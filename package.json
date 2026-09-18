@@ -1,5 +1,5 @@
 {
-  "name": "baby-tracker",
+  "name": "zuno-baby-tracker",
   "description": "Self-hosted, end-to-end encrypted newborn tracker for two parents (vanilla JS PWA + PHP/SQLite API)",
   "private": true,
   "version": "1.0.0",
@@ -13,6 +13,7 @@
     "package": "node scripts/package.mjs",
     "deploy": "node scripts/deploy.mjs",
     "preview": "php -S 127.0.0.1:8081 scripts/preview-router.php",
+    "screenshots": "node scripts/make-screenshots.mjs",
     "spike": "vite --config scripts/spike/vite.config.mjs"
   },
   "devDependencies": {

@@ -3,7 +3,7 @@
 // inside the strings, the icon() pictograms stay in code.
 export default {
   // The lead paragraph
-  'lead': 'Baby Tracker hält fest, wann das Baby getrunken hat, was in der Windel war und wie lange es geschlafen hat – auf beiden Handys derselbe Stand. Das Wichtigste geht mit einem Fingertipp, auch um drei Uhr nachts.',
+  'lead': 'Zuno hält fest, wann das Baby getrunken hat, was in der Windel war und wie lange es geschlafen hat – auf beiden Handys derselbe Stand. Das Wichtigste geht mit einem Fingertipp, auch um drei Uhr nachts.',
   // «Die vier Tabs»: one item per tab
   'tabs.title': 'Die vier Tabs',
   'tabs.now': '<strong>Jetzt</strong> – der Stand: seit wann keine Mahlzeit, der Tag bisher (Mahlzeiten und nasse Windeln gegen das Ziel), der Schlaf oder die nächste Erinnerung. Darunter die Knöpfe zum Erfassen.',

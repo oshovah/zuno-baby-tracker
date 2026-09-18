@@ -51,8 +51,11 @@ still runs — the test is what keeps it from shipping half done.
 - **Tone**: German is informal («du»), Swiss spelling («ss», never «ß»),
   Swiss words (Schoppen, Gaggi). English is plain and short. Both are
   written for a parent at 3 am: short sentences, no jargon.
-- **Names stay**: Baby Tracker, Claude, the family's names. No product
-  brands: the formula milk is «Formula», whatever tin a family buys.
+- **Names stay**: Zuno – Baby Tracker (the app; «Zuno» for short), Claude,
+  cyon (the hoster on the login pitch), the family's names. No product
+  brands in the app itself: the formula milk is «Formula», whatever tin a
+  family buys. The one exception is the pitch's «missing on purpose» list
+  (`login.hosting.none.*`), which names what a parent knows by that name.
 
 ## Glossary (German → English)
 

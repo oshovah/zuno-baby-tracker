@@ -1,4 +1,4 @@
-# Baby Tracker — Build Spec
+# Zuno – Baby Tracker — Build Spec
 
 A simple tracking webapp for a newborn: feeds, diapers, sleep, and occasional
 measurements. Used by both parents from their phones, synced through a shared

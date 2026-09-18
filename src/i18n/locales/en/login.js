@@ -1,7 +1,9 @@
 // The login screen (views/login.js): login, register, recovery, unlock, the pitch.
 export default {
-  // Under the title, on every mode
+  // Under the title of the login mode: what it is, then (taglineTrust, its
+  // own line) why to trust it — the short form of the hosting panel below
   tagline: 'Nursing, bottles, diapers, sleep – for two, in sync and private.',
+  taglineTrust: 'Encrypted. Hosted in Switzerland. No third parties.',
   // The pill above the login form that scrolls to the pitch
   pitchCue: 'What the app does',
   // The submit button while the phone derives the key (PBKDF2, ~0.3 s)
@@ -110,10 +112,42 @@ export default {
   'pitch.cta': 'Create account',
   'pitch.ctaNote': 'No e-mail address, set up in a minute. The other parent joins with the family name and the family password.',
 
+  // The screenshot strip under the pitch's lead (src/shots.js lists the
+  // screens): one caption per picture — plain text, it is the alt text too —,
+  // the strip's and the dots' labels for screen readers, the note underneath
+  'shots.label': 'Screenshots of the app',
+  'shots.home': '"Now": when the last meal was, which side is next, what is still open today.',
+  'shots.timer': 'Nursing in progress: pause for a burp, one tap to stop.',
+  'shots.bottle': "Bottle: the feeding amount for the baby's age is already there – what was nursed is taken off.",
+  'shots.history': '"History": every day with its numbers – and who logged what.',
+  'shots.charts': '"Charts": weight, meals, diapers and sleep over the days.',
+  'shots.dot': 'Picture {n} of {total}',
+  'shots.note': 'Real screens of the app – the data in them is invented.',
+
+  // "Where your data lives" — the panel between the features and the CTA:
+  // the drawing's three labels, where THIS installation runs ({host} = the
+  // hoster's name as a link, {name} = the same as text; both come from the
+  // view, the place is written here), and what is missing on purpose (tags).
+  // Only claim what the packaged CSP (scripts/package.mjs) really enforces.
+  'hosting.title': 'One server in Switzerland&nbsp;– nothing else.',
+  'hosting.map.phone': 'Your phone',
+  'hosting.map.server': '{name}, Basel',
+  'hosting.map.partner': 'The other phone',
+  'hosting.where': 'Zuno runs entirely at {host} in Basel: the app and the database with your encrypted entries sit on servers in Switzerland.',
+  'hosting.only': 'Your phone talks to this one server only – fonts, scripts and images come from there too. No third-party service, tool or CDN: nothing outside the hosting at {name}.',
+  'hosting.noneTitle': 'What is missing here – on purpose:',
+  'hosting.none.cdn': 'CDN',
+  'hosting.none.fonts': 'Google Fonts',
+  'hosting.none.analytics': 'Analytics tools',
+  'hosting.none.ads': 'Ad networks',
+  'hosting.none.login': 'Sign-in with Google or Apple',
+  'hosting.none.ai': 'AI services',
+  'hosting.proof': 'Your browser enforces it: the page forbids it any connection to another address (Content-Security-Policy).',
+
   // "Why this app exists" — the maker's note under the pitch
   'about.title': 'Why this app exists',
   'about.p1': 'Our baby arrived, and with it the questions: When was the last meal? Which side? How many diapers today? The apps for that wanted an account, an e-mail, a subscription – and could read everything. So I built the app myself.',
   'about.p2': 'Every feature here exists because I needed it in exactly that moment: the stop button for nursing, the feeding amount for the bottle, the pause for burping, the reminder for the vitamin D. Nothing was added because other apps have it too – everything because we were missing it at home.',
   'about.p3': 'I am a developer – but with a baby on one arm, typing is hard. So I built the app together with Claude: by remote control from my phone, while waiting at the hospital and later in the postpartum weeks, between two meals. I said what was missing, Claude wrote, I checked. The app came about the way it is used: one-handed.',
-  'about.tech': 'Tech: vanilla JavaScript with Vite, as an installable web app with a service worker. Behind it a small PHP API with SQLite on Swiss shared hosting. Encryption runs in the browser (WebCrypto, AES-GCM); the family key is derived from the password and never leaves the phone.',
+  'about.tech': 'Tech: vanilla JavaScript with Vite, as an installable web app with a service worker. Behind it a small PHP API with SQLite on shared hosting at cyon in Basel. Encryption runs in the browser (WebCrypto, AES-GCM); the family key is derived from the password and never leaves the phone.',
 };

@@ -4,7 +4,7 @@
 // here are the ones the English views show — keep them in step.
 export default {
   // The lead paragraph
-  'lead': 'Baby Tracker keeps track of when the baby fed, what was in the diaper and how long it slept – the same on both phones. The essentials take one tap, even at three in the morning.',
+  'lead': 'Zuno keeps track of when the baby fed, what was in the diaper and how long it slept – the same on both phones. The essentials take one tap, even at three in the morning.',
   // "The four tabs": one item per tab
   'tabs.title': 'The four tabs',
   'tabs.now': '<strong>Now</strong> – where things stand: how long since the last meal, the day so far (meals and wet diapers against the target), sleep or the next reminder. Below that, the buttons for logging.',

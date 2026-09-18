@@ -1539,26 +1539,60 @@ input[type='datetime-local'] {
 
 /* --- auth ------------------------------------------------------------------- */
 
+/* The head (badge, wordmark, tagline) gives way on a short screen — top
+ * margin and badge shrink with the viewport height — so «Anmelden» stays
+ * above the fold of a phone browser (~660px) for the parent coming back. */
 .auth-card {
   max-width: 340px;
-  margin: 10vh auto 0;
+  margin: clamp(16px, calc(22vh - 110px), 10vh) auto 0;
   text-align: center;
 }
 
 .auth-logo img {
+  display: block;
+  width: clamp(76px, 12vh, 96px);
+  height: auto;
+  aspect-ratio: 1;
+  margin: 0 auto;
   border-radius: 50%; /* the badge is a plain square — the circle crop blends it into both themes */
   border: 2px solid var(--line);
   object-fit: cover;
 }
 
+/* The wordmark, one h1 in two lines: «Zuno» is the name a parent remembers
+ * and passes on, «Baby Tracker» underneath says what it is. */
 .auth-card h1 {
-  margin: 14px 0 4px;
-  font-size: 24px;
+  margin: 10px 0 8px;
   font-weight: 800;
+}
+
+.brand-name {
+  display: block;
+  font-size: 46px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.brand-kind {
+  display: block;
+  margin-top: 5px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
 }
 
 .auth-card .hint {
   margin-bottom: 20px;
+}
+
+/* The tagline's second line — encrypted, Swiss, nobody else: the short form
+ * of the hosting panel further down, a notch stronger than the hint. */
+.tagline-trust {
+  display: inline-block;
+  margin-top: 4px;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .auth-form {
@@ -1916,6 +1950,109 @@ input[type='datetime-local'] {
   color: var(--muted);
 }
 
+/* How the app looks, before the sign-up: a strip of real screens that
+ * scrolls sideways — the browser's scroll-snap does the swiping, the script
+ * only moves the dots. It runs out into the .app gutter so the neighbours
+ * peek in and say «there is more», and fades at both ends (the mask: alpha
+ * only, no colour) instead of being cut off in mid-air on a wide screen; the
+ * two spacers let the first and the last picture reach the middle. */
+.shots {
+  --shot-w: 228px;
+  --shot-gap: 14px;
+  margin: 16px 0 10px;
+}
+
+.shots-strip {
+  position: relative; /* the offset parent of the slides (bindShots) */
+  display: flex;
+  gap: var(--shot-gap);
+  margin: 0 -16px;
+  padding: 4px 0 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+}
+
+.shots-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.shots-strip::before,
+.shots-strip::after {
+  content: '';
+  flex: none;
+  width: calc(50% - var(--shot-w) / 2 - var(--shot-gap));
+}
+
+.shot {
+  flex: none;
+  width: var(--shot-w);
+  margin: 0;
+  scroll-snap-align: center;
+  cursor: pointer;
+}
+
+/* The picture is the bare screen; the frame makes it a phone. */
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 4px solid var(--surface-2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.shot figcaption {
+  margin: 10px 2px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+
+.shots-dots {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+/* A 7px dot in a 28px target. */
+.shots-dots button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.shots-dots button::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.shots-dots button[aria-current]::before {
+  background: var(--milk);
+  box-shadow: none;
+}
+
+.shots-note {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+  text-align: center;
+}
+
 .features {
   list-style: none;
   margin: 0;
@@ -1972,6 +2109,111 @@ input[type='datetime-local'] {
   font-size: 14px;
   line-height: 1.45;
   color: var(--muted);
+}
+
+/* Where the data lives — the one framed block of the pitch: two phones and
+ * ONE server (the drawing, strokes in currentColor), where that server
+ * stands, what is missing on purpose (the tags) and what enforces it. */
+.pitch .hosting {
+  margin: 8px 0 26px;
+  padding: 20px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.pitch .hosting h3 {
+  margin: 0 0 16px;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-wrap: balance; /* no lone «nichts.» on the second line */
+}
+
+.pitch .hosting p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.pitch .hosting a {
+  color: var(--milk);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+.hosting-map {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+.hosting-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.hosting-map .map-server {
+  color: var(--milk);
+}
+
+.hosting-map-labels {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.hosting-map-labels b {
+  color: var(--ink);
+  text-align: center;
+}
+
+.hosting-map-labels span:last-child {
+  text-align: right;
+}
+
+.pitch .hosting .hosting-none-title {
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.hosting-none {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.hosting-none li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.hosting-none li span {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--danger);
+}
+
+.pitch .hosting .hosting-proof {
+  margin-bottom: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
 }
 
 .pitch .cta {

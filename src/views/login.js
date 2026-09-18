@@ -27,6 +27,10 @@ import { escapeHtml, toast, icon } from '../ui.js';
 import { t, tn, getLocale, setLocale, availableLocales } from '../i18n/index.js';
 import { bindAuthInfo } from './auth-info.js';
 import { badgeSrc, bindBadgeFallback } from '../art.js';
+import { SHOTS, SHOT_SIZE, shotFile } from '../shots.js';
+
+// The slider's pictures by file name → the URL Vite gave them (hashed in a build).
+const SHOT_URLS = import.meta.glob('../shots/*.webp', { eager: true, query: '?url', import: 'default' });
 
 const CHECK_DEBOUNCE_MS = 400;
 // The display-name chips: the word the chip shows is what gets stored (an
@@ -46,19 +50,22 @@ function langSwitchHtml() {
   return `<div class="lang-switch" role="radiogroup" aria-label="${t('common.language')}">${buttons}</div>`;
 }
 
+// The wordmark: «Zuno» is the name a parent remembers and passes on, «Baby
+// Tracker» says what it is. Names stay untranslated (locales/README.md).
 function logoHtml() {
   return `
       <div class="auth-logo" aria-hidden="true">
         <img src="${badgeSrc()}" alt="" width="96" height="96" />
       </div>
-      <h1>Baby Tracker</h1>
+      <h1 class="brand"><span class="brand-name">Zuno</span> <span class="brand-kind">Baby Tracker</span></h1>
       ${langSwitchHtml()}`;
 }
 
 // The pitch under the login form — what whoever got the link is looking at.
 // The form stays on top so a returning parent logs in without scrolling;
 // the two selling points lead: one shared state across both phones, and
-// end-to-end encryption. [hue, icon, key under login.pitch.*]
+// end-to-end encryption; the hosting panel (hostingHtml) closes the list
+// before the CTA. [hue, icon, key under login.pitch.*]
 const PITCH_FEATURES = [
   ['milk', 'sync', 'sync'],
   ['sleep', 'lock', 'e2ee'],
@@ -67,6 +74,91 @@ const PITCH_FEATURES = [
   ['sleep', 'reminder', 'reminders'],
   ['measure', 'phone', 'noStore'],
 ];
+
+// How the app looks, before anyone signs up: real screens with invented data
+// (scripts/make-screenshots.mjs takes them, src/shots.js lists them, the
+// files sit in src/shots/) in a
+// strip that scrolls sideways. Swiping is the browser's own scroll-snap; the
+// script (bindShots) only moves the dots and lets a tap bring a picture to
+// the middle. The caption doubles as the picture's alt text, so the visible
+// copy is hidden from screen readers — one reading, not two.
+function shotsHtml() {
+  const locale = getLocale();
+  const shown = SHOTS.filter((id) => SHOT_URLS[`../shots/${shotFile(id, locale)}`]);
+  if (shown.length === 0) return ''; // a checkout without pictures: no strip, no broken images
+  const slides = shown.map((id) => {
+    const caption = escapeHtml(t(`login.shots.${id}`));
+    return `
+            <figure class="shot">
+              <img src="${SHOT_URLS[`../shots/${shotFile(id, locale)}`]}" alt="${caption}" width="${SHOT_SIZE.width}" height="${SHOT_SIZE.height}" loading="lazy" decoding="async" />
+              <figcaption aria-hidden="true">${caption}</figcaption>
+            </figure>`;
+  }).join('');
+  const dots = shown.map(
+    (id, i) =>
+      `<button type="button" data-shot-dot${i === 0 ? ' aria-current="true"' : ''} aria-label="${escapeHtml(t('login.shots.dot', { n: i + 1, total: shown.length }))}"></button>`
+  ).join('');
+  return `
+        <div class="shots">
+          <div class="shots-strip" data-shots tabindex="0" role="region" aria-label="${escapeHtml(t('login.shots.label'))}">${slides}
+          </div>
+          <div class="shots-dots">${dots}</div>
+          <p class="shots-note">${t('login.shots.note')}</p>
+        </div>`;
+}
+
+// Where THIS installation runs, named on the pitch (login.hosting.*). The
+// «nothing else» half of that panel holds for every copy of the app — the
+// packaged CSP (scripts/package.mjs) allows the own origin only —, the host
+// and the place do not: whoever runs a copy elsewhere changes this constant
+// and the wording in the locales.
+const HOSTER = { name: 'cyon', url: 'https://www.cyon.ch/' };
+
+// What is missing on purpose — the tags under login.hosting.none.*
+const HOSTING_NONE = ['cdn', 'fonts', 'analytics', 'ads', 'login', 'ai'];
+
+// The whole data path as a drawing: two phones, ONE server between them.
+// Strokes in currentColor — muted from .hosting-map, the server in the
+// accent (.map-server, style.css); the labels are HTML underneath so they
+// follow the language.
+const HOSTING_MAP_SVG = `
+          <svg viewBox="0 0 300 64" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <g>
+              <rect x="18" y="6" width="30" height="52" rx="7" /><path d="M29 51h8" />
+              <rect x="252" y="6" width="30" height="52" rx="7" /><path d="M263 51h8" />
+            </g>
+            <path d="M60 32h48M192 32h48" stroke-dasharray="2 6" />
+            <g class="map-server">
+              <rect x="120" y="9" width="60" height="20" rx="6" /><path d="M150 19h19" />
+              <rect x="120" y="35" width="60" height="20" rx="6" /><path d="M150 45h19" />
+              <circle cx="132" cy="19" r="1.6" fill="currentColor" stroke="none" />
+              <circle cx="132" cy="45" r="1.6" fill="currentColor" stroke="none" />
+            </g>
+          </svg>`;
+
+function hostingHtml() {
+  const name = escapeHtml(HOSTER.name);
+  const host = `<a href="${HOSTER.url}" target="_blank" rel="noopener noreferrer">${name}</a>`;
+  const none = HOSTING_NONE.map(
+    (key) => `<li><span aria-hidden="true">✕</span>${t(`login.hosting.none.${key}`)}</li>`
+  ).join('');
+  return `
+        <div class="hosting">
+          <h3>${t('login.hosting.title')}</h3>
+          <div class="hosting-map" aria-hidden="true">${HOSTING_MAP_SVG}
+            <div class="hosting-map-labels">
+              <span>${t('login.hosting.map.phone')}</span>
+              <b>${t('login.hosting.map.server', { name })}</b>
+              <span>${t('login.hosting.map.partner')}</span>
+            </div>
+          </div>
+          <p>${t('login.hosting.where', { host })}</p>
+          <p>${t('login.hosting.only', { name })}</p>
+          <p class="hosting-none-title" id="hosting-none-title">${t('login.hosting.noneTitle')}</p>
+          <ul class="hosting-none" aria-labelledby="hosting-none-title">${none}</ul>
+          <p class="hosting-proof">${t('login.hosting.proof')}</p>
+        </div>`;
+}
 
 function pitchHtml() {
   const features = PITCH_FEATURES.map(
@@ -78,9 +170,9 @@ function pitchHtml() {
   return `
       <section class="pitch" aria-labelledby="pitch-title">
         <h2 id="pitch-title">${t('login.pitch.title')}</h2>
-        <p class="lead">${t('login.pitch.lead')}</p>
+        <p class="lead">${t('login.pitch.lead')}</p>${shotsHtml()}
         <ul class="features">${features}
-        </ul>
+        </ul>${hostingHtml()}
         <button type="button" class="btn primary wide cta" data-switch="register">${t('login.pitch.cta')}</button>
         <p class="cta-note">${t('login.pitch.ctaNote')}</p>
         <div class="about" aria-labelledby="about-title">
@@ -246,6 +338,38 @@ export function renderLogin(root, opts = {}) {
     });
   }
 
+  /** The screenshot strip: the dots follow the scroll position; a dot or a picture brings that picture to the middle. */
+  function bindShots() {
+    const strip = root.querySelector('[data-shots]');
+    if (!strip) return;
+    const slides = [...strip.querySelectorAll('.shot')];
+    const dots = [...root.querySelectorAll('[data-shot-dot]')];
+    const middle = (el) => el.offsetLeft + el.offsetWidth / 2; // the strip is the offset parent (position: relative)
+    let frame = 0;
+    const mark = () => {
+      frame = 0;
+      const at = strip.scrollLeft + strip.clientWidth / 2;
+      let active = 0;
+      slides.forEach((slide, i) => {
+        if (Math.abs(middle(slide) - at) < Math.abs(middle(slides[active]) - at)) active = i;
+      });
+      dots.forEach((dot, i) => (i === active ? dot.setAttribute('aria-current', 'true') : dot.removeAttribute('aria-current')));
+    };
+    const show = (i) => {
+      const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      strip.scrollTo({ left: middle(slides[i]) - strip.clientWidth / 2, behavior: reduce ? 'auto' : 'smooth' });
+    };
+    strip.addEventListener(
+      'scroll',
+      () => {
+        if (!frame) frame = requestAnimationFrame(mark);
+      },
+      { passive: true }
+    );
+    dots.forEach((dot, i) => dot.addEventListener('click', () => show(i)));
+    slides.forEach((slide, i) => slide.addEventListener('click', () => show(i)));
+  }
+
   /**
    * The language toggle under the title (every mode): the device's choice
    * (prefs.lang) and the i18n singleton, then this screen again in the new
@@ -319,7 +443,7 @@ export function renderLogin(root, opts = {}) {
   function renderLoginMode() {
     root.innerHTML = `
     <div class="auth-card">${logoHtml()}
-      <p class="hint">${t('login.tagline')}</p>
+      <p class="hint tagline">${t('login.tagline')}<br /><span class="tagline-trust">${t('login.taglineTrust')}</span></p>
       ${pitchCueHtml()}
       <form class="auth-form" novalidate>
         <label>${t('login.field.username')}
@@ -344,6 +468,7 @@ export function renderLogin(root, opts = {}) {
     bindLangSwitch();
     bindSwitches();
     bindPitchCue();
+    bindShots();
     takePendingError(errEl);
 
     form.addEventListener('submit', async (e) => {

@@ -1,6 +1,6 @@
 # Security policy
 
-Baby Tracker makes one promise: the server cannot read a family's entries.
+Zuno – Baby Tracker makes one promise: the server cannot read a family's entries.
 If you find a way to break that promise — or any other vulnerability — please
 report it privately first.
 

@@ -15,6 +15,17 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-18-b',
+    de: [
+      'Die App hat einen Namen: «Zuno – Baby Tracker». Unter dem App-Symbol steht er erst, wenn du die App neu zum Home-Bildschirm hinzufügst – nötig ist das nicht.',
+      'Die Anmeldeseite zeigt neu Bildschirmfotos der App (mit erfundenen Daten) und sagt, wo eure Daten liegen: auf einem Server bei cyon in Basel, ohne Dienste von Dritten.',
+    ],
+    en: [
+      'The app has a name: "Zuno – Baby Tracker". The label under the app icon only changes when you add the app to the home screen again – there is no need to.',
+      'The login page now shows screenshots of the app (with invented data) and says where your data lives: on one server at cyon in Basel, Switzerland, with no third-party services.',
+    ],
+  },
+  {
     id: '2026-09-18',
     de: ['Die Schoppenmilch heisst jetzt überall «Formula» statt nach einer Marke: «Milch (Formula)» im Schoppen-Formular, «Formula» im Verlauf und in der Grafik.'],
     en: ['Formula milk is now simply called "Formula" instead of a brand name – in the bottle form, in History and in the charts.'],

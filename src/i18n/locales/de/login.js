@@ -1,7 +1,9 @@
 // The login screen (views/login.js): login, register, recovery, unlock, the pitch.
 export default {
-  // Under the title, on every mode
+  // Under the title of the login mode: what it is, then (taglineTrust, its
+  // own line) why to trust it — the short form of the hosting panel below
   tagline: 'Stillen, Schoppen, Windeln, Schlaf – zu zweit, synchron und privat.',
+  taglineTrust: 'Verschlüsselt. In der Schweiz gehostet. Ohne Dritte.',
   // The pill above the login form that scrolls to the pitch
   pitchCue: 'Was die App kann',
   // The submit button while the phone derives the key (PBKDF2, ~0.3 s)
@@ -110,10 +112,42 @@ export default {
   'pitch.cta': 'Konto erstellen',
   'pitch.ctaNote': 'Ohne E-Mail-Adresse, in einer Minute eingerichtet. Der zweite Elternteil tritt mit Familienname und Familien-Passwort bei.',
 
+  // The screenshot strip under the pitch's lead (src/shots.js lists the
+  // screens): one caption per picture — plain text, it is the alt text too —,
+  // the strip's and the dots' labels for screen readers, the note underneath
+  'shots.label': 'Bildschirmfotos der App',
+  'shots.home': '«Jetzt»: wann die letzte Mahlzeit war, welche Seite dran ist, was heute noch ansteht.',
+  'shots.timer': 'Stillen läuft: Pause zum Aufstossen, ein Fingertipp beendet.',
+  'shots.bottle': 'Schoppen: Die Trinkmenge fürs Alter steht schon da – was gestillt wurde, ist abgezogen.',
+  'shots.history': '«Verlauf»: jeder Tag mit seinen Zahlen – und wer was eingetragen hat.',
+  'shots.charts': '«Grafik»: Gewicht, Mahlzeiten, Windeln und Schlaf über die Tage.',
+  'shots.dot': 'Bild {n} von {total}',
+  'shots.note': 'Echte Bildschirme der App – die Daten darin sind erfunden.',
+
+  // «Wo eure Daten liegen» — the panel between the features and the CTA:
+  // the drawing's three labels, where THIS installation runs ({host} = the
+  // hoster's name as a link, {name} = the same as text; both come from the
+  // view, the place is written here), and what is missing on purpose (tags).
+  // Only claim what the packaged CSP (scripts/package.mjs) really enforces.
+  'hosting.title': 'Ein Server in der Schweiz&nbsp;– sonst nichts.',
+  'hosting.map.phone': 'Dein Handy',
+  'hosting.map.server': '{name}, Basel',
+  'hosting.map.partner': 'Das zweite Handy',
+  'hosting.where': 'Zuno läuft vollständig bei {host} in Basel: Die App und die Datenbank mit euren verschlüsselten Einträgen liegen auf Servern in der Schweiz.',
+  'hosting.only': 'Dein Handy spricht nur mit diesem einen Server – auch Schriften, Skripte und Bilder kommen von dort. Kein Dienst, kein Tool und kein CDN von Dritten: nichts ausserhalb des Hostings bei {name}.',
+  'hosting.noneTitle': 'Was hier fehlt – mit Absicht:',
+  'hosting.none.cdn': 'CDN',
+  'hosting.none.fonts': 'Google Fonts',
+  'hosting.none.analytics': 'Analyse-Tools',
+  'hosting.none.ads': 'Werbenetze',
+  'hosting.none.login': 'Login über Google oder Apple',
+  'hosting.none.ai': 'KI-Dienste',
+  'hosting.proof': 'Dein Browser setzt das durch: Die Seite verbietet ihm jede Verbindung zu einer anderen Adresse (Content-Security-Policy).',
+
   // «Warum es diese App gibt» — the maker's note under the pitch
   'about.title': 'Warum es diese App gibt',
   'about.p1': 'Unser Baby kam, und mit ihm die Fragen: Wann war die letzte Mahlzeit? Welche Seite? Wie viele Windeln heute? Die Apps dafür wollten ein Konto, eine E-Mail, ein Abo – und lasen mit. Also habe ich mir die App selber gebaut.',
   'about.p2': 'Jede Funktion hier gibt es, weil ich sie in genau dem Moment gebraucht habe: der Stopp-Knopf für das Stillen, die Trinkmenge für den Schoppen, die Pause zum Aufstossen, die Erinnerung an das Vitamin D. Nichts ist dazugekommen, weil es in anderen Apps auch drin ist – alles, weil es bei uns zu Hause gefehlt hat.',
   'about.p3': 'Ich bin Entwickler – aber mit einem Baby auf dem einen Arm tippt es sich schlecht. Darum habe ich die App zusammen mit Claude gebaut: per Fernsteuerung vom Handy aus, in den Wartezeiten im Spital und später im Wochenbett, zwischen zwei Mahlzeiten. Ich habe gesagt, was fehlt, Claude hat geschrieben, ich habe geprüft. Die App ist so entstanden, wie sie benutzt wird: einhändig.',
-  'about.tech': 'Technik: Vanilla JavaScript mit Vite, als installierbare Web-App mit Service Worker. Dahinter eine kleine PHP-API mit SQLite auf einem Schweizer Shared Hosting. Die Verschlüsselung läuft im Browser (WebCrypto, AES-GCM), der Familienschlüssel wird aus dem Passwort abgeleitet und verlässt das Handy nie.',
+  'about.tech': 'Technik: Vanilla JavaScript mit Vite, als installierbare Web-App mit Service Worker. Dahinter eine kleine PHP-API mit SQLite auf einem Shared Hosting bei cyon in Basel. Die Verschlüsselung läuft im Browser (WebCrypto, AES-GCM), der Familienschlüssel wird aus dem Passwort abgeleitet und verlässt das Handy nie.',
 };

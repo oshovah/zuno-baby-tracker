@@ -28,7 +28,7 @@ const PRECACHE = ['./', './manifest.webmanifest']; /* __PRECACHE__ */
 const OFFLINE_HTML = `<!doctype html>
 <html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Baby Tracker</title>
+<title>Zuno – Baby Tracker</title>
 <style>
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
     background: #171310; color: #f2e9df; font-family: -apple-system, system-ui, sans-serif; text-align: center; }
@@ -38,8 +38,8 @@ const OFFLINE_HTML = `<!doctype html>
     border-radius: 14px; background: #eba76f; color: #2b1c0e; }
 </style></head><body><main>
 <h1>Keine Verbindung</h1>
-<p>Baby Tracker braucht kurz Internet zum Starten. Danach funktioniert das Öffnen auch offline.</p>
-<p lang="en"><b>No connection.</b> Baby Tracker needs a moment online to start. After that it opens offline too.</p>
+<p>Zuno braucht kurz Internet zum Starten. Danach funktioniert das Öffnen auch offline.</p>
+<p lang="en"><b>No connection.</b> Zuno needs a moment online to start. After that it opens offline too.</p>
 <button onclick="location.reload()">Nochmals versuchen · Try again</button>
 </main></body></html>`;
 

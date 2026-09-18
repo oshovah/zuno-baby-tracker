@@ -1,4 +1,4 @@
-# Baby Tracker
+# Zuno – Baby Tracker
 
 A small, self-hosted newborn tracker for two parents — nursing, bottles,
 diapers, sleep, measurements and daily reminders, shared between both phones
@@ -102,6 +102,23 @@ There is no default account: open the app and register. To deploy, copy
 guides: designs in [`src/themes/README.md`](src/themes/README.md), languages
 in [`src/i18n/locales/README.md`](src/i18n/locales/README.md).
 
+**Hosting somewhere else? Change the login page.** The pitch under the login
+form describes the reference installation: it names its hoster (cyon in
+Basel, Switzerland) and says that nothing outside that hosting is involved.
+The second half holds for every copy — the app loads no third-party font,
+script, image or API, and the packaged CSP (`default-src 'self'`,
+`connect-src 'self'`) makes the browser enforce it. The first half is only
+true where it is true: if your copy runs elsewhere, change `HOSTER` in
+[`src/views/login.js`](src/views/login.js), the `taglineTrust`, `hosting.*`
+and `about.*` strings in `src/i18n/locales/*/login.js` and the description in
+`index.html` before you put it online.
+
+The pictures in the login page's slider are the real app with invented data,
+taken by `npm run screenshots` ([`scripts/make-screenshots.mjs`](scripts/make-screenshots.mjs):
+a scratch database, headless Chrome, a week of a newborn written through the
+app's own code — needs Chrome, PHP and Node 22+). Re-run it after a change
+to one of the screens it shows.
+
 ## Private artwork
 
 The repo ships its own icon set. If your family would rather see pictures you
@@ -132,7 +149,7 @@ sit next to them in [`src/themes/fonts/`](src/themes/fonts/).
 
 # Dokumentation (Deutsch)
 
-Ein einfacher, selbst gehosteter Baby-Tracker für zwei Eltern: Stillen,
+Zuno ist ein einfacher, selbst gehosteter Baby-Tracker für zwei Eltern: Stillen,
 Schoppen, Windeln, Schlaf, Messwerte und tägliche Erinnerungen (Vitamin D
 fürs Baby, ein Medikament für Mama) — synchronisiert über ein PHP-API mit
 SQLite auf Shared Hosting (cyon). Produktentscheide stehen in
