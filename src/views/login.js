@@ -114,6 +114,14 @@ function shotsHtml() {
 // and the wording in the locales.
 const HOSTER = { name: 'cyon', url: 'https://www.cyon.ch/' };
 
+// The public source: the link that closes the hosting panel («glauben musst
+// du das nicht») and the last line of the tech note. AGPL §13: whoever runs
+// a MODIFIED copy for other people points this at the source of THAT copy.
+const SOURCE_URL = 'https://github.com/oshovah/zuno-baby-tracker';
+
+/** A link that leaves the app: new tab, no opener, no referrer. `label` is HTML. */
+const extLink = (url, label) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+
 // What is missing on purpose — the tags under login.hosting.none.*
 const HOSTING_NONE = ['cdn', 'fonts', 'analytics', 'ads', 'login', 'ai'];
 
@@ -138,7 +146,8 @@ const HOSTING_MAP_SVG = `
 
 function hostingHtml() {
   const name = escapeHtml(HOSTER.name);
-  const host = `<a href="${HOSTER.url}" target="_blank" rel="noopener noreferrer">${name}</a>`;
+  const host = extLink(HOSTER.url, name);
+  const source = t('login.hosting.source', { link: extLink(SOURCE_URL, t('login.hosting.sourceLink')) });
   const none = HOSTING_NONE.map(
     (key) => `<li><span aria-hidden="true">✕</span>${t(`login.hosting.none.${key}`)}</li>`
   ).join('');
@@ -156,7 +165,7 @@ function hostingHtml() {
           <p>${t('login.hosting.only', { name })}</p>
           <p class="hosting-none-title" id="hosting-none-title">${t('login.hosting.noneTitle')}</p>
           <ul class="hosting-none" aria-labelledby="hosting-none-title">${none}</ul>
-          <p class="hosting-proof">${t('login.hosting.proof')}</p>
+          <p class="hosting-proof">${t('login.hosting.proof')} ${source}</p>
         </div>`;
 }
 
@@ -180,7 +189,7 @@ function pitchHtml() {
           <p>${t('login.about.p1')}</p>
           <p>${t('login.about.p2')}</p>
           <p>${t('login.about.p3')}</p>
-          <p class="about-tech">${t('login.about.tech')}</p>
+          <p class="about-tech">${t('login.about.tech')} ${t('login.about.source', { link: extLink(SOURCE_URL, SOURCE_URL.replace(/^https?:\/\//, '')) })}</p>
         </div>
       </section>`;
 }

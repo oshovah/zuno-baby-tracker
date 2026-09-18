@@ -2137,10 +2137,12 @@ input[type='datetime-local'] {
   color: var(--muted);
 }
 
-.pitch .hosting a {
+.pitch .hosting a,
+.pitch .about a {
   color: var(--milk);
   font-weight: 600;
   text-underline-offset: 3px;
+  overflow-wrap: anywhere; /* the repository's address in the tech note */
 }
 
 .hosting-map {

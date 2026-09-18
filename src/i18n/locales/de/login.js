@@ -143,6 +143,9 @@ export default {
   'hosting.none.login': 'Login über Google oder Apple',
   'hosting.none.ai': 'KI-Dienste',
   'hosting.proof': 'Dein Browser setzt das durch: Die Seite verbietet ihm jede Verbindung zu einer anderen Adresse (Content-Security-Policy).',
+  // … and the way to check all of it: {link} = hosting.sourceLink as a link to the public repository
+  'hosting.source': 'Glauben musst du das nicht: Der ganze Quellcode ist öffentlich – {link}.',
+  'hosting.sourceLink': 'auf GitHub nachlesen',
 
   // «Warum es diese App gibt» — the maker's note under the pitch
   'about.title': 'Warum es diese App gibt',
@@ -150,4 +153,6 @@ export default {
   'about.p2': 'Jede Funktion hier gibt es, weil ich sie in genau dem Moment gebraucht habe: der Stopp-Knopf für das Stillen, die Trinkmenge für den Schoppen, die Pause zum Aufstossen, die Erinnerung an das Vitamin D. Nichts ist dazugekommen, weil es in anderen Apps auch drin ist – alles, weil es bei uns zu Hause gefehlt hat.',
   'about.p3': 'Ich bin Entwickler – aber mit einem Baby auf dem einen Arm tippt es sich schlecht. Darum habe ich die App zusammen mit Claude gebaut: per Fernsteuerung vom Handy aus, in den Wartezeiten im Spital und später im Wochenbett, zwischen zwei Mahlzeiten. Ich habe gesagt, was fehlt, Claude hat geschrieben, ich habe geprüft. Die App ist so entstanden, wie sie benutzt wird: einhändig.',
   'about.tech': 'Technik: Vanilla JavaScript mit Vite, als installierbare Web-App mit Service Worker. Dahinter eine kleine PHP-API mit SQLite auf einem Shared Hosting bei cyon in Basel. Die Verschlüsselung läuft im Browser (WebCrypto, AES-GCM), der Familienschlüssel wird aus dem Passwort abgeleitet und verlässt das Handy nie.',
+  // The tech note's last sentence: {link} = the repository's address, as a link
+  'about.source': 'Der Quellcode ist offen (AGPL-3.0): {link}',
 };

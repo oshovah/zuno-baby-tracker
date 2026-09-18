@@ -111,7 +111,9 @@ script, image or API, and the packaged CSP (`default-src 'self'`,
 true where it is true: if your copy runs elsewhere, change `HOSTER` in
 [`src/views/login.js`](src/views/login.js), the `taglineTrust`, `hosting.*`
 and `about.*` strings in `src/i18n/locales/*/login.js` and the description in
-`index.html` before you put it online.
+`index.html` before you put it online. The same page links to the source
+(`SOURCE_URL`, next to `HOSTER`): if you run a **modified** copy for other
+people, the AGPL asks you to offer them *your* source — point it there.
 
 The pictures in the login page's slider are the real app with invented data,
 taken by `npm run screenshots` ([`scripts/make-screenshots.mjs`](scripts/make-screenshots.mjs):

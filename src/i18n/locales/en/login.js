@@ -143,6 +143,9 @@ export default {
   'hosting.none.login': 'Sign-in with Google or Apple',
   'hosting.none.ai': 'AI services',
   'hosting.proof': 'Your browser enforces it: the page forbids it any connection to another address (Content-Security-Policy).',
+  // … and the way to check all of it: {link} = hosting.sourceLink as a link to the public repository
+  'hosting.source': "You do not have to take anyone's word for it: the whole source code is public – {link}.",
+  'hosting.sourceLink': 'read it on GitHub',
 
   // "Why this app exists" — the maker's note under the pitch
   'about.title': 'Why this app exists',
@@ -150,4 +153,6 @@ export default {
   'about.p2': 'Every feature here exists because I needed it in exactly that moment: the stop button for nursing, the feeding amount for the bottle, the pause for burping, the reminder for the vitamin D. Nothing was added because other apps have it too – everything because we were missing it at home.',
   'about.p3': 'I am a developer – but with a baby on one arm, typing is hard. So I built the app together with Claude: by remote control from my phone, while waiting at the hospital and later in the postpartum weeks, between two meals. I said what was missing, Claude wrote, I checked. The app came about the way it is used: one-handed.',
   'about.tech': 'Tech: vanilla JavaScript with Vite, as an installable web app with a service worker. Behind it a small PHP API with SQLite on shared hosting at cyon in Basel. Encryption runs in the browser (WebCrypto, AES-GCM); the family key is derived from the password and never leaves the phone.',
+  // The tech note's last sentence: {link} = the repository's address, as a link
+  'about.source': 'The source code is open (AGPL-3.0): {link}',
 };
