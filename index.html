@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#faf5ee" media="(prefers-color-scheme: light)" />
+    <meta name="description" content="Stillen, Schoppen, Windeln und Schlaf festhalten – Ende-zu-Ende verschlüsselt" />
+    <title>Baby Tracker</title>
+    <!-- "img/", not "icons/": shared hosts alias /icons/ globally (directory-index
+         icons), which shadows a docroot folder of that name and 404s everything. -->
+    <link rel="icon" href="img/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Baby" />
+  </head>
+  <body>
+    <main id="app" class="app"></main>
+
+    <nav id="tabbar" class="tabbar" aria-label="Hauptnavigation" hidden>
+      <a href="#/" data-tab="jetzt">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10.5 4.5h3M12 4.5v2" />
+          <rect x="9" y="6.5" width="6" height="2.5" rx="1" />
+          <rect x="8" y="9" width="8" height="11" rx="2.5" />
+          <path d="M10 12.5h4M10 15.5h4" />
+        </svg>
+        <span>Jetzt</span>
+      </a>
+      <a href="#/nachtragen" data-tab="nachtragen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.25" />
+          <path d="M12 8.5v7M8.5 12h7" />
+        </svg>
+        <span>Nachtragen</span>
+      </a>
+      <a href="#/verlauf" data-tab="verlauf">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.25" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+        <span>Verlauf</span>
+      </a>
+      <a href="#/mehr" data-tab="mehr">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 8h5.5M13.5 8H20M4 16h7.5M15.5 16H20" />
+          <circle cx="11.5" cy="8" r="2" />
+          <circle cx="13.5" cy="16" r="2" />
+        </svg>
+        <span>Mehr</span>
+      </a>
+    </nav>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

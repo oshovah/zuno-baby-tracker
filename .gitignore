@@ -1,0 +1,27 @@
+node_modules/
+dist/
+deploy/
+data/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+deploy-v1-live/
+
+# The repo is public: nothing that holds family data may ever be tracked.
+# Databases and their backups (data/ is ignored above; these catch a copy
+# pulled from the server into the project folder) …
+*.db
+*.db-wal
+*.db-shm
+*.db.*.bak
+*.sqlite
+# … and DECRYPTED exports: «Daten exportieren» in the app and
+# `node scripts/export-plain.mjs … > export.json` (README) write plaintext.
+export*.json
+baby-tracker-export-*.json
+
+# Artwork an installation shows to ONE family only (README › Private
+# artwork): packaged and served behind the session, never published.
+private-art/

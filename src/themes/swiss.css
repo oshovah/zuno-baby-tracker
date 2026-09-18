@@ -1,0 +1,175 @@
+/* Design "Swiss" — white paper, black grotesque, rules and circles.
+ *
+ * After the look of the Swiss Design Association (swiss-design-association.ch):
+ * bold lowercase Helvetica on white, rows separated by solid black rules, a
+ * thick rule under the page title, and vivid magenta/yellow shapes as the
+ * only colour — circles, so buttons are pills. No glows, no shadows, no
+ * rounded cards. By night the same on true black. The accent (--milk, also
+ * Stillen/Schoppen) is the site's magenta, darkened just enough to read as
+ * text on white; the yellow of its gradient goes to the measurements. The
+ * "soft" tints are not tints here but the site's solid fills — the quick
+ * tiles are magenta, green, blue and yellow blocks with black text on them
+ * (and the notice on the registration form is the pink circle's cousin).
+ * Every text/ground pair is ≥ 4.5:1 in its variant.
+ */
+
+[data-theme='swiss'] {
+  --bg: light-dark(#ffffff, #000000);
+  --surface: light-dark(#ffffff, #000000);
+  --surface-2: light-dark(#f3f3f3, #1a1a1a);
+  --line: light-dark(#111111, #ffffff); /* solid rules, not hairlines */
+  --ink: light-dark(#111111, #ffffff);
+  --muted: light-dark(#444444, #bdbdbd);
+  --faint: light-dark(#555555, #b0b0b0);
+
+  --milk: light-dark(#c026d3, #e879f9);
+  --milk-soft: light-dark(#e879f9, #c026d3); /* solid fills, see below */
+  --on-milk: light-dark(#ffffff, #111111);
+  --diaper: light-dark(#15803d, #4ade80);
+  --diaper-soft: light-dark(#4ade80, #15803d);
+  --sleep: light-dark(#2563eb, #60a5fa);
+  --sleep-soft: light-dark(#60a5fa, #2563eb);
+  --measure: light-dark(#b45309, #fbbf24);
+  --measure-soft: light-dark(#fde047, #b45309);
+  --danger: light-dark(#dc2626, #ff6b6b);
+
+  --glow-milk: none;
+  --glow-diaper: none;
+  --glow-sleep: none;
+  --glow-measure: none;
+
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-lg: 0px;
+  --radius-pill: 999px; /* the circles */
+  --shadow-pop: none; /* the toast has its own 1px rule */
+  --backdrop: rgba(0, 0, 0, 0.4);
+  --font: Inter, 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif; /* Inter is bundled */
+}
+
+/* The typographic grid: lowercase titles, a thick rule under the page
+ * title, a rule above every section, rows instead of cards. */
+[data-theme='swiss'] .view-head {
+  padding-bottom: 8px;
+  border-bottom: 3px solid var(--ink);
+}
+
+[data-theme='swiss'] .view-head h1 {
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+[data-theme='swiss'] .section-title {
+  padding-top: 10px;
+  border-top: 1px solid var(--ink);
+  font-size: 18px;
+  text-transform: lowercase;
+}
+
+[data-theme='swiss'] .tabbar a {
+  font-size: 12px;
+  text-transform: lowercase;
+}
+
+[data-theme='swiss'] .hero {
+  border-width: 0 0 2px;
+}
+
+[data-theme='swiss'] .mini.card {
+  border-width: 0 0 1px;
+}
+
+/* Buttons are the site's circles: pills, the primary one in magenta. */
+[data-theme='swiss'] .btn {
+  border-radius: 999px;
+}
+
+/* The tinted tiles are solid colour blocks, so their labels take the ink
+ * (black on the vivid fills by day, white on the deep ones by night). */
+[data-theme='swiss'] .quick.milk,
+[data-theme='swiss'] .quick.diaper,
+[data-theme='swiss'] .quick.sleep,
+[data-theme='swiss'] .quick.todo,
+[data-theme='swiss'] .more-btn.milk,
+[data-theme='swiss'] .more-btn.diaper,
+[data-theme='swiss'] .more-btn.sleep,
+[data-theme='swiss'] .more-btn.measure {
+  color: var(--ink);
+}
+
+/* Icon set: monochrome SVGs in currentColor instead of the emoji (files in
+ * icons/swiss/; the names are ui.js ICONS). */
+[data-theme='swiss'] {
+  --ico-glyph: none;
+  --ico-svg: block;
+}
+
+[data-theme='swiss'] .ico[data-ico='breastfeed'] {
+  --ico: url('./icons/swiss/breastfeed.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='bottle'] {
+  --ico: url('./icons/swiss/bottle.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='sleep'] {
+  --ico: url('./icons/swiss/sleep.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='wake'] {
+  --ico: url('./icons/swiss/wake.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='pee'],
+[data-theme='swiss'] .ico[data-ico='diaper'] {
+  --ico: url('./icons/swiss/pee.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='poop'] {
+  --ico: url('./icons/swiss/poop.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='both'] {
+  --ico: url('./icons/swiss/both.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='weight'] {
+  --ico: url('./icons/swiss/weight.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='temperature'] {
+  --ico: url('./icons/swiss/temperature.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='medication'] {
+  --ico: url('./icons/swiss/medication.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='task'] {
+  --ico: url('./icons/swiss/task.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='reminder'] {
+  --ico: url('./icons/swiss/reminder.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='sync'] {
+  --ico: url('./icons/swiss/sync.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='lock'] {
+  --ico: url('./icons/swiss/lock.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='bolt'] {
+  --ico: url('./icons/swiss/bolt.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='care'] {
+  --ico: url('./icons/swiss/care.svg');
+}
+
+[data-theme='swiss'] .ico[data-ico='phone'] {
+  --ico: url('./icons/swiss/phone.svg');
+}

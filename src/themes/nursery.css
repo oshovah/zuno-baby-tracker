@@ -1,0 +1,61 @@
+/* Design "Nachtkinderzimmer" (night nursery) — the default, and the reference
+ * every other design is measured against.
+ *
+ * Dark-first: the primary use is one-handed at 3am in a dim bedroom, so the
+ * dark palette is a warm near-black with low-glare, hue-coded surfaces. Each
+ * event family owns a hue that stays identical in both variants:
+ *   milk (Stillen/Schoppen) apricot · diaper sage · sleep lavender ·
+ *   measurements clay.
+ * Light: accents dark enough for white button text AND for use as small
+ * text on the light ground (≥ 4.5:1 both ways — daylight outdoor reading).
+ * Type: ui-rounded (SF Pro Rounded on iPhone and Mac) gives the big
+ * elapsed-time numerals their soft, instrument-like look; where the system
+ * has no rounded face (Android) the bundled Nunito steps in.
+ *
+ * Every colour is `light-dark(<light>, <dark>)`: the browser picks the side
+ * from the element's colour scheme — the phone's setting, or the user's
+ * override under Mehr (a `color-scheme` on <html>).
+ *
+ * `:where(:root)` has zero specificity: these are the fallbacks for every
+ * token, and any design's `[data-theme="…"]` block beats them without
+ * caring about file order. The `[data-theme="nursery"]` selector lets the
+ * picker's swatch show this design while another one is active.
+ * The tokens themselves are documented in _template.css.
+ */
+
+:where(:root),
+[data-theme='nursery'] {
+  --bg: light-dark(#faf5ee, #171310);
+  --surface: light-dark(#ffffff, #211b16);
+  --surface-2: light-dark(#f3ebdf, #2a231d);
+  --line: light-dark(rgba(90, 60, 30, 0.12), rgba(235, 200, 160, 0.09));
+  --ink: light-dark(#33291f, #f2eae0);
+  --muted: light-dark(#7d6f61, #a3968a);
+  /* ≥4.5:1 on --bg and --surface — faint is still load-bearing text
+   * (tabbar labels, the timer hint) read in a dim bedroom. */
+  --faint: light-dark(#7a6c58, #8f8175);
+
+  --milk: light-dark(#9c5c1e, #eba76f);
+  --milk-soft: light-dark(rgba(156, 92, 30, 0.12), rgba(235, 167, 111, 0.14));
+  --on-milk: light-dark(#ffffff, #2b1c0e);
+  --diaper: light-dark(#4f7440, #a3c292);
+  --diaper-soft: light-dark(rgba(79, 116, 64, 0.12), rgba(163, 194, 146, 0.13));
+  --sleep: light-dark(#6c63ad, #a49dd6);
+  --sleep-soft: light-dark(rgba(108, 99, 173, 0.12), rgba(164, 157, 214, 0.15));
+  --measure: light-dark(#96604f, #cfa89b);
+  --measure-soft: light-dark(rgba(150, 96, 79, 0.12), rgba(207, 168, 155, 0.13));
+  --danger: light-dark(#b5492f, #e07a5f);
+
+  --glow-milk: radial-gradient(120% 90% at 50% 0%, var(--milk-soft), transparent 70%);
+  --glow-diaper: radial-gradient(140% 100% at 50% 0%, var(--diaper-soft), transparent 75%);
+  --glow-sleep: radial-gradient(140% 100% at 50% 0%, var(--sleep-soft), transparent 75%);
+  --glow-measure: radial-gradient(140% 100% at 50% 0%, var(--measure-soft), transparent 75%);
+
+  --radius: 20px;
+  --radius-sm: 12px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+  --shadow-pop: 0 6px 24px rgba(0, 0, 0, 0.35);
+  --backdrop: rgba(10, 7, 5, 0.55);
+  --font: ui-rounded, 'SF Pro Rounded', Nunito, -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+}

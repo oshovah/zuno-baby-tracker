@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Baby Tracker – Crypto-Spike</title>
+  <style>
+    body { font: 16px/1.5 ui-rounded, -apple-system, system-ui, sans-serif; margin: 20px; background: #171310; color: #f2eae0; }
+    h1 { font-size: 20px; }
+    pre { white-space: pre-wrap; background: #211b16; padding: 12px; border-radius: 12px; font-size: 14px; }
+    button { font: inherit; padding: 12px 18px; border-radius: 12px; border: 0; background: #eba76f; color: #2b1c0e; font-weight: 700; margin: 6px 6px 6px 0; }
+    .ok { color: #a3c292; } .bad { color: #e07a5f; }
+  </style>
+</head>
+<body>
+  <h1>Crypto-Spike (Plan §0)</h1>
+  <p>Schritt 1: «Messen» tippen. Schritt 2: App/Tab schliessen, Handy neu starten, Seite wieder öffnen → «Schlüssel prüfen» tippen. Ergebnisse unten.</p>
+  <button id="run">Messen</button>
+  <button id="check">Schlüssel prüfen</button>
+  <button id="wipe">Zurücksetzen</button>
+  <pre id="out">secure context: …</pre>
+  <script type="module">
+    const out = document.getElementById('out');
+    const log = (s, cls) => { out.innerHTML += (cls ? `<span class="${cls}">${s}</span>` : s) + '\n'; };
+    out.textContent = `secure context: ${window.isSecureContext} · crypto.subtle: ${!!globalThis.crypto?.subtle}\nUA: ${navigator.userAgent}\n`;
+    const enc = new TextEncoder();
+    const subtle = crypto.subtle;
+    const IDB = 'bt-spike';
+    function openDb() {
+      return new Promise((res, rej) => {
+        const t = setTimeout(() => rej(new Error('IndexedDB open() hängt (> 3 s)')), 3000);
+        const req = indexedDB.open(IDB, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('meta', { keyPath: 'k' });
+        req.onsuccess = () => { clearTimeout(t); res(req.result); };
+        req.onerror = () => { clearTimeout(t); rej(req.error); };
+      });
+    }
+    function put(db, rec) { return new Promise((res, rej) => { const tx = db.transaction('meta', 'readwrite'); tx.objectStore('meta').put(rec); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+    function get(db, k) { return new Promise((res, rej) => { const req = db.transaction('meta').objectStore('meta').get(k); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
+    const AAD = enc.encode('bt1|1|spike');
+    async function measure() {
+      out.textContent += '\n— Messung —\n';
+      try {
+        const base = await subtle.importKey('raw', enc.encode('familie-geheim-2026'), 'PBKDF2', false, ['deriveBits']);
+        let t = performance.now();
+        const mk = await subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: crypto.getRandomValues(new Uint8Array(16)), iterations: 600000 }, base, 256);
+        log(`PBKDF2 600k: ${(performance.now() - t).toFixed(0)} ms`, 'ok');
+        const ikm = await subtle.importKey('raw', mk, 'HKDF', false, ['deriveBits', 'deriveKey']);
+        const kek = await subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: enc.encode('bt/v1/user/kek') }, ikm, { name: 'AES-KW', length: 256 }, false, ['wrapKey', 'unwrapKey']);
+        log('HKDF → AES-KW KEK: ok', 'ok');
+        const fdk = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+        const wrapped = await subtle.wrapKey('raw', fdk, kek, 'AES-KW');
+        log(`AES-KW wrap: ${wrapped.byteLength} bytes`, 'ok');
+        const daily = await subtle.unwrapKey('raw', wrapped, kek, 'AES-KW', { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+        log('AES-KW unwrap (non-extractable): ok', 'ok');
+        const N = 5000; const pt = enc.encode(JSON.stringify({ v: 1, type: 'bottle', startedAt: '2026-09-06T03:12:00Z', details: { amount_ml: 90 } }).padEnd(256, ' '));
+        t = performance.now(); const blobs = [];
+        for (let i = 0; i < N; i++) { const iv = crypto.getRandomValues(new Uint8Array(12)); blobs.push({ iv, ct: await subtle.encrypt({ name: 'AES-GCM', iv, additionalData: AAD }, daily, pt) }); }
+        log(`AES-GCM encrypt ${N}: ${(performance.now() - t).toFixed(0)} ms`, 'ok');
+        t = performance.now();
+        for (let i = 0; i < N; i += 256) await Promise.all(blobs.slice(i, i + 256).map((b) => subtle.decrypt({ name: 'AES-GCM', iv: b.iv, additionalData: AAD }, daily, b.ct)));
+        log(`AES-GCM decrypt ${N} (Chunks à 256): ${(performance.now() - t).toFixed(0)} ms`, 'ok');
+        // persistence test: store the non-extractable key + one blob
+        const db = await openDb();
+        const sample = blobs[0];
+        try {
+          await put(db, { k: 'fdk', key: daily, iv: sample.iv, ct: sample.ct, mode: 'CryptoKey' });
+          log('IndexedDB put(CryptoKey non-extractable): ok', 'ok');
+        } catch (e) {
+          log(`IndexedDB put(CryptoKey) FEHLER: ${e.name} ${e.message} → Fallback raw bytes`, 'bad');
+          const raw = await subtle.exportKey('raw', fdk);
+          await put(db, { k: 'fdk', raw, iv: sample.iv, ct: sample.ct, mode: 'raw' });
+          log('IndexedDB put(raw): ok', 'ok');
+        }
+        t = performance.now();
+        const rows = []; for (let i = 0; i < 5000; i++) rows.push({ k: 'r' + i, blob: blobs[i].ct, iv: blobs[i].iv });
+        const tx = db.transaction('meta', 'readwrite'); rows.forEach((r) => tx.objectStore('meta').put(r)); await new Promise((r) => (tx.oncomplete = r));
+        log(`IndexedDB write 5000 rows: ${(performance.now() - t).toFixed(0)} ms`, 'ok');
+        t = performance.now();
+        const all = await new Promise((res) => { const q = db.transaction('meta').objectStore('meta').getAll(); q.onsuccess = () => res(q.result); });
+        log(`IndexedDB getAll (${all.length} rows): ${(performance.now() - t).toFixed(0)} ms`, 'ok');
+        if (navigator.storage && navigator.storage.persist) log(`storage.persist(): ${await navigator.storage.persist()}`); else log('storage.persist(): nicht verfügbar');
+        log('\nJetzt: App schliessen, Handy neu starten, Seite öffnen, «Schlüssel prüfen».');
+      } catch (e) { log(`FEHLER: ${e.name} ${e.message}`, 'bad'); }
+    }
+    async function check() {
+      out.textContent += '\n— Schlüssel prüfen —\n';
+      try {
+        const db = await openDb();
+        const rec = await get(db, 'fdk');
+        if (!rec) { log('Kein Schlüssel gespeichert (evicted oder nie gemessen)', 'bad'); return; }
+        let key = rec.key;
+        if (rec.mode === 'raw') key = await subtle.importKey('raw', rec.raw, 'AES-GCM', false, ['decrypt']);
+        const pt = await subtle.decrypt({ name: 'AES-GCM', iv: rec.iv, additionalData: AAD }, key, rec.ct);
+        log(`Schlüssel (${rec.mode}) überlebt: ja — Testdatensatz entschlüsselt (${pt.byteLength} bytes)`, 'ok');
+      } catch (e) { log(`FEHLER: ${e.name} ${e.message}`, 'bad'); }
+    }
+    document.getElementById('run').onclick = measure;
+    document.getElementById('check').onclick = check;
+    document.getElementById('wipe').onclick = () => { indexedDB.deleteDatabase(IDB); out.textContent = 'zurückgesetzt\n'; };
+  </script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+/* Design "<Your name>" — copy this file to src/themes/<id>.css, replace
+ * every `my-theme` with your id (lowercase, letters and dashes), then add
+ * one entry to THEMES in src/themes/index.js. That is the whole procedure;
+ * src/themes/README.md has the checklist.
+ *
+ * Every token is optional: leave one out and the default design
+ * (nursery.css) fills it in. The values below ARE the default design, so
+ * an untouched copy looks exactly like it — change what you mean.
+ *
+ * Colours are written as `light-dark(<light>, <dark>)`. The browser picks
+ * the side from the phone's setting — or from the user's override under
+ * Mehr › Einstellungen, which you get for free. A design with a single
+ * look simply writes plain colours instead.
+ */
+
+[data-theme='my-theme'] {
+  /* --- grounds ---------------------------------------------------------- */
+  --bg: light-dark(#faf5ee, #171310); /* page background */
+  --surface: light-dark(#ffffff, #211b16); /* cards, sheets, inputs */
+  --surface-2: light-dark(#f3ebdf, #2a231d); /* chips, segmented controls, secondary buttons */
+  --line: light-dark(rgba(90, 60, 30, 0.12), rgba(235, 200, 160, 0.09)); /* hairlines: borders, separators */
+
+  /* --- text ------------------------------------------------------------- */
+  --ink: light-dark(#33291f, #f2eae0); /* body text */
+  --muted: light-dark(#7d6f61, #a3968a); /* hints, labels — keep ≥ 4.5:1 on --bg */
+  --faint: light-dark(#7a6c58, #8f8175); /* tab bar labels, the smallest text — still ≥ 4.5:1 */
+
+  /* --- event hues ------------------------------------------------------- *
+   * One hue per event family; each with a translucent "soft" tint for
+   * tinted grounds. --milk doubles as the app's accent: primary buttons,
+   * links, the active tab, the info buttons. --on-milk is the text colour
+   * ON the accent (button labels): ≥ 4.5:1 against --milk.              */
+  --milk: light-dark(#9c5c1e, #eba76f); /* Stillen + Schoppen + accent */
+  --milk-soft: light-dark(rgba(156, 92, 30, 0.12), rgba(235, 167, 111, 0.14));
+  --on-milk: light-dark(#ffffff, #2b1c0e);
+  --diaper: light-dark(#4f7440, #a3c292); /* Windel */
+  --diaper-soft: light-dark(rgba(79, 116, 64, 0.12), rgba(163, 194, 146, 0.13));
+  --sleep: light-dark(#6c63ad, #a49dd6); /* Schlaf */
+  --sleep-soft: light-dark(rgba(108, 99, 173, 0.12), rgba(164, 157, 214, 0.15));
+  --measure: light-dark(#96604f, #cfa89b); /* Gewicht, Temperatur, Medikament, Erledigt — and the Erinnerungen card and tile */
+  --measure-soft: light-dark(rgba(150, 96, 79, 0.12), rgba(207, 168, 155, 0.13));
+  --danger: light-dark(#b5492f, #e07a5f); /* delete, errors, the "to do" dot */
+
+  /* --- surfaces --------------------------------------------------------- *
+   * The soft hue glow at the top of the hero and the mini cards. `none`
+   * for a flat design.                                                     */
+  --glow-milk: radial-gradient(120% 90% at 50% 0%, var(--milk-soft), transparent 70%);
+  --glow-diaper: radial-gradient(140% 100% at 50% 0%, var(--diaper-soft), transparent 75%);
+  --glow-sleep: radial-gradient(140% 100% at 50% 0%, var(--sleep-soft), transparent 75%);
+  --glow-measure: radial-gradient(140% 100% at 50% 0%, var(--measure-soft), transparent 75%); /* the Erinnerungen card */
+
+  /* --- shape ------------------------------------------------------------ */
+  --radius: 20px; /* cards, big buttons */
+  --radius-sm: 12px; /* inputs, small buttons, toasts, notices */
+  --radius-lg: 22px; /* the bottom sheet's top corners */
+  --radius-pill: 999px; /* chips, quick buttons, status pills */
+  --shadow-pop: 0 6px 24px rgba(0, 0, 0, 0.35); /* the toast; a flat design may use a 1px ring */
+  --backdrop: rgba(10, 7, 5, 0.55); /* dims the page behind the bottom sheet */
+
+  /* --- type ------------------------------------------------------------- *
+   * A system font, or one of the bundled faces (Inter, Jost, Nunito — see
+   * fonts.css; more can be added, OFL and latin-subsetted). Never a font
+   * from a third-party host: the CSP blocks it, and the app promises no
+   * outside requests. The big timer numerals use this face too — pick one
+   * with clear digits.                                                     */
+  --font: ui-rounded, 'SF Pro Rounded', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Need more than tokens? Scope component rules to your design and keep
+ * them few — the layout is shared by every design:
+ *
+ * [data-theme='my-theme'] .btn.primary { text-transform: uppercase; }
+ *
+ * Own icons instead of the emoji? One SVG per name in icons/my-theme/ and
+ * (README.md, "Icons"):
+ *
+ * [data-theme='my-theme'] { --ico-glyph: none; --ico-svg: block; }
+ * [data-theme='my-theme'] .ico[data-ico='breastfeed'] { --ico: url('./icons/my-theme/breastfeed.svg'); }
+ */

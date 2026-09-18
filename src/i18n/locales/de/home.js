@@ -1,0 +1,87 @@
+// The «Jetzt» screen (views/home.js, timer.js): the hero, the cards, the quick tiles.
+export default {
+  // Before the first snapshot
+  'empty.loading': 'Laden …',
+  'empty.offline': 'Keine Verbindung – noch keine gespeicherten Daten.',
+  // The hero: a live side ({place} = « · 2. Seite» / « · weiter» / « · nochmals»
+  // from meals.liveSideInMeal, or nothing), a paused side, the closed meal
+  'hero.nursingNow': 'Stillt gerade · {side}{place}',
+  'hero.nursingSide': 'Stillen {side}{place}',
+  'hero.pausedSide': 'Pause · {side}',
+  // «seit 14:32 ▾» — {time} is the clock button that unfolds the start corrections
+  'hero.sinceTime': 'seit {time}',
+  'hero.mealSince': 'Mahlzeit seit {time}',
+  'hero.startedEarlier': 'Früher begonnen?',
+  'hero.adjust': 'anpassen',
+  'hero.startBackChip': '+{n} Min',
+  'hero.howLongNursed': 'Wie lange gestillt?',
+  'hero.minutesChip': '{n} Min',
+  'hero.pause': 'Pause',
+  'hero.resume': 'Weiter',
+  'hero.stopNursing': 'Stillen beenden',
+  // {span} = «in 12 Min.» / «jetzt» (ui.fmtInShort)
+  'hero.pauseEnds': 'Ohne «Weiter» endet die Mahlzeit {span}',
+  'hero.nothingYet': "Noch nichts erfasst – unten geht's los.",
+  // The store's notice line ends with this link
+  'notice.toHistory': 'Zum Verlauf',
+  // The stale chip: when the data was last refreshed
+  'stale.title': 'Letzte Aktualisierung',
+  'stale.today': 'Stand {time}',
+  'stale.yesterday': 'Stand gestern {time}',
+  'stale.onDate': 'Stand {day}.{month}. {time}',
+  // The mini cards (diaper, sleep); {span} = «12 Min.» / «1½ Std.» / «kurzem» (ui.fmtAgoBareShort)
+  'card.lastDiaperAgo': 'Zuletzt',
+  'card.noDiaperYet': 'Noch keine Windel',
+  'card.noneYet': 'noch keine',
+  'card.mealsWord': 'Mahlzeiten',
+  'card.sleeping': 'Schläft',
+  'card.awake': 'Wach',
+  'card.forSpan': 'seit {span}',
+  'card.adjust': 'anpassen ›',
+  'card.nothingYet': 'noch nichts erfasst',
+  // The reminders mini card and tile
+  'todo.label': 'Erinnerungen',
+  'todo.allDone': 'Alles erledigt',
+  'todo.allDoneCheck': 'Alles erledigt ✓',
+  'todo.create': 'anlegen ›',
+  'todo.nextUp': 'Als Nächstes',
+  'todo.tomorrowAt': 'morgen {time}',
+  'todo.dueSince': '{time} · seit {span}',
+  'todo.overdue': 'Überfällig',
+  'todo.overdueCount.one': '1 Überfällig',
+  'todo.overdueCount.other': '{n} Überfällig',
+  'todo.dueNow': 'Jetzt fällig',
+  'todo.tickAria': '{title} um {time} als erledigt markieren',
+  'todo.tick': 'Abhaken ✓',
+  'todo.doneCheck': 'erledigt ✓',
+  'todo.open': '{n} offen',
+  // The sleep card's day total
+  'today.sleep': '{span} Schlaf',
+  // The quick tiles
+  'quick.title': 'Erfassen',
+  'tile.nurseLeft': 'Stillen links',
+  'tile.nurseRight': 'Stillen rechts',
+  'tile.switchSide': 'Wechseln',
+  'tile.nextUp': 'als Nächstes',
+  'tile.wokeUp': 'Aufgewacht',
+  'tile.startSleep': 'Schlaf starten',
+  // Toasts; {side} = «links» / «rechts», {span} = «25 Min.», {kind} = «Pipi» …
+  'toast.nursingSaved': 'Stillen {side} gespeichert',
+  'toast.diaperSaved': 'Windel ({kind}) gespeichert',
+  'toast.nursingStopped': 'Stillen beendet · {span}',
+  'toast.slept': 'Geschlafen · {span}',
+  'toast.timerRunningAgain': '{type}-Timer läuft wieder',
+  'toast.nursingRunningAgain': 'Stillen läuft wieder',
+  'toast.resumed': 'Weiter – {side}',
+  'toast.switched': 'Seite gewechselt – jetzt {side}',
+  'toast.nursingDurationSaved': 'Stillen · {span} gespeichert',
+  'toast.startSet': 'Start auf {time} gesetzt',
+  'toast.paused': 'Pause – {side} {span}',
+  'toast.sleepStarted': 'Schlaf gestartet',
+  'error.pauseUndoGone': 'Nicht mehr rückgängig – es ging schon weiter',
+  // The stopwatch sheet (timer.js)
+  'timer.title': 'Timer',
+  'timer.start': 'Start',
+  'timer.restart': 'Neu starten',
+  'timer.stop': 'Timer beenden',
+};

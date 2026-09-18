@@ -1,0 +1,205 @@
+/* Design "Bauhaus" — red, yellow, blue and black on warm paper.
+ *
+ * The 1920s primaries as flat fills, black 2px rules around everything,
+ * one round corner against the square grid (circle · square), geometric
+ * type (the bundled Jost, a Futura revival) with spaced uppercase titles,
+ * and a hard offset shadow on
+ * the toast instead of a blur. Yellow can never be text on paper, so the
+ * Windel hue is a dark ochre for text with a true yellow tint behind it;
+ * measurements take black. By night the same on near-black, the primaries
+ * lightened. Every text/ground pair is ≥ 4.5:1 in its variant.
+ */
+
+[data-theme='bauhaus'] {
+  --bg: light-dark(#f3eee4, #141414);
+  --surface: light-dark(#fbf8f1, #1d1d1d);
+  --surface-2: light-dark(#e9e2d3, #2a2a2a);
+  --line: light-dark(#1a1a1a, #f3eee4);
+  --ink: light-dark(#1a1a1a, #f3eee4);
+  --muted: light-dark(#5a544c, #b9b1a5);
+  --faint: light-dark(#5f584f, #ada598);
+
+  --milk: light-dark(#c1272d, #ff5a4f); /* red: Stillen/Schoppen + accent */
+  --milk-soft: light-dark(rgba(193, 39, 45, 0.14), rgba(255, 90, 79, 0.18));
+  --on-milk: light-dark(#ffffff, #141414);
+  --diaper: light-dark(#7a5c00, #f5c518); /* yellow */
+  --diaper-soft: light-dark(rgba(245, 197, 24, 0.35), rgba(245, 197, 24, 0.2));
+  --sleep: light-dark(#1d4ed8, #6d9cff); /* blue */
+  --sleep-soft: light-dark(rgba(29, 78, 216, 0.14), rgba(109, 156, 255, 0.2));
+  --measure: light-dark(#1a1a1a, #e6dfd3); /* black */
+  --measure-soft: light-dark(rgba(26, 26, 26, 0.08), rgba(230, 223, 211, 0.14));
+  --danger: light-dark(#b3261e, #ff6b6b);
+
+  --glow-milk: none;
+  --glow-diaper: none;
+  --glow-sleep: none;
+  --glow-measure: none;
+
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-lg: 0px;
+  --radius-pill: 999px; /* the circle */
+  --shadow-pop: 4px 4px 0 var(--ink); /* hard offset, no blur */
+  --backdrop: rgba(26, 26, 26, 0.55);
+  --font: Jost, Futura, 'Avenir Next', 'Century Gothic', system-ui, sans-serif; /* Jost is bundled */
+}
+
+/* Geometry: 2px black frames, one round corner on the hero and the sleep
+ * card, spaced uppercase titles. */
+[data-theme='bauhaus'] .hero,
+[data-theme='bauhaus'] .mini.card,
+[data-theme='bauhaus'] .quick,
+[data-theme='bauhaus'] .more-btn,
+[data-theme='bauhaus'] .btn,
+[data-theme='bauhaus'] .chip,
+[data-theme='bauhaus'] .segmented,
+[data-theme='bauhaus'] .theme-option,
+[data-theme='bauhaus'] input[type='text'],
+[data-theme='bauhaus'] input[type='password'],
+[data-theme='bauhaus'] input[type='number'],
+[data-theme='bauhaus'] input[type='date'],
+[data-theme='bauhaus'] input[type='datetime-local'],
+[data-theme='bauhaus'] input[type='time'] {
+  border: 2px solid var(--ink);
+}
+
+[data-theme='bauhaus'] .hero {
+  border-radius: 0 0 0 56px;
+}
+
+[data-theme='bauhaus'] .mini.sleep,
+[data-theme='bauhaus'] .mini.todo {
+  border-radius: 0 56px 0 0;
+}
+
+[data-theme='bauhaus'] .tabbar {
+  border-top: 2px solid var(--ink);
+}
+
+[data-theme='bauhaus'] .view-head h1,
+[data-theme='bauhaus'] .section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+[data-theme='bauhaus'] .view-head h1 {
+  font-size: 24px;
+}
+
+[data-theme='bauhaus'] .section-title {
+  font-size: 15px;
+}
+
+/* The quick tiles are the primaries themselves — solid red, yellow, blue
+ * (black for measurements) — with whichever text reads on them. The
+ * «als Nächstes»/«Wechseln» pill turns ink so it stays visible on red. */
+[data-theme='bauhaus'] .quick.milk,
+[data-theme='bauhaus'] .more-btn.milk {
+  background: var(--milk);
+  color: var(--on-milk);
+}
+
+[data-theme='bauhaus'] .quick.sleep,
+[data-theme='bauhaus'] .more-btn.sleep {
+  background: var(--sleep);
+  color: light-dark(#ffffff, #141414);
+}
+
+[data-theme='bauhaus'] .quick.diaper,
+[data-theme='bauhaus'] .more-btn.diaper {
+  background: #f5c518;
+  color: #1a1a1a;
+}
+
+[data-theme='bauhaus'] .more-btn.measure,
+[data-theme='bauhaus'] .quick.todo {
+  background: var(--measure);
+  color: var(--bg);
+}
+
+/* On the black tile the pill inverts, like «als Nächstes» on red. */
+[data-theme='bauhaus'] .quick.todo .q-next.todo-pill {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+[data-theme='bauhaus'] .q-next {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* Icon set: monochrome SVGs in currentColor instead of the emoji (files in
+ * icons/bauhaus/; the names are ui.js ICONS). */
+[data-theme='bauhaus'] {
+  --ico-glyph: none;
+  --ico-svg: block;
+}
+
+[data-theme='bauhaus'] .ico[data-ico='breastfeed'] {
+  --ico: url('./icons/bauhaus/breastfeed.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='bottle'] {
+  --ico: url('./icons/bauhaus/bottle.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='sleep'] {
+  --ico: url('./icons/bauhaus/sleep.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='wake'] {
+  --ico: url('./icons/bauhaus/wake.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='pee'],
+[data-theme='bauhaus'] .ico[data-ico='diaper'] {
+  --ico: url('./icons/bauhaus/pee.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='poop'] {
+  --ico: url('./icons/bauhaus/poop.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='both'] {
+  --ico: url('./icons/bauhaus/both.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='weight'] {
+  --ico: url('./icons/bauhaus/weight.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='temperature'] {
+  --ico: url('./icons/bauhaus/temperature.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='medication'] {
+  --ico: url('./icons/bauhaus/medication.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='task'] {
+  --ico: url('./icons/bauhaus/task.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='reminder'] {
+  --ico: url('./icons/bauhaus/reminder.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='sync'] {
+  --ico: url('./icons/bauhaus/sync.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='lock'] {
+  --ico: url('./icons/bauhaus/lock.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='bolt'] {
+  --ico: url('./icons/bauhaus/bolt.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='care'] {
+  --ico: url('./icons/bauhaus/care.svg');
+}
+
+[data-theme='bauhaus'] .ico[data-ico='phone'] {
+  --ico: url('./icons/bauhaus/phone.svg');
+}

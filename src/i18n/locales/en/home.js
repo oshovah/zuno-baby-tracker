@@ -1,0 +1,87 @@
+// The "Now" screen (views/home.js, timer.js): the hero, the cards, the quick tiles.
+export default {
+  // Before the first snapshot
+  'empty.loading': 'Loading …',
+  'empty.offline': 'No connection – no saved data yet.',
+  // The hero: a live side ({place} = " · 2nd side" / " · resumed" / " · again"
+  // from meals.liveSideInMeal, or nothing), a paused side, the closed meal
+  'hero.nursingNow': 'Nursing now · {side}{place}',
+  'hero.nursingSide': 'Nursing {side}{place}',
+  'hero.pausedSide': 'Paused · {side}',
+  // "since 14:32 ▾" — {time} is the clock button that unfolds the start corrections
+  'hero.sinceTime': 'since {time}',
+  'hero.mealSince': 'Meal since {time}',
+  'hero.startedEarlier': 'Started earlier?',
+  'hero.adjust': 'adjust',
+  'hero.startBackChip': '+{n} min',
+  'hero.howLongNursed': 'How long did you nurse?',
+  'hero.minutesChip': '{n} min',
+  'hero.pause': 'Pause',
+  'hero.resume': 'Resume',
+  'hero.stopNursing': 'Stop nursing',
+  // {span} = "in 12 min" / "now" (ui.fmtInShort)
+  'hero.pauseEnds': 'Without "Resume" the meal ends {span}',
+  'hero.nothingYet': 'Nothing logged yet – start below.',
+  // The store's notice line ends with this link
+  'notice.toHistory': 'Open History',
+  // The stale chip: when the data was last refreshed
+  'stale.title': 'Last update',
+  'stale.today': 'As of {time}',
+  'stale.yesterday': 'As of yesterday {time}',
+  'stale.onDate': 'As of {day}/{month} {time}',
+  // The mini cards (diaper, sleep); {span} = "12 min" / "1½ h" / "a moment" (ui.fmtAgoBareShort)
+  'card.lastDiaperAgo': 'Last diaper',
+  'card.noDiaperYet': 'No diaper yet',
+  'card.noneYet': 'none yet',
+  'card.mealsWord': 'meals',
+  'card.sleeping': 'Asleep',
+  'card.awake': 'Awake',
+  'card.forSpan': 'for {span}',
+  'card.adjust': 'adjust ›',
+  'card.nothingYet': 'nothing logged yet',
+  // The reminders mini card and tile
+  'todo.label': 'Reminders',
+  'todo.allDone': 'All done',
+  'todo.allDoneCheck': 'All done ✓',
+  'todo.create': 'add one ›',
+  'todo.nextUp': 'Next up',
+  'todo.tomorrowAt': 'tomorrow {time}',
+  'todo.dueSince': '{time} · for {span}',
+  'todo.overdue': 'Overdue',
+  'todo.overdueCount.one': '1 overdue',
+  'todo.overdueCount.other': '{n} overdue',
+  'todo.dueNow': 'Due now',
+  'todo.tickAria': 'Mark {title} at {time} as done',
+  'todo.tick': 'Tick off ✓',
+  'todo.doneCheck': 'done ✓',
+  'todo.open': '{n} open',
+  // The sleep card's day total
+  'today.sleep': '{span} of sleep',
+  // The quick tiles
+  'quick.title': 'Quick log',
+  'tile.nurseLeft': 'Nursing left',
+  'tile.nurseRight': 'Nursing right',
+  'tile.switchSide': 'Switch',
+  'tile.nextUp': 'next up',
+  'tile.wokeUp': 'Woke up',
+  'tile.startSleep': 'Start sleep',
+  // Toasts; {side} = "left" / "right", {span} = "25 min", {kind} = "Pee" …
+  'toast.nursingSaved': 'Nursing {side} saved',
+  'toast.diaperSaved': 'Diaper ({kind}) saved',
+  'toast.nursingStopped': 'Nursing stopped · {span}',
+  'toast.slept': 'Slept · {span}',
+  'toast.timerRunningAgain': '{type} timer running again',
+  'toast.nursingRunningAgain': 'Nursing running again',
+  'toast.resumed': 'Resumed – {side}',
+  'toast.switched': 'Switched sides – now {side}',
+  'toast.nursingDurationSaved': 'Nursing · {span} saved',
+  'toast.startSet': 'Start set to {time}',
+  'toast.paused': 'Paused – {side} {span}',
+  'toast.sleepStarted': 'Sleep started',
+  'error.pauseUndoGone': 'Too late to undo – nursing has already resumed',
+  // The stopwatch sheet (timer.js)
+  'timer.title': 'Timer',
+  'timer.start': 'Start',
+  'timer.restart': 'Restart',
+  'timer.stop': 'Stop timer',
+};
