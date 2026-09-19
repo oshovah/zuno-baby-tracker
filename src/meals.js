@@ -3,7 +3,7 @@
 // the next-side suggestion, the live side's place in its meal, the
 // start-correction clamp and the Verlauf item list. Pure functions over
 // model.groupMeals output (no DOM), node-tested in tests/meals.test.mjs —
-// the home view's closure used to hold this and nothing could assert it.
+// kept out of the views' closures, where nothing could assert it.
 
 import { t } from './i18n/index.js';
 import { groupMeals, liveEntries, sortNewest, MEAL_GAP_MIN } from './model.js';

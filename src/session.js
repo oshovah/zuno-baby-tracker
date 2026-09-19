@@ -1,4 +1,4 @@
-// Auth and key flows (plan §2, §4, §5): login, register (create / join /
+// Auth and key flows: login, register (create / join /
 // recovery code), unlock, password change, family password rotation,
 // recovery code reveal, display name, logout. UI-free: every failure is an
 // Error whose text the views show verbatim — read from the translations at
@@ -182,12 +182,10 @@ async function persistKey(raw) {
 }
 
 /**
- * Common tail of login / register / unlock: prefs.user, identity, the
- * legacy flag (a creator that adopted plaintext rows — must be set BEFORE
- * the first sync), the store key, persistence. `raw` is consumed (zeroed
- * by persistKey).
+ * Common tail of login / register / unlock: prefs.user, identity, the store
+ * key, persistence. `raw` is consumed (zeroed by persistKey).
  */
-async function finishSession(user, raw, kdf, displayName, legacyRemaining = null) {
+async function finishSession(user, raw, kdf, displayName) {
   const fdk = await importFdk(raw, false);
   const name = displayName !== undefined ? displayName : await profileName(fdk, user);
   prefs.user = {
@@ -199,7 +197,6 @@ async function finishSession(user, raw, kdf, displayName, legacyRemaining = null
   };
   prefs.authed = true;
   await store.setIdentity(user);
-  if (legacyRemaining !== null) await store.setLegacyPending(legacyRemaining);
   await store.unlockWith(fdk);
   await persistKey(raw);
   return prefs.user;
@@ -237,12 +234,12 @@ export async function login(username, password, opts = {}) {
 /**
  * Create a family: client-generated salts + FDK, both wrappings, profile
  * blob, recovery auth value → POST api/register familyMode 'create'.
- * Resolves with {user, recoveryCode (grouped), adoptedEntries,
- * legacyRemaining}; the recovery code is shown once — the FDK is never
- * shown again without the own password (revealRecoveryCode).
+ * Resolves with {user, recoveryCode (grouped)}; the recovery code is shown
+ * once — the FDK is never shown again without the own password
+ * (revealRecoveryCode).
  */
 export async function registerCreate(input, opts = {}) {
-  const { username, password, displayName, familyName, familyPassword, legacyPassword } = input || {};
+  const { username, password, displayName, familyName, familyPassword } = input || {};
   const name = requireUsername(username);
   requireNewPassword(password);
   const display = requireDisplayName(displayName);
@@ -276,16 +273,13 @@ export async function registerCreate(input, opts = {}) {
     fdkWrappedUser,
     recoveryAuthKey: recovery,
   };
-  if (typeof legacyPassword === 'string' && legacyPassword !== '') body.legacyPassword = legacyPassword;
 
   progress(opts, 'server');
   const res = await api.post('api/register', body);
   if (!res || !res.user) throw new Error(t('errors.crypto.kdf'));
 
-  const adoptedEntries = Number(res.adoptedEntries) || 0;
-  const legacyRemaining = Number(res.legacyRemaining) || 0;
-  const user = await finishSession(res.user, fdkRaw, body.kdf, display, adoptedEntries > 0 ? legacyRemaining : null);
-  return { user, recoveryCode: groupCode(code), adoptedEntries, legacyRemaining };
+  const user = await finishSession(res.user, fdkRaw, body.kdf, display);
+  return { user, recoveryCode: groupCode(code) };
 }
 
 /**

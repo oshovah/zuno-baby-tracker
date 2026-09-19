@@ -1,11 +1,11 @@
 <?php
 /**
- * Front controller for the baby tracker API (schema v3: end-to-end encrypted
- * entries, per-person accounts grouped in families).
+ * Front controller for the baby tracker API (end-to-end encrypted entries,
+ * per-person accounts grouped in families).
  *
  * All endpoints live under /api, JSON in/out, errors as {"error": "...",
  * "code": "entries.notFound", "params": {...}?} with
- * 400/401/403/404/405/409/410/415/429/500/503/507. Error messages are German;
+ * 400/401/403/404/405/409/415/429/500/503/507. Error messages are German;
  * the code names the error by meaning and the UI translates it when it can
  * (older shells show the message verbatim — see lib/http.php). Every
  * response is Cache-Control: no-store.
@@ -21,26 +21,23 @@
  *   POST /api/families/unlock         {familyName, familyAuthKey | recoveryAuthKey} -> {kdf, fdkWrapped}
  *   POST /api/register                create-or-join in ONE request (a join may carry rotateFamily:
  *                                     fresh family credentials applied with the join, see lib/auth.php)
- *                                     -> 201 {ok, user, familyCreated, familyClosed, adoptedEntries, legacyRemaining}
+ *                                     -> 201 {ok, user, familyCreated, familyClosed}
  *   POST /api/login                   {username, authKey} -> {ok, user, kdf, fdkWrappedUser}
  *   POST /api/logout
- *   GET  /api/state, GET /api/entries, /api/entries/<integer id>… -> 410 with the update hint
- *                                     (routes only the pre-encryption shell calls)
  * Authenticated (cookie; everything scoped to the user's family):
  *   POST   /api/me/keys/unlock        {authKey} -> {kdf, fdkWrappedUser}
  *   PATCH  /api/me                    {profileBlob} -> {ok, user}
  *   PATCH  /api/me/password           {currentAuthKey, authKey, kdf, fdkWrappedUser} -> {ok}
  *   PATCH  /api/families/password     {currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily} -> {ok}
- *   GET    /api/sync?since=&limit=    {serverNow, feed, rows, next, legacyRemaining[, reset][, art]}
+ *   GET    /api/sync?since=&limit=    {serverNow, feed, rows, next[, reset][, art]}
  *   POST   /api/entries               {eid, blob} -> 201 row (507 at the family's or the database's row cap)
  *   PATCH  /api/entries/:eid          {blob, ifSeq} -> row (409 when the seq moved)
  *   DELETE /api/entries/:eid          [{ifSeq}] -> row (soft delete; with a body, 409 when the seq moved)
  *   POST   /api/entries/:eid/restore  -> row
- *   POST   /api/entries/seal          {items: [{eid, seq, blob}]} -> {done, skipped, remaining}
  *   GET    /api/art/<name>            a private artwork file (image/png) for members of the configured
  *                                     family; the same 404 for everyone and everything else (lib/art.php)
  * User JSON everywhere: {username, familyId, familyName, profileBlob}; row
- * JSON: {eid, seq, blob|null, plain|null, createdAt, updatedAt, deletedAt}.
+ * JSON: {eid, seq, blob|null, createdAt, updatedAt, deletedAt}.
  *
  * Every POST/PATCH — and a DELETE that carries a body — must declare
  * Content-Type: application/json (415 otherwise); that closes cross-site
@@ -55,9 +52,7 @@
  * DB counts, successes included) and never cleared on success. Wrong
  * secrets are additionally damped by 300 ms. Entry writes draw on a per-IP
  * write budget ('write:<ip>', 300 / 15 min) before anything else happens,
- * and a create stops at the row caps of lib/entries.php (507). A body still
- * carrying raw passwords comes from the service-worker-cached previous
- * shell -> 400 with an update hint before any work.
+ * and a create stops at the row caps of lib/entries.php (507).
  *
  * Routing works identically in three situations:
  *  1. Apache + .htaccess rewrite (possibly under a subdirectory):
@@ -267,7 +262,6 @@ function bt_dispatch(PDO $pdo, array $config, string $method, array $segments, ?
         $key = 'reg:' . bt_client_ip();
         bt_assert_login_allowed($pdo, $key);
         $body = $readBody();
-        bt_reject_old_shell($body);
         $name = bt_valid_family_name($body['familyName'] ?? null); // typos (400) are free ...
         bt_family_credential($body);
         $target = bt_family_throttle_key(bt_name_key($name));
@@ -298,8 +292,8 @@ function bt_dispatch(PDO $pdo, array $config, string $method, array $segments, ?
         if ($target !== null) {
             bt_record_login_failure($pdo, $target);
         }
-        $res = bt_damp_wrong_secret($pdo, [], function () use ($pdo, $body, $config) {
-            return bt_register($pdo, $body, $config);
+        $res = bt_damp_wrong_secret($pdo, [], function () use ($pdo, $body) {
+            return bt_register($pdo, $body);
         });
         bt_gc_tokens($pdo);
         bt_issue_token($pdo, (int) $res['user']['id']);
@@ -308,8 +302,6 @@ function bt_dispatch(PDO $pdo, array $config, string $method, array $segments, ?
             'user' => bt_user_json($res['user']),
             'familyCreated' => $res['familyCreated'],
             'familyClosed' => $res['familyClosed'],
-            'adoptedEntries' => $res['adoptedEntries'],
-            'legacyRemaining' => $res['legacyRemaining'],
         ]];
     }
 
@@ -318,7 +310,6 @@ function bt_dispatch(PDO $pdo, array $config, string $method, array $segments, ?
         $ip = bt_client_ip();
         bt_assert_login_allowed($pdo, $ip);
         $body = $readBody();
-        bt_reject_old_shell($body);
         // The account under attack has a budget of its own (any address).
         $username = $body['username'] ?? null;
         $target = is_string($username) && trim($username) !== '' ? bt_user_throttle_key($username) : null;
@@ -350,15 +341,6 @@ function bt_dispatch(PDO $pdo, array $config, string $method, array $segments, ?
         bt_require_method($method, ['POST']);
         bt_revoke_current_token($pdo);
         return [200, ['ok' => true]];
-    }
-
-    // Routes only the pre-encryption shell knows (its state fetch, its
-    // history range, its integer entry ids): answered before auth so the
-    // update hint reaches the phone no matter what its cookie is worth.
-    if ($segments === ['state'] || ($segments === ['entries'] && $method === 'GET')
-        || (count($segments) >= 2 && $segments[0] === 'entries' && ctype_digit($segments[1]) && strlen($segments[1]) < 32)
-    ) {
-        throw new HttpError(410, BT_OLD_SHELL_MESSAGE, 'request.oldShell');
     }
 
     // Private artwork (lib/art.php). Answered before the auth gate: a
@@ -454,16 +436,6 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
     if ($segments === ['entries']) {
         bt_require_method($method, ['POST']);
         return [201, bt_create_entry($pdo, $fid, $readBody())];
-    }
-
-    if ($segments === ['entries', 'seal']) {
-        bt_require_method($method, ['POST']);
-        $body = $readBody();
-        $items = $body['items'] ?? null;
-        if (!is_array($items)) {
-            throw new HttpError(400, '"items" fehlt', 'request.missingField', ['field' => 'items']);
-        }
-        return [200, bt_seal_legacy($pdo, $fid, array_values($items))];
     }
 
     if (count($segments) === 2 && $segments[0] === 'entries') {

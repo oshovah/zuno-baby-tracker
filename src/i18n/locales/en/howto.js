@@ -36,7 +36,7 @@ export default {
   // "Log"
   'log.title': 'Log',
   'log.body': 'For everything that did not just happen: pick the type, adjust the time, save. Nursing and Sleep have a start and an end – leave "End" empty and the timer keeps running on "Now"; for nursing, the chips "10" to "30 min" set the end from the start. Weight, Temperature, Medication (the last names as chips) and "Done" are only here.',
-  // "History" — the three views and paging
+  // "History" — the four views and paging
   'history.title': 'History',
   'history.body': 'Every entry by day, newest at the top, with a day line: meals, wet diapers ("5/~6" – about six a day is the goal), soiled diapers, sleep, things done. The switch at the top right picks the view: "Entries" shows every day with all its entries, "Days" only the day lines (a tap on a day unfolds its entries, a second one folds them again), "Meals" only the meals, folded: a tap shows the sides and bottles inside – and "Charts" curves for 7, 14 or 28 days: weight, meals against your daily target, nursing minutes per side, bottle millilitres (breast milk beside formula), diapers, sleep, temperature, each only when there are entries for it; the filter button beside the days hides single charts, on this phone only. Tap an entry to change its time, amount or side – or to delete it. "Load earlier entries" and "Load earlier meals" fetch one more week each, "Load earlier days" four.',
   // "Reminders"

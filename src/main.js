@@ -146,10 +146,10 @@ function startApp() {
   mode = 'app';
   tabbar.hidden = false;
   store.start();
-  // The store can lock SYNCHRONOUSLY inside start() (no account data on this
-  // device — e.g. the pre-encryption version's "logged in" flag survived an
-  // update); the subscriber below then already swapped to the login screen.
-  // Painting the home view over it would strand the phone on "Laden …".
+  // The store can lock SYNCHRONOUSLY inside start() (the "logged in" flag is
+  // set but there is no account data on this device); the subscriber below
+  // then already swapped to the login screen. Painting the home view over it
+  // would strand the phone on "Laden …".
   if (mode !== 'app') return;
   route();
   // The family was created on this phone and the recovery code screen was
@@ -422,12 +422,10 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 // Boot: no server round-trip. If this device ever logged in, show the app
 // immediately: the cached snapshot paints at once, store.start() boots the
 // key (locked → the subscriber above swaps to the unlock screen) and syncs
-// (a 401 drops to login — that is also how a cookie from the
-// shared-password era ends: the migration dropped those tokens, so each
-// phone logs in once). Otherwise show the login screen — and ask the server
-// whether the cookie is still good (probeCookie).
-// prefs.user is required next to the flag: the pre-encryption version set
-// only the flag, and without an account there is no key to boot with.
+// (a 401 drops to login). Otherwise show the login screen — and ask the
+// server whether the cookie is still good (probeCookie).
+// prefs.user is required next to the flag: without an account there is no
+// key to boot with.
 if (prefs.authed && prefs.user) {
   startApp();
 } else {

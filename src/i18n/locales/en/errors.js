@@ -1,7 +1,7 @@
 // Client-side error messages: crypto.js, db.js, store.js, session.js, validate.js.
 export default {
-  // validate.js (and model.listRange): the texts the API used to answer with —
-  // the UI toasts them verbatim. The quoted names are field names, not words.
+  // validate.js (and model.listRange): the UI toasts these verbatim. The
+  // quoted names are field names, not words.
   'validate.timerRunning': 'A {type} timer is already running',
   'validate.datetimeFormat': '"{name}" must be an ISO 8601 date-time with a time zone',
   'validate.datetimeInvalid': '"{name}" is not a valid date-time',
@@ -73,19 +73,16 @@ export default {
   'session.displayName': 'Display name: 1–{max} characters',
   'session.familyName': 'Family name: 1–{max} characters',
 
-  // store.js: sync, writes, the seal pass (store.js reuses crypto.decrypt,
+  // store.js: sync and writes (store.js reuses crypto.decrypt,
   // crypto.keyData and validate.timerAlreadyEnded). {type} is the type's
   // label (common.type.*).
   'store.locked': 'Please unlock first',
   'store.notFound': 'Entry not found',
   'store.badPage': 'Invalid answer from the server',
-  'store.plainIgnored': 'Unencrypted entry ignored',
   'store.rollback': 'Record is older than the known version',
   'store.noContent': 'Content not available',
   'store.aborted': 'Signed out',
   'store.invalidUser': 'Invalid user',
   'store.duplicateTimers': 'Two {type} timers open – please stop one in History',
   'store.duplicateRemoved': 'Duplicate {type} timer removed',
-  'store.sealed.one': '{n} entry encrypted',
-  'store.sealed.other': '{n} entries encrypted',
 };

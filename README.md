@@ -61,9 +61,8 @@ passed-on family password opens nothing afterwards.
 - [`src/store.js`](src/store.js) — the only module that talks to the API: what
   is actually sent
 - [`api/lib/db.php`](api/lib/db.php) — the schema: no column for a type, a time
-  or an amount (the `legacy_*` columns only ever hold rows migrated from the
-  pre-encryption version until the first phone seals them, then they are
-  nulled and the file is vacuumed)
+  or an amount, and [`api/index.php`](api/index.php) — the routes: none that
+  takes or returns an entry's content
 - [`api/lib/auth.php`](api/lib/auth.php) and
   [`api/lib/entries.php`](api/lib/entries.php) — auth values and throttling;
   the opaque row store and family isolation (a foreign entry id answers 404,
@@ -205,10 +204,9 @@ npm test        # PHP-API-Tests (api/tests/*.test.php) + Node-Tests (src/tests/)
 ```
 
 Auf einem Handy im LAN läuft `crypto.subtle` nur über HTTPS (`http://192.168…`
-ist kein «secure context»). Für den Geräte-Test gibt es
-`scripts/spike/index.html` (misst Schlüsselableitung, AES-GCM und ob der
-Schlüssel in IndexedDB einen Neustart überlebt) — am einfachsten mit
-`@vitejs/plugin-basic-ssl` oder per USB-Port-Forwarding auf `localhost`.
+ist kein «secure context»): Für den Test auf dem Gerät braucht der Dev-Server
+ein Zertifikat (z. B. `@vitejs/plugin-basic-ssl`), oder das Handy greift per
+USB-Port-Forwarding auf `localhost` zu.
 
 ## Schlüssel und Wiederherstellung
 
@@ -258,8 +256,7 @@ löschen, aber keine Passwörter setzen und keine Einträge lesen (siehe
 ## Deployment (cyon)
 
 Einmalig: `.env.example` nach `.env` kopieren und die `DEPLOY_*`-Zugänge
-ausfüllen. `APP_PASSWORD` ist nur noch für das Update von der alten
-Ein-Passwort-Version relevant (siehe unten) — danach entfernen.
+ausfüllen.
 
 ```bash
 npm run package   # baut + stellt deploy/ zusammen
@@ -271,7 +268,10 @@ npm run deploy    # deploy/ hochladen (rsync/sftp/ftp gemäss .env)
   Server bleibt bestehen.
 - Health-Check: `deploy.mjs` ruft nach dem Upload `<DEPLOY_URL>/api/me` auf.
   Das ist die erste Anfrage nach dem Upload — sie führt eine allfällige
-  Datenbank-Migration aus (200 = durch, 500 = zurückgerollt).
+  Datenbank-Migration aus (200 = durch, 500 = zurückgerollt, die Datei ist
+  unverändert; der Grund steht im PHP-Fehlerlog). Vor einer Migration
+  schreibt die API einmalig eine Kopie neben die Datenbank
+  (`baby.db.v3.bak`) — nach ein paar Tagen ohne Probleme löschen.
 - Die gepackte `.htaccess` setzt eine Content-Security-Policy (nur eigene
   Skripte): Bei Verschlüsselung im Browser ist eingeschleustes JavaScript der
   letzte verbleibende Angriffsweg. Dazu `nosniff`, `Referrer-Policy:
@@ -294,97 +294,28 @@ npm run deploy    # deploy/ hochladen (rsync/sftp/ftp gemäss .env)
   3. Das leere `data/` im Docroot kann bleiben (nur der Deny-Stub liegt drin).
   Zurück: Dateien zurückschieben, Variable leeren, erneut deployen.
 
-## Update von der Ein-Passwort-Version (erledigt am 6. 9. 2026)
+## Schema v3 → v4
 
-Diese Installation ist umgestellt; das Feld «Bestehende Einträge übernehmen»
-wurde danach aus dem Registrierformular entfernt. Der Server versteht
-`legacyPassword` bei `POST /api/register` weiterhin (für eine allfällige
-weitere Installation, die von der alten Version kommt) — dann müsste das Feld
-in `src/views/login.js` wieder eingebaut werden. Der Ablauf zur Referenz:
+Schema v3 hatte in der Tabelle `entries` noch fünf `legacy_*`-Spalten: Dort
+lagen Einträge aus der Zeit vor der Verschlüsselung im Klartext, bis ein Handy
+der Familie sie verschlüsselt hatte. v4 entfernt diese Spalten samt dem Code,
+der sie las — die API hat seither keine Stelle mehr, die den Inhalt eines
+Eintrags annimmt oder ausgibt. Die Migration läuft bei der ersten Anfrage nach
+dem Deploy in einer Transaktion; Einträge, Konten, Sitzungen und die
+Sync-Stände der Handys bleiben, wie sie sind.
 
-Die Datenbank der alten Version (Schema v1: ein gemeinsames Passwort, keine
-Konten, Klartext) wird beim **ersten Request nach dem Deploy** in einer
-Transaktion auf v3 migriert; davor wird einmalig `data/baby.db.v1.bak`
-geschrieben. Die alten Einträge bleiben zunächst im Klartext und werden vom
-ersten Handy der Familie verschlüsselt («versiegelt»).
+Eine v3-Datei, in der noch ein **lebender** Eintrag im Klartext liegt (oder
+einer ohne Familie), wird **abgelehnt** und nicht angefasst: Der Health-Check
+meldet 500, der Grund steht im Fehlerlog. Dann den letzten v3-Stand nochmals
+deployen, ein Handy der Familie die Einträge fertig verschlüsseln lassen und
+erneut deployen. Vorab prüfen lässt es sich auf dem Server (`sqlite3
+data/baby.db`) — das Ergebnis muss 0 sein:
 
-**Vorher, einmalig:**
-
-1. Der Code der laufenden v1-Version liegt nur auf dem Server. Für einen
-   Rollback das Docroot (ohne `data/`, aber mit `.htaccess` und
-   `api/config.php`) per SFTP nach `deploy-v1-live/` holen (gitignored).
-2. `APP_PASSWORD` (das alte gemeinsame Passwort) in `.env` lassen:
-   `npm run package` hasht es in die Deploy-Config als **Übernahme-Sperre** —
-   die alten Einträge übernimmt nur, wer es bei der ersten Registrierung
-   eingibt. Ohne diese Sperre könnte, wer die URL kennt und zuerst
-   registriert, die Historie unter seinem Schlüssel versiegeln — und das ist
-   unumkehrbar.
-3. Probelauf auf einer Kopie der Produktionsdatenbank (`baby.db` samt
-   `-wal`/`-shm` herunterladen): `BABY_DB_PATH=/pfad/kopie.db npm run dev`
-   (die gepackte Config liest `BABY_DB_PATH` nicht — für den Probelauf des
-   gepackten Builds die Kopie nach `deploy/data/baby.db` legen und
-   `npm run preview`). Registrieren, Übernahme- und Versiegelungs-Toast
-   abwarten, Verlauf prüfen, zweites Konto beitreten lassen. Das anschliessende
-   `npm run deploy` packt neu und verwirft dabei die Kopie in `deploy/data/`
-   — nach einem Probelauf nie mit `--no-package` deployen (der Upload lässt
-   `data/` ohnehin bis auf `data/.htaccess` aus, aber die migrierte Kopie
-   gehört nicht in ein Deploy-Verzeichnis).
-
-**Deploy:**
-
-1. Beide Handys ruhen. `npm run deploy` → Health-Check migriert.
-2. **Sofort** in einem privaten Desktop-Browserfenster (keine alte
-   App-Shell) «Neues Konto erstellen»: Benutzername, Passwort, Anzeigename,
-   Familie, Familien-Passwort und das **alte App-Passwort** (Feld
-   «Bestehende Einträge übernehmen», heute nicht mehr im Formular — siehe
-   oben) → Toast «N bestehende Einträge übernommen», kurz darauf «N Einträge
-   verschlüsselt». **Wiederherstellungscode aufschreiben.**
-3. Handys: Die alte Shell bekommt beim ersten Aufruf einen Hinweis «Neue
-   App-Version — bitte die App schliessen und neu öffnen»; danach anmelden
-   (der Ersteller) bzw. mit Familienname + Familien-Passwort beitreten.
-4. Kontrolle (`sqlite3 data/baby.db` per SSH):
-
-   ```sql
-   SELECT COUNT(*) FROM entries WHERE family_id IS NULL;                 -- 0
-   SELECT COUNT(*) FROM entries WHERE legacy_type IS NOT NULL;           -- 0 (versiegelt)
-   SELECT id, name FROM families;                                        -- eure Familie
-   SELECT username, family_id FROM users;                                -- die Eltern
-   ```
-
-   Vor dem Update gelöschte Einträge bleiben als leere Grabsteine ohne
-   Inhalt (ihr Klartext wird beim Versiegeln gelöscht) — sie lassen sich
-   nicht mehr wiederherstellen.
-5. Danach: `APP_PASSWORD` aus `.env` löschen und erneut packen/deployen (hebt
-   die Übernahme-Sperre auf); `data/baby.db.v1.bak` nach ein paar Tagen auf
-   dem Server löschen — sie ist die letzte Klartext-Kopie.
-
-### Rollback
-
-Den v1-Code zurückspielen heisst: den Inhalt von `deploy-v1-live/` (aus
-«Vorher 1») ins Docroot kopieren — entweder per SFTP von Hand (alles ausser
-`data/`), oder mit der Deploy-Pipeline, die `data/` auf dem Server nie
-anfasst:
-
-```bash
-rm -rf deploy && cp -R deploy-v1-live deploy \
-  && mkdir -p deploy/data && cp data/.htaccess deploy/data/ \
-  && node scripts/deploy.mjs --no-package
+```sql
+SELECT COUNT(*) FROM entries WHERE deleted_at IS NULL AND (family_id IS NULL
+  OR legacy_type IS NOT NULL OR legacy_started_at IS NOT NULL OR legacy_ended_at IS NOT NULL
+  OR legacy_details IS NOT NULL OR legacy_logged_by IS NOT NULL);
 ```
-
-(`--no-package`, sonst würde `deploy/` mit dem neuen Build überschrieben;
-`deploy/data/.htaccess` verlangt der Vollständigkeits-Check des Uploads.
-Danach `deploy/` wieder mit `npm run package` neu erzeugen.)
-
-- **Migration fehlgeschlagen** (Health-Check 500): Die Datenbank ist noch v1
-  (Transaktion zurückgerollt). v1-Code wie oben zurückspielen.
-- **Migriert, aber noch niemand registriert:** Zugriffe stoppen, auf dem
-  Server per SSH `data/baby.db-wal` und `-shm` löschen,
-  `cp data/baby.db.v1.bak data/baby.db`, dann v1-Code wie oben zurückspielen.
-  (Ein später erneut migriertes `baby.db` bekommt eine neue Feed-Kennung —
-  Handys, die schon synchronisiert hatten, verwerfen ihre Kopie von selbst.)
-- **Versiegelt:** v1-Code kann die Datensätze nicht lesen. Weg zurück =
-  «Daten exportieren» auf einem angemeldeten Gerät oder
-  `scripts/export-plain.mjs` mit Familien-Passwort/Wiederherstellungscode.
 
 ## Konten von Hand verwalten
 
@@ -441,23 +372,20 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `GET /api/auth/params?username=` | – | `{kdf: {salt, iter}}` zum Ableiten des Login-Werts (stabile Attrappe für unbekannte Namen) |
 | `GET /api/families/check?name=` | – | `{exists, name, kdf}` — gibt es die Familie schon? |
 | `POST /api/families/unlock` | – | `{familyName, familyAuthKey \| recoveryAuthKey}` → `{kdf, fdkWrapped}` (der familien-verpackte Schlüssel, nur nach Prüfung) |
-| `POST /api/register` | – | `familyMode: create` (mit allem Schlüsselmaterial, optional `legacyPassword`) oder `join` (mit `rotateFamily`: neue Familien-Schlüssel, die im selben Schritt das Familien-Passwort ersetzen) → 201 `{ok, user, familyCreated, familyClosed, adoptedEntries, legacyRemaining}` + Cookie |
+| `POST /api/register` | – | `familyMode: create` (mit allem Schlüsselmaterial) oder `join` (mit `rotateFamily`: neue Familien-Schlüssel, die im selben Schritt das Familien-Passwort ersetzen) → 201 `{ok, user, familyCreated, familyClosed}` + Cookie |
 | `POST /api/login` | – | `{username, authKey}` → `{ok, user, kdf, fdkWrappedUser}` + Cookie |
 | `POST /api/logout` | – | Token widerrufen |
 | `POST /api/me/keys/unlock` | ✓ | `{authKey}` → `{kdf, fdkWrappedUser}` (Gerät ohne Schlüssel) |
 | `PATCH /api/me` | ✓ | `{profileBlob}` (verschlüsselter Anzeigename) |
 | `PATCH /api/me/password` | ✓ | `{currentAuthKey, authKey, kdf, fdkWrappedUser}` — meldet andere Geräte ab |
 | `PATCH /api/families/password` | ✓ | `{currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily}` |
-| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next, legacyRemaining}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (neu migrierte/zurückgespielte Datenbank), fängt der Client ebenfalls von vorn an |
+| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an |
 | `POST /api/entries` | ✓ | `{eid, blob}` → Datensatz (507 an der Zeilengrenze der Familie bzw. der Datenbank) |
 | `PATCH /api/entries/:eid` | ✓ | `{blob, ifSeq}` → Datensatz (409, wenn ein anderes Gerät dazwischenkam) |
 | `DELETE /api/entries/:eid` | ✓ | Soft-Delete; optionaler JSON-Body `{ifSeq}` macht ihn bedingt (409, wenn ein anderes Gerät dazwischenkam) |
 | `POST /api/entries/:eid/restore` | ✓ | Soft-Delete rückgängig |
-| `POST /api/entries/seal` | ✓ | `{items: [{eid, seq, blob}]}` — migrierte Klartext-Zeilen verschlüsseln |
 | `GET /api/art/<name>` | (✓) | Privates Bildmaterial (`image/png`) für die Mitglieder der in `PRIVATE_ART_FAMILY` genannten Familie — für alle anderen, auch ohne Anmeldung, dasselbe 404 (siehe «Private artwork») |
 
-`GET /api/state` und das alte `GET /api/entries?from&to` antworten 410 mit
-dem Update-Hinweis (nur alte, vom Service Worker gecachte Shells rufen sie).
 Fremde `eid`s → 404. Eintragstypen im Klartext des Blobs: `breastfeed {side,
 paused?}`, `bottle {amount_ml, colostrum_ml?}`, `diaper {kind}`, `sleep`, `weight {grams}`,
 `temperature {celsius}`, `medication {name}`, `task {title, who,
@@ -547,6 +475,7 @@ src/            Frontend: main.js Shell, views/, store.js (lokales Modell +
 public/         Manifest, Service Worker, Icons
 scripts/        dev-router, preview-router, package.mjs, deploy.mjs,
                 export-plain.mjs (Offline-Entschlüsselung), make-icons.mjs
-                (zeichnet das Icon-Set nach public/img/), spike/ (Handy-Test)
+                (zeichnet das Icon-Set nach public/img/), make-screenshots.mjs
+                (die Bildschirmfotos der Anmeldeseite)
 data/           lokale SQLite-DB (gitignored, nie deployt)
 ```

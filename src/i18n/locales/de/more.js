@@ -175,7 +175,6 @@ export default {
   'export.shareFailed': 'Teilen nicht möglich – bitte nochmals versuchen',
   'export.unsupported': 'Export wird auf diesem Gerät nicht unterstützt',
   'crypto.title': 'Verschlüsselung',
-  'crypto.sealing': 'Bisherige Einträge werden verschlüsselt … {sealed} erledigt, noch {remaining} offen.',
   'crypto.undecryptable.one': '{n} Eintrag konnte nicht entschlüsselt werden.',
   'crypto.undecryptable.other': '{n} Einträge konnten nicht entschlüsselt werden.',
   'crypto.allGood': 'Alle Einträge sind Ende-zu-Ende verschlüsselt – der Server sieht weder Inhalte noch Namen.',

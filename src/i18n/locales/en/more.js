@@ -175,7 +175,6 @@ export default {
   'export.shareFailed': 'Sharing not possible – please try again',
   'export.unsupported': 'Export is not supported on this device',
   'crypto.title': 'Encryption',
-  'crypto.sealing': 'Earlier entries are being encrypted … {sealed} done, {remaining} to go.',
   'crypto.undecryptable.one': '{n} entry could not be decrypted.',
   'crypto.undecryptable.other': '{n} entries could not be decrypted.',
   'crypto.allGood': 'Every entry is end-to-end encrypted – the server sees neither contents nor names.',

@@ -6,7 +6,7 @@
  *   1. `npm run build` (vite) unless --no-build
  *   2. dist/*  -> deploy/            (built frontend, incl. sw.js + manifest)
  *      api/*   -> deploy/api/        (PHP backend, minus tests/ and the dev config.php)
- *   3. generate deploy/api/config.php   (db_path from DEPLOY_DB_PATH, optional legacy_password_hash)
+ *   3. generate deploy/api/config.php   (db_path from DEPLOY_DB_PATH, the private-art family)
  *   4. generate deploy/.htaccess        (api rewrite, FilesMatch denials, caching)
  *   5. generate deploy/data/.htaccess   (deny-all stub — the SQLite db must never be served)
  *   5b. private-art/ -> deploy/private-art/ when PRIVATE_ART_FAMILY is set (deny-all stub;
@@ -14,16 +14,14 @@
  *   6. print a summary + total size
  *
  * Auth note: accounts + families live in the database (api/lib/auth.php) and
- * entries are end-to-end encrypted. APP_PASSWORD in .env (the shared password
- * of the pre-accounts release) is OPTIONAL: when present its bcrypt hash is
- * deployed as the one-release legacy adoption gate (needs the local php CLI).
+ * entries are end-to-end encrypted — no password or key is packaged.
  *
  * Usage: node scripts/package.mjs [--no-build] [--env <file>] [--root <dir>]
  *   --no-build   skip `npm run build` and reuse the existing dist/
  *   --env FILE   read .env keys from FILE (default: <root>/.env)
  *   --root DIR   project root (default: this script's parent dir; used by tests)
  *
- * Zero npm dependencies (Node 18+; `php` only needed when APP_PASSWORD is set).
+ * Zero npm dependencies (Node 18+).
  */
 
 import fs from 'node:fs';
@@ -155,31 +153,10 @@ function dirStats(dir) {
 }
 
 // ---------------------------------------------------------------------------
-// 0. Read .env — APP_PASSWORD is the pre-accounts shared password. If it is
-//    still set, its bcrypt hash goes into the deployed config as the ONE-RELEASE
-//    legacy adoption gate: the plaintext rows migrated from that era can only be
-//    adopted by a family creator who knows it (see bt_register). Remove the
-//    key from .env after the cutover and re-package to drop the gate.
+// 0. Read .env
 // ---------------------------------------------------------------------------
 
 const env = parseEnvFile(envFile);
-let legacyPasswordHash = null;
-if (env.APP_PASSWORD) {
-  // stdin, not argv: a password on a command line is visible in `ps`.
-  const hashRes = spawnSync(
-    'php',
-    ['-r', 'echo password_hash(stream_get_contents(STDIN), PASSWORD_BCRYPT, ["cost" => 12]);'],
-    { input: env.APP_PASSWORD, encoding: 'utf8' }
-  );
-  if (hashRes.error) fail(`could not run php to hash APP_PASSWORD: ${hashRes.error.message}`);
-  if (hashRes.status !== 0 || !/^\$2y\$/.test(hashRes.stdout)) {
-    fail(`php failed to hash APP_PASSWORD (exit ${hashRes.status}): ${hashRes.stderr}`);
-  }
-  legacyPasswordHash = hashRes.stdout;
-  log('APP_PASSWORD present: deploying the legacy adoption gate (bcrypt hash only)');
-} else {
-  log('no APP_PASSWORD in .env: no legacy adoption gate (the first family created adopts old entries)');
-}
 
 // DEPLOY_DB_PATH — where the SQLite file lives ON THE SERVER. Unset = the
 // default <docroot>/data/baby.db, which two .htaccess rules keep off the web.
@@ -318,8 +295,8 @@ log(`copied api/ -> deploy/api/ (${apiCount} files, excluded tests/ and dev conf
 // 3. deploy/api/config.php
 // ---------------------------------------------------------------------------
 
-// SINGLE-quoted PHP string: bcrypt hashes contain "$<letters>" sequences that
-// PHP would interpolate inside double quotes, silently corrupting the hash.
+// SINGLE-quoted PHP string: a "$<letters>" sequence in a path or a name would
+// be interpolated inside double quotes.
 const phpSingleQuoted = (s) => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
 
 const configPhp = `<?php
@@ -331,10 +308,6 @@ return [
     // time), or null for the default: <app root>/data/baby.db (app root = the
     // parent directory of api/).
     'db_path' => ${deployDbPath === null ? 'null' : phpSingleQuoted(deployDbPath)},
-    // bcrypt of the pre-accounts shared password (APP_PASSWORD in .env at
-    // packaging time), or null: while set, the plaintext rows of that era are
-    // adopted only by a family creator who sends that password (legacyPassword).
-    'legacy_password_hash' => ${legacyPasswordHash === null ? 'null' : phpSingleQuoted(legacyPasswordHash)},
     // Name of the one family that gets the pictures in <app root>/private-art/
     // (PRIVATE_ART_FAMILY in .env at packaging time), or null: nobody does.
     'private_art_family' => ${privateArtFamily === null ? 'null' : phpSingleQuoted(privateArtFamily)},
@@ -342,7 +315,7 @@ return [
 ];
 `;
 fs.writeFileSync(path.join(deployDir, 'api', 'config.php'), configPhp);
-log(`wrote deploy/api/config.php (db_path ${deployDbPath === null ? 'default' : deployDbPath}, legacy gate ${legacyPasswordHash === null ? 'off' : 'on'})`);
+log(`wrote deploy/api/config.php (db_path ${deployDbPath === null ? 'default' : deployDbPath})`);
 
 // ---------------------------------------------------------------------------
 // 4. deploy/.htaccess

@@ -1,13 +1,13 @@
-// Entry validation — a 1:1 port of the rules that used to live server-side in
-// api/lib/entries.php (bt_valid_details, bt_canon_datetime,
-// bt_valid_local_date, bt_assert_not_future, the field rules of
-// bt_create_entry and the merge rules of bt_update_entry). With end-to-end
-// encryption the server never sees an entry, so the phone is the validator.
+// Entry validation: the details per type, canonical instants, local dates,
+// "not in the future", the field rules of a create and the merge rules of an
+// update. With end-to-end encryption the server never sees an entry, so the
+// phone is the only validator — of its own input and of what the other
+// phone wrote.
 //
-// Every failure throws a plain Error carrying the text the API used to
-// return, in the active language (errors.validate.* — the UI toasts
-// err.message verbatim); err.status mirrors the old HTTP status (400, 409)
-// like api.js does for server errors.
+// Every failure throws a plain Error with its text in the active language
+// (errors.validate.* — the UI toasts err.message verbatim) and an HTTP-like
+// err.status (400, 409), the shape api.js gives a server error, so callers
+// handle both alike.
 //
 // Pure module: no DOM, no IndexedDB, imports only the translations — runs
 // under `node --test`.
@@ -66,14 +66,14 @@ export function isTimerType(type) {
   return TIMER_TYPES.includes(type);
 }
 
-/** Error with the text and the status the API used to answer with. */
+/** Error with a text and an HTTP-like status (see the file header). */
 function fail(message, status = 400) {
   const err = new Error(message);
   err.status = status;
   return err;
 }
 
-/** The old 409 text for a second open timer of one type. */
+/** The 409 text for a second open timer of one type. */
 export function timerRunningMessage(type) {
   return t('errors.validate.timerRunning', { type: TYPE_LABELS[type] || type });
 }
@@ -500,33 +500,20 @@ const isCanonIso = (v) => {
  * keeps such rows as {eid, error} and skips them everywhere.
  */
 export function validatePlain(obj) {
-  if (!isPlainShape(obj, { legacy: false })) {
+  if (!isPlainShape(obj)) {
     throw fail(t('errors.validate.invalidRecord'));
   }
   return obj;
 }
 
-/**
- * Same check for a legacy `plain` row from the migration window
- * ({type, startedAt, endedAt, details, loggedBy}: no rev, no eid).
- */
-export function validateLegacyPlain(obj) {
-  if (!isPlainShape(obj, { legacy: true })) {
-    throw fail(t('errors.validate.invalidRecord'));
-  }
-  return obj;
-}
-
-function isPlainShape(obj, { legacy }) {
+function isPlainShape(obj) {
   if (!isObject(obj)) return false;
   if (typeof obj.type !== 'string' || !TYPES.includes(obj.type)) return false;
   if (!isCanonIso(obj.startedAt)) return false;
   if (obj.endedAt !== null && !isCanonIso(obj.endedAt)) return false;
   if (obj.loggedBy !== null && typeof obj.loggedBy !== 'string') return false;
-  if (!legacy) {
-    if (!isInt(obj.rev) || obj.rev < 1) return false;
-    if (typeof obj.eid !== 'string' || !EID_RE.test(obj.eid)) return false;
-  }
+  if (!isInt(obj.rev) || obj.rev < 1) return false;
+  if (typeof obj.eid !== 'string' || !EID_RE.test(obj.eid)) return false;
   try {
     validDetails(obj.type, obj.details);
   } catch {

@@ -1,10 +1,10 @@
 // IndexedDB 'bt' (version 1): the local copy of the family's sync feed.
 //
-//   rows  — server rows verbatim ({eid, seq, blob|null, plain|null,
-//           createdAt, updatedAt, deletedAt}), keyPath eid, index seq.
+//   rows  — server rows verbatim ({eid, seq, blob|null, createdAt,
+//           updatedAt, deletedAt}), keyPath eid, index seq.
 //   meta  — {k, v} records: cursor (last synced seq), identity (the
-//           username the rows belong to), legacyPending, and the daily
-//           key under 'fdk' (see keys.js).
+//           username the rows belong to), feed (the server database the
+//           rows came from) and the daily key under 'fdk' (see keys.js).
 //
 // Every function returns a promise and REJECTS when IndexedDB is missing,
 // blocked, hung (openDb gives up after 3 s) or broken — callers decide what

@@ -43,7 +43,8 @@ class HttpError extends RuntimeException
 /**
  * The JSON error envelope: {error: message} plus, when a code is set,
  * {code} and — only when there are any — {params}. An error without a code
- * answers exactly as before, so nothing an older shell reads changes.
+ * is {error} alone, and `error` is always there: the one field a shell that
+ * knows no codes reads.
  */
 function bt_error_body(string $message, ?string $code = null, array $params = []): array
 {

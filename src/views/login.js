@@ -24,7 +24,7 @@ import { api } from '../api.js';
 import { prefs } from '../store.js';
 import * as session from '../session.js';
 import { escapeHtml, toast, icon } from '../ui.js';
-import { t, tn, getLocale, setLocale, availableLocales } from '../i18n/index.js';
+import { t, getLocale, setLocale, availableLocales } from '../i18n/index.js';
 import { bindAuthInfo } from './auth-info.js';
 import { badgeSrc, bindBadgeFallback } from '../art.js';
 import { SHOTS, SHOT_SIZE, shotFile } from '../shots.js';
@@ -250,10 +250,6 @@ function bindWhoField(root, form) {
 function readDisplayName(root, form) {
   const activeChip = root.querySelector('.chip[data-name].active');
   return form.customName.value.trim() || (activeChip ? activeChip.dataset.name : '');
-}
-
-function adoptedMessage(n) {
-  return tn('login.recoveryCode.adopted', n);
 }
 
 /** Progress hook for session.*: the button shows the KDF stage, then `serverLabel`. */
@@ -734,7 +730,8 @@ export function renderLogin(root, opts = {}) {
       if (!displayName) return reject(errEl, form.customName, t('login.error.chooseDisplayName'));
       if (!familyName) return reject(errEl, familyInput, t('login.error.noFamilyName'));
       if (!familyPassword) return reject(errEl, familyPw, t('login.error.noFamilyPassword'));
-      // Family passwords were always ≥ 8 (the old server rule) — one check for both modes.
+      // Every family password has ≥ 8 characters (enforced whenever one is set), so a
+      // shorter one cannot be the right one either — one check for both modes.
       if (tooShort(familyPassword)) {
         return reject(errEl, familyPw, t('login.error.familyPasswordShort', { min: session.PASSWORD_MIN }));
       }
@@ -855,7 +852,6 @@ export function renderLogin(root, opts = {}) {
       prefs.recoveryPending = false; // acknowledged — before the shell boots and would nag
       onAuthed(user);
       toast(t('login.recoveryCode.familyCreated', { family: familyName }), 'success');
-      if (result.adoptedEntries > 0) toast(adoptedMessage(result.adoptedEntries), 'info', { ms: 6000 });
     });
   }
 

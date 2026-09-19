@@ -1,16 +1,15 @@
-// The in-memory entry model: what the server used to compute in
-// api/lib/entries.php (bt_state, bt_list_entries, the open-timer lookups)
-// now runs on the phone over the decrypted rows.
+// The in-memory entry model: the home-screen state, the history ranges and
+// the open-timer lookups, computed on the phone over the decrypted rows —
+// the server cannot compute any of it, it only holds ciphertext.
 //
 // Entries in the map carry {eid, seq, rev, type, startedAt, endedAt, details,
-// loggedBy, createdAt, updatedAt, deletedAt, legacy?, error?}: the server's
+// loggedBy, createdAt, updatedAt, deletedAt, error?}: the server's
 // row meta plus the decrypted plaintext. Rows that failed to decrypt or
 // validate are kept as {eid, seq, …, error} and skipped everywhere (counted
 // under Mehr). Soft-deleted rows (deletedAt) stay in the map as tombstones.
 //
-// Ordering everywhere is startedAt DESC, then eid DESC (the old
-// "started_at DESC, id DESC"); the tie-break only matters for identical
-// seconds.
+// Ordering everywhere is startedAt DESC, then eid DESC; the tie-break only
+// matters for identical seconds.
 //
 // Pure module: no DOM, no IndexedDB; imports only validate.js, tz.js and
 // reminders.js (itself pure).
@@ -27,7 +26,7 @@ export function sortNewest(a, b) {
   return cmpDesc(a.startedAt, b.startedAt) || cmpDesc(a.eid, b.eid);
 }
 
-/** Oldest first (bt_state's open timers: ORDER BY started_at). */
+/** Oldest first (the open timers of the home state). */
 const sortOldest = (a, b) => -sortNewest(a, b);
 
 const isLive = (e) => e && e.deletedAt == null && !e.error;
@@ -218,15 +217,15 @@ export function groupMeals(entries, nowIso) {
 }
 
 /**
- * Field-for-field port of bt_state for the home view: open timers (oldest
- * first), the last entry per type (timer types: the last CLOSED one — "Wach
+ * The state the home view renders: open timers (oldest first), the last
+ * entry per type (timer types: the last CLOSED one — "Wach
  * seit" depends on it), the last feed of either kind (an OPEN breastfeed
  * included: "time since last feed" counts from its start), today's counts in
  * the Europe/Zurich day of nowIso, sleep minutes as the clipped overlap of
  * every sleep with that day (open sleeps run until now; seconds summed, then
  * divided), and recent medication names for the entry form.
  *
- * On top of the old shape: `lastMeal` (the meal the last feed belongs to, see
+ * It also carries `lastMeal` (the meal the last feed belongs to, see
  * groupMeals), `lastNursingMeal` (the last meal with a Stillen side — the
  * "which side next" question survives a Schoppen in between), `today.meals`
  * (meals that STARTED today — the number the midwife asks for, a two-sided
@@ -344,9 +343,9 @@ export function deriveState(entries, nowIso) {
 }
 
 /**
- * Port of bt_list_entries: live entries whose start falls in the local-date
- * range [fromLocal, toLocal] (Europe/Zurich days), newest first. Throws the
- * old 400 texts for bad dates or a reversed range.
+ * Live entries whose start falls in the local-date range [fromLocal,
+ * toLocal] (Europe/Zurich days), newest first. Throws (status 400) for bad
+ * dates or a reversed range.
  */
 export function listRange(entries, fromLocal, toLocal) {
   validLocalDate(fromLocal, 'from');
@@ -401,12 +400,10 @@ const errorText = (e) => {
 };
 
 /**
- * Seq-monotonic upsert of one server row {eid, seq, blob|null, plain|null,
- * createdAt, updatedAt, deletedAt} into the map (a Map, or a plain object
- * keyed by eid). `plainOrError` is the
- * decrypted+validated plaintext, or {error} for a row that failed; for a
- * legacy row (blob null, `plain` from the server) it may be omitted and
- * row.plain is used — legacy entries get legacy:true and rev 0. Returns
+ * Seq-monotonic upsert of one server row {eid, seq, blob|null, createdAt,
+ * updatedAt, deletedAt} into the map (a Map, or a plain object keyed by
+ * eid). `plainOrError` is the decrypted+validated plaintext, or {error} for
+ * a row that failed — content never comes from the row itself. Returns
  * whether the map changed (false when it already holds this eid at the same
  * or a higher seq).
  */
@@ -417,8 +414,7 @@ export function applyRow(map, row, plainOrError) {
   const existing = isMap ? map.get(row.eid) : map[row.eid];
   if (existing && Number(existing.seq) >= seq) return false;
 
-  const legacy = row.blob == null && row.plain != null && typeof row.plain === 'object';
-  const src = plainOrError !== undefined ? plainOrError : legacy ? row.plain : undefined;
+  const src = plainOrError;
 
   const meta = {
     eid: row.eid,
@@ -432,14 +428,13 @@ export function applyRow(map, row, plainOrError) {
   if (src && typeof src === 'object' && !('error' in src)) {
     entry = {
       ...meta,
-      rev: legacy ? 0 : src.rev,
+      rev: src.rev,
       type: src.type,
       startedAt: src.startedAt,
       endedAt: src.endedAt === undefined ? null : src.endedAt,
       details: src.details && typeof src.details === 'object' ? src.details : {},
       loggedBy: src.loggedBy === undefined ? null : src.loggedBy,
     };
-    if (legacy) entry.legacy = true;
   } else {
     entry = { ...meta, error: errorText(src && typeof src === 'object' ? src.error : src) };
   }

@@ -1,4 +1,4 @@
-// End-to-end encryption primitives (plan §2 / §10). Pure WebCrypto: the same
+// End-to-end encryption primitives. Pure WebCrypto: the same
 // code runs in the browser and under `node --test` (Node >= 20) — no DOM, no
 // IndexedDB, no Buffer; the only import is the translations. Error messages
 // are read from them at the moment they are thrown (never at module load)

@@ -70,8 +70,6 @@ export default {
   'recoveryCode.copied': 'Code copied – now store it safely',
   'recoveryCode.copyManually': 'Please copy the highlighted code',
   'recoveryCode.familyCreated': 'Family "{family}" created',
-  'recoveryCode.adopted.one': '{n} existing entry taken over',
-  'recoveryCode.adopted.other': '{n} existing entries taken over',
 
   // A new account in an existing family via the recovery code
   'recovery.hint': 'With the recovery code you create a new account in your family – without a password. All entries are kept.',

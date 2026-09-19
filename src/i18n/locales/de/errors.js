@@ -1,7 +1,7 @@
 // Client-side error messages: crypto.js, db.js, store.js, session.js, validate.js.
 export default {
-  // validate.js (and model.listRange): the texts the API used to answer with —
-  // the UI toasts them verbatim. The quoted names are field names, not words.
+  // validate.js (and model.listRange): the UI toasts these verbatim. The
+  // quoted names are field names, not words.
   'validate.timerRunning': 'Es läuft bereits ein {type}-Timer',
   'validate.datetimeFormat': '"{name}" muss ein ISO-8601-Zeitpunkt mit Zeitzone sein',
   'validate.datetimeInvalid': '"{name}" ist kein gültiger Zeitpunkt',
@@ -73,19 +73,16 @@ export default {
   'session.displayName': 'Anzeigename: 1–{max} Zeichen',
   'session.familyName': 'Familienname: 1–{max} Zeichen',
 
-  // store.js: sync, writes, the seal pass (store.js reuses crypto.decrypt,
+  // store.js: sync and writes (store.js reuses crypto.decrypt,
   // crypto.keyData and validate.timerAlreadyEnded). {type} is the type's
   // label (common.type.*).
   'store.locked': 'Bitte zuerst entsperren',
   'store.notFound': 'Eintrag nicht gefunden',
   'store.badPage': 'Ungültige Antwort vom Server',
-  'store.plainIgnored': 'Unverschlüsselter Eintrag ignoriert',
   'store.rollback': 'Datensatz ist älter als der bekannte Stand',
   'store.noContent': 'Inhalt nicht verfügbar',
   'store.aborted': 'Abgemeldet',
   'store.invalidUser': 'Ungültiger Benutzer',
   'store.duplicateTimers': 'Zwei {type}-Timer offen – bitte einen im Verlauf beenden',
   'store.duplicateRemoved': 'Doppelter {type}-Timer entfernt',
-  'store.sealed.one': '{n} Eintrag verschlüsselt',
-  'store.sealed.other': '{n} Einträge verschlüsselt',
 };

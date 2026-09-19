@@ -5,12 +5,14 @@ measurements. Used by both parents from their phones, synced through a shared
 backend. Replaces paper notes / memory at 3am — so every common action must be
 1–2 taps, big touch targets, mobile-first.
 
-**UI language: German.** Timezone Europe/Zurich, dates/times in Swiss format
-(`31.08.2026`, `14:30`). Code, comments, and this spec stay in English.
+**UI language: German** (Swiss flavour, the source language); English ships
+too (`src/i18n/`, one folder per language). Timezone Europe/Zurich, dates/times
+in Swiss format (`31.08.2026`, `14:30`). Code, comments, and this spec stay in
+English.
 
 ## Stack
 
-Same architecture as `../workout-tracker` (proven on the same cyon hosting):
+Built for cheap shared hosting — PHP and SQLite, no service to run:
 
 - Frontend: vanilla JS + Vite, no framework. Mobile-first CSS.
 - Backend: PHP API (single router `api/index.php` + `api/lib/` modules),
@@ -19,11 +21,12 @@ Same architecture as `../workout-tracker` (proven on the same cyon hosting):
 - Tests: PHP API tests (`api/tests/run.php`) + node unit tests
   (`node --test src/tests/*.test.mjs`: crypto, the local model, the meal
   presentation, the drinking-target rule, reminders, validation, timezone,
-  the ui helpers, store/sync, the offline export tool).
-- Deploy: copy/adapt workout-tracker's `scripts/package.mjs` +
-  `scripts/deploy.mjs` (rsync/sftp/ftp, never touches remote `data/`).
-- Config/credentials via gitignored `.env` (see workout-tracker's
-  `.env.example` pattern).
+  the ui helpers, store/sync, the chart figures and their SVG builders, the
+  languages and API error codes, the release notes, private artwork, the
+  screenshot list, the offline export tool).
+- Deploy: `scripts/package.mjs` + `scripts/deploy.mjs` (rsync/sftp/ftp,
+  never touches remote `data/`).
+- Config/credentials via gitignored `.env` (see `.env.example`).
 
 ## Auth & encryption
 
@@ -62,12 +65,6 @@ under Mehr after typing the own password) unlocks everything without any
 password; `scripts/export-plain.mjs` decrypts a database file offline. Lose
 all three with no logged-in device and the data is gone — by design.
 
-Upgrade path from the original one-shared-password version: the schema
-migrates in place on the first request (backup `data/baby.db.v1.bak`), every
-device logs in once, the first registration repeats the OLD shared password
-to adopt the existing entries, and the phone encrypts them ("seal") right
-after; the server then vacuums the plaintext away.
-
 ## Sync model
 
 The server is the single source of truth for the encrypted rows; each phone
@@ -81,9 +78,9 @@ offline-first complexity:
   survive reloads and appear on both phones.
 - Writes are compare-and-swap on `seq`: a stale stop/edit gets a 409, the
   phone re-syncs and retries once when its precondition (e.g. "still open")
-  still holds — the old `ifOpen` semantics, now for every edit.
-- Day windows: "today" counts use the Europe/Zurich day (ported from the old
-  server logic), history groups by device-local day — as before.
+  still holds.
+- Day windows: "today" counts use the Europe/Zurich day, history groups by
+  device-local day.
 
 ## Performance & caching
 
@@ -117,9 +114,11 @@ Every entry: editable and deletable afterwards (typos, forgot to stop a
 timer). Deletes are soft (`deleted_at`) so nothing is lost by a 3am mistap.
 
 **Erinnerungen (reminders)** are the family's daily schedules: one entry of
-type `reminder` per schedule — `details {title, who, note?, times}` («Vitamin
-D · 2 Tropfen · Baby · 08:00», «Ibuprofen 600 · Mama · 08:00 · 20:00»), the
-times in Zurich wall-clock like the day windows, `startedAt` the last change,
+type `reminder` per schedule — `details {title, who, note?, times, everyDays?,
+startDate?}` («Vitamin D · 2 Tropfen · Baby · 08:00», «Ibuprofen 600 · Mama ·
+08:00 · 20:00»), the times in Zurich wall-clock like the day windows, daily
+unless `everyDays` is more than 1 (then every n-th day, counted from
+`startDate`), `startedAt` the last change,
 `loggedBy` who made it. Not an event (Verlauf, Nachtragen and the counts skip
 it), edited under Mehr › Erinnerungen with compare-and-set like any row. The
 phone expands them into the day's to-dos (`src/reminders.js`): one occurrence
@@ -133,8 +132,10 @@ Verlauf. No notification fires — the home screen shows what is due.
 family — its `details` is the settings document (`feedFromStart`,
 `recommendedMl`, `bottlePresets` — the Muttermilch chips, historical name —,
 `formulaPresets` — the formula's own three, small ones —, `birthDate`,
-`mealsPerDay`; every key optional, unknown keys kept so an older shell's save never drops a newer
-shell's setting), `startedAt` the
+`mealsPerDay`, `breastfeeding` — «Stillen» on/off: off hides the side tiles
+and the Schoppen tile leads —, `nursingMl` — roughly what one nursing session
+gives; every key optional, unknown keys kept so an older shell's save never
+drops a newer shell's setting), `startedAt` the
 time of the last change, `loggedBy` who made it. Encrypted and synced like
 a feed, so the server learns no preference either; the live row with the
 highest `seq` counts on every phone; a save lays only the changed keys over
@@ -155,16 +156,20 @@ by `mealsPerDay` (default 6), rounded to 5 ml; the Lebenstag counts Zurich
 calendar days from `birthDate` (1 on the birth day, which has no target).
 Past day ten the rule says nothing (`source: 'expired'`) and the form asks
 for the midwife's number. Einstellungen › Trinkmenge holds the two keys and
-previews today's numbers.
+previews today's numbers. When the bottle's meal already has a Stillen side
+(`meals.nursingBeforeBottle`, the same join rule as the meals), the form takes
+`nursingMl` off the target (`dose.supplementFor`) and aims for the rest.
 
 ## Core features (MVP)
 
 1. **Home / "Jetzt" view** — the screen that matters:
-   - Big "time since" indicators: since the last meal (the number parents
-     check most), since last diaper, sleep status (schläft seit … / wach
-     seit …). The half-width cards round to half hours from one hour on
-     («vor 1½ Std.», «seit 3½ Std.», ui.fmtSpanShort) so they never wrap on
-     a narrow phone; the hero keeps the exact numerals.
+   - Big "time since" indicator: since the last meal (the number parents
+     check most). Below it the «Heute» card — meals against the family's
+     `mealsPerDay`, wet diapers against the ~6-a-day guide, soiled ones and
+     the last diaper — and the sleep status (schläft seit … / wach seit …).
+     The small cards round to half hours from one hour on («vor 1½ Std.»,
+     «seit 3½ Std.», ui.fmtSpanShort) so they never wrap on a narrow phone;
+     the hero keeps the exact numerals.
    - **Mahlzeiten**: feeds (Stillen of either side, Schoppen) at most 20
      minutes apart — end of the meal so far to the next start — count as ONE
      meal. Derived on the phone from the synced entries (`groupMeals` in
@@ -241,19 +246,24 @@ previews today's numbers.
 4. **History ("Verlauf")**: reverse-chronological list grouped by day, with
    per-day summary counts (x Mahlzeiten, wet diapers against the ~6-a-day
    guide «💧 5/~6», soiled ones, Schlaf total, ticked-off «Erledigt»
-   entries). Three views,
+   entries). Four views,
    switched in the head: «Einträge» (every visit starts here — leaving the
    tab drops the choice) lists every day with its rows under a head
    carrying the counts, a week per page; «Tage» is one folded row per day —
    the day and its counts — that a tap unfolds (and a second folds again),
    four weeks per page; «Mahlzeiten» shows the feeds only — under each day
    head one folded row per meal (its total, parts and span) that a tap
-   unfolds into its sides, a week per page. A
+   unfolds into its sides, a week per page; «Grafik» draws one card per
+   figure that has data — weight, meals, nursing minutes, bottle amounts,
+   diapers, sleep, temperature — per day over 7, 14 or 28 days (range chips
+   instead of paging; the figures in `src/stats.js`, pure SVG builders in
+   `src/charts.js`), and its filter button hides charts per device. A
    meal of several feeds is one card — a head with the total («Mahlzeit ·
    20 Min.», «Links 12 · Rechts 8 · 13:02–13:31») and the sides indented
    below it, placed under the day the meal STARTED; every side stays its
    own entry. Tap an entry to edit or delete it.
-5. **Simple day stats**: just the per-day summary line in history — no charts.
+5. **Simple day stats**: the per-day summary line in history, plus the
+   per-day charts of the «Grafik» view (see 4).
 6. **«Mehr»**: four panes — Erinnerungen, Einstellungen, Konto (the own
    account, then the family: family password, recovery code, export,
    encryption status) and Anleitung, a plain-language how-to of the app
@@ -263,7 +273,7 @@ previews today's numbers.
    Anleitung» with «Anzeigen» on every app start until the pane was opened
    once. No interactive walkthrough, no overlays on the home screen.
 
-## Data model (schema v3)
+## Data model (schema v4)
 
 - `families` (id, name, name_key UNIQUE — case-folded, auth_hash = bcrypt of
   the family auth value, kdf_salt, kdf_iter, fdk_wrapped — the family data key
@@ -273,21 +283,21 @@ previews today's numbers.
   encrypted `{displayName}`, created_at DATE)
 - `entries` (eid TEXT PK — 32 hex, client-generated; family_id; seq — per-
   family change counter = sync cursor and concurrency token; blob — the
-  encrypted entry; legacy_* — plaintext of pre-encryption rows until sealed;
-  created_at / updated_at / deleted_at as DATES)
+  encrypted entry; created_at / updated_at / deleted_at as DATES — no column
+  for a type, a time or an amount)
   - Inside the blob: `{v, eid, rev, type, startedAt, endedAt, details, loggedBy}`
     with `type`: `breastfeed | bottle | diaper | sleep | weight | temperature |
     medication | task | settings | reminder`, `details` per type: `{side,
     paused?}`, `{amount_ml, colostrum_ml?}`, `{kind}`, `{grams}`, `{celsius}`, `{name}`,
     `{title, who, reminderEid?, due?}`, the family settings document and the
-    reminder schedule `{title, who, note?, times}` (see *What gets tracked*);
+    reminder schedule `{title, who, note?, times, everyDays?, startDate?}` (see
+    *What gets tracked*);
     canonical UTC ISO times; point-in-time types use `startedAt` only.
   - One open timer per type is a client rule (lower `seq` wins a race).
 - `auth_tokens` (hashed session tokens, bound to a user_id)
-- `settings` (key, value) — `schema_version`, `salt_secret`, `legacy_max_seq`,
-  `feed_id` (random token every sync page carries as `feed`; a re-migrated or
-  restored file gets a new one, so phones drop a mirror that belongs to
-  another history of the file)
+- `settings` (key, value) — `schema_version`, `salt_secret`, `feed_id` (random
+  token every sync page carries as `feed`; a file created anew gets a new
+  one, so phones drop a mirror that belongs to another file)
 - `login_attempts` (ip, fails, window_start) — every attempt budget: per
   address (`<ip>`, `reg:<ip>`, `write:<ip>`) and per target (`user:<name>`,
   `family:<name key>`); the key prefix picks the budget
@@ -306,9 +316,7 @@ One baby only — no `babies` table until reality demands it.
 - entries: `GET /sync?since=&limit=` (paged rows + tombstones, `feed`),
   `POST /entries {eid, blob}`, `PATCH /entries/:eid {blob, ifSeq}` (409 when
   moved), `DELETE /entries/:eid` (optional body `{ifSeq}` → 409 when moved),
-  `POST /entries/:eid/restore`, `POST /entries/seal` (encrypt migrated
-  plaintext rows)
-- `GET /state` and the old `GET /entries?from=&to=` answer 410 (old shells)
+  `POST /entries/:eid/restore` — no route takes or returns an entry's content
 - `GET /art/<name>`: private artwork. The repo ships its own icon set
   (`public/img/`, drawn by `scripts/make-icons.mjs`); an installation may keep
   other pictures in the gitignored `private-art/` and name ONE family
@@ -320,7 +328,6 @@ One baby only — no `babies` table until reality demands it.
 
 ## Non-goals (don't build)
 
-- Charts / statistics dashboards
 - Offline *writes* (queueing/sync of entries logged without network) — shell
   caching and stale-state display are in scope, see Performance & caching
 - Push notifications (the reminders are in-app only: the home screen shows
@@ -328,7 +335,7 @@ One baby only — no `babies` table until reality demands it.
 - Multiple babies, roles/permissions (every family member is equal), admin
   panel, e-mail / server-side password reset (impossible by design: the
   server holds no key)
-- Native app; i18n beyond German
+- Native app
 
 ## Definition of done
 
@@ -338,9 +345,8 @@ One baby only — no `babies` table until reality demands it.
 - A timer started on phone A can be stopped from phone B.
 - Editing and deleting an entry works from the history view.
 - API tests cover sync paging, compare-and-set writes (PATCH and
-  conditional DELETE), soft delete/restore, the legacy seal, the schema
-  migration and auth; node model tests cover crypto, the local model (day
+  conditional DELETE), soft delete/restore, the schema migration and auth; node model tests cover crypto, the local model (day
   windows, one-open-timer rule, timer open/close, meals, the pause,
   reminders and their ticks), the drinking-target rule and validation.
-- `npm run deploy` publishes to the cyon subdomain (same .env mechanism as
-  workout-tracker); README covers setup and deploy.
+- `npm run deploy` publishes to the host named in `.env`; README covers
+  setup and deploy.

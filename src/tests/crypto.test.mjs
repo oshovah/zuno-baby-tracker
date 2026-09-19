@@ -75,7 +75,7 @@ const SAMPLES = {
   },
 };
 
-function entry(sample, eid = EID, rev = 1, loggedBy = 'Dino') {
+function entry(sample, eid = EID, rev = 1, loggedBy = 'Papa') {
   return { eid, rev, ...sample, loggedBy };
 }
 
@@ -357,7 +357,7 @@ test('encryptEntry: padding invariant – every type gives the same blob length'
   const key = await fixedFdkKey();
   const lengths = new Set();
   for (const [type, sample] of Object.entries(SAMPLES)) {
-    const plain = entry(sample, EID, 12, 'Dino');
+    const plain = entry(sample, EID, 12, 'Papa');
     const size = new TextEncoder().encode(JSON.stringify({ v: 1, ...plain })).length;
     assert.ok(size <= 256, `${type} sample must fit the 256 bucket (${size} bytes)`);
     const blob = await encryptEntry(key, FAMILY, plain);
@@ -373,7 +373,7 @@ test('encryptEntry: a 100-char medication name lands in the 512 bucket only when
   const key = await fixedFdkKey();
   const longName = 'Paracetamol Zäpfchen 125 mg nach Rücksprache mit der Kinderärztin bei Fieber über 38.5 Grad'.padEnd(100, ' geben');
   assert.equal([...longName].length, 100);
-  const plain = entry({ ...SAMPLES.medication, details: { name: longName } }, EID, 3, 'Dino');
+  const plain = entry({ ...SAMPLES.medication, details: { name: longName } }, EID, 3, 'Papa');
   const size = new TextEncoder().encode(JSON.stringify({ v: 1, ...plain })).length;
   assert.ok(size > 256 && size <= 512, `expected 257..512 plaintext bytes, got ${size}`);
   const blob = await encryptEntry(key, FAMILY, plain);
@@ -490,30 +490,30 @@ test('decryptEntry: inner checks – eid swap, inner version, malformed JSON', a
 
 test('encryptProfile / decryptProfile: round trip, AAD by username, buckets', async () => {
   const key = await fixedFdkKey();
-  const blob = await encryptProfile(key, 'dino', { displayName: 'Dino' });
+  const blob = await encryptProfile(key, 'papa', { displayName: 'Papa' });
   assert.match(blob, B64U_RE);
   assert.equal(blob.length, blobChars(128)); // 210
-  assert.deepEqual(await decryptProfile(key, 'dino', blob), { displayName: 'Dino' });
+  assert.deepEqual(await decryptProfile(key, 'papa', blob), { displayName: 'Papa' });
   // Username canonicalisation matches the server (trim + lowercase).
-  assert.deepEqual(await decryptProfile(key, ' Dino ', blob), { displayName: 'Dino' });
+  assert.deepEqual(await decryptProfile(key, ' Papa ', blob), { displayName: 'Papa' });
   await assert.rejects(decryptProfile(key, 'anna', blob), /Entschlüsselung fehlgeschlagen/);
   await assert.rejects(decryptProfile(key, '', blob), /Ungültiger Benutzername/);
   await assert.rejects(decryptEntry(key, FAMILY, EID, blob), /Entschlüsselung fehlgeschlagen/);
   // Two encryptions differ (IV) and both open.
-  const again = await encryptProfile(key, 'dino', { displayName: 'Dino' });
+  const again = await encryptProfile(key, 'papa', { displayName: 'Papa' });
   assert.notEqual(again, blob);
-  assert.deepEqual(await decryptProfile(key, 'dino', again), { displayName: 'Dino' });
+  assert.deepEqual(await decryptProfile(key, 'papa', again), { displayName: 'Papa' });
   // Longer names move to the 256 bucket; absurd ones are refused.
   const long = 'Mami ' + 'ä'.repeat(70);
-  const longBlob = await encryptProfile(key, 'dino', { displayName: long });
+  const longBlob = await encryptProfile(key, 'papa', { displayName: long });
   assert.equal(longBlob.length, blobChars(256));
-  assert.deepEqual(await decryptProfile(key, 'dino', longBlob), { displayName: long });
-  await assert.rejects(encryptProfile(key, 'dino', { displayName: 'x'.repeat(300) }), /Daten sind zu gross/);
-  await assert.rejects(encryptProfile(key, 'dino', { displayName: 42 }), /Ungültiger Datensatz/);
+  assert.deepEqual(await decryptProfile(key, 'papa', longBlob), { displayName: long });
+  await assert.rejects(encryptProfile(key, 'papa', { displayName: 'x'.repeat(300) }), /Daten sind zu gross/);
+  await assert.rejects(encryptProfile(key, 'papa', { displayName: 42 }), /Ungültiger Datensatz/);
   // Version byte and tamper checks apply here too.
   const bytes = unb64u(blob);
   bytes[0] = 2;
-  await assert.rejects(decryptProfile(key, 'dino', b64u(bytes)), /Unbekanntes Datenformat/);
-  const crafted = await craft(key, 'bt1|profile|dino', JSON.stringify({ v: 1, name: 'x' }), 128);
-  await assert.rejects(decryptProfile(key, 'dino', crafted), /Ungültiger Datensatz/);
+  await assert.rejects(decryptProfile(key, 'papa', b64u(bytes)), /Unbekanntes Datenformat/);
+  const crafted = await craft(key, 'bt1|profile|papa', JSON.stringify({ v: 1, name: 'x' }), 128);
+  await assert.rejects(decryptProfile(key, 'papa', crafted), /Ungültiger Datensatz/);
 });

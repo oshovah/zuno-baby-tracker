@@ -1,7 +1,6 @@
-// Port of the PHP state/list/timer tests (api/tests/api.test.php) onto the
-// client model — same fixtures, same NOW (2026-09-01T10:00:00Z: Europe/Zurich
-// is on CEST then, the local day is 2026-09-01 and the day window starts
-// 2026-08-31T22:00:00Z), same expected numbers.
+// The client model: home state, history ranges, timers, meals. NOW is
+// 2026-09-01T10:00:00Z — Europe/Zurich is on CEST then, the local day is
+// 2026-09-01 and its window starts 2026-08-31T22:00:00Z.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -28,8 +27,8 @@ const NOW = '2026-09-01T10:00:00Z';
 const eidOf = (n) => n.toString(16).padStart(32, '0');
 
 /**
- * A tiny stand-in for the old bt_create_entry: validates the input exactly
- * like the server did and appends a model entry with the next seq.
+ * A tiny stand-in for store.entries.create: validates the input
+ * (validateCreate) and appends a model entry with the next seq.
  */
 function fixture() {
   const map = new Map();
@@ -99,7 +98,7 @@ test('liveEntries drops tombstones and undecryptable rows, accepts Map/object/ar
 });
 
 // ---------------------------------------------------------------------------
-// State (bt_state)
+// State (deriveState)
 // ---------------------------------------------------------------------------
 
 test('state aggregates today counts, last feed, and sleep minutes', () => {
@@ -282,7 +281,7 @@ test('today follows the Zurich day of nowIso, not UTC', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Listing (bt_list_entries)
+// Listing (listRange)
 // ---------------------------------------------------------------------------
 
 test('list filters by local-day range, newest first', () => {
@@ -368,7 +367,6 @@ const row = (eid, seq, extra = {}) => ({
   eid,
   seq,
   blob: 'AQ',
-  plain: null,
   createdAt: '2026-09-01',
   updatedAt: '2026-09-01',
   deletedAt: null,
@@ -468,41 +466,29 @@ test('applyRow keeps undecryptable rows as {eid, seq, …, error}', () => {
   assert.equal(liveEntries(map).length, 1);
 });
 
-test('applyRow: legacy rows (blob null, plain from the server) get legacy:true and rev 0', () => {
-  const map = new Map();
+test('applyRow: content never comes from the row itself — a plaintext a server slipped in is ignored', () => {
   const eid = eidOf(3);
-  const legacyRow = row(eid, 1, {
+  const smuggled = row(eid, 1, {
     blob: null,
     plain: { type: 'bottle', startedAt: '2026-08-30T08:00:00Z', endedAt: null, details: { amount_ml: 90 }, loggedBy: 'Mama' },
   });
-  // Explicit plain (the caller validated it) …
-  assert.equal(applyRow(map, legacyRow, legacyRow.plain), true);
+  // Without a decrypted plaintext from the caller the row is an error row …
+  const map = new Map();
+  assert.equal(applyRow(map, smuggled, undefined), true);
   assert.deepEqual(map.get(eid), {
     eid,
     seq: 1,
     createdAt: '2026-09-01',
     updatedAt: '2026-09-01',
     deletedAt: null,
-    rev: 0,
-    type: 'bottle',
-    startedAt: '2026-08-30T08:00:00Z',
-    endedAt: null,
-    details: { amount_ml: 90 },
-    loggedBy: 'Mama',
-    legacy: true,
+    error: 'Ungültiger Datensatz',
   });
-  // … or omitted: row.plain is used.
+  assert.equal(liveEntries(map).length, 0, 'and shows up nowhere');
+  // … and with one, only that plaintext counts.
   const map2 = new Map();
-  assert.equal(applyRow(map2, legacyRow, undefined), true);
-  assert.deepEqual(map2.get(eid), map.get(eid));
-  // Once sealed (blob present, seq bumped) the entry is a normal one.
-  assert.equal(applyRow(map, row(eid, 2), plainOf(eid, 1, { type: 'bottle', details: { amount_ml: 90 } })), true);
-  assert.equal(map.get(eid).legacy, undefined);
-  assert.equal(map.get(eid).rev, 1);
-  // A legacy row whose plain failed validation is stored as an error row.
-  const map3 = new Map();
-  assert.equal(applyRow(map3, legacyRow, { error: 'Ungültiger Datensatz' }), true);
-  assert.equal(map3.get(eid).error, 'Ungültiger Datensatz');
+  assert.equal(applyRow(map2, { ...smuggled, blob: 'AQ' }, plainOf(eid, 1, { type: 'diaper', details: { kind: 'pee' } })), true);
+  assert.equal(map2.get(eid).type, 'diaper');
+  assert.equal('legacy' in map2.get(eid), false);
 });
 
 test('applyRow works on a plain object keyed by eid as well', () => {
@@ -709,7 +695,7 @@ test('state.lastMeal is the meal of the last feed (the open timer included); tod
   bottle(f, '2026-09-01T07:30:00Z', 90);
   const open = bf(f, 'L', '2026-09-01T09:40:00Z');
   const state = deriveState(f.map, NOW);
-  // The old per-entry number: 5 today plus the right side at 00:05 local.
+  // The per-entry number: 5 today plus the right side at 00:05 local.
   assert.equal(state.today.feeds, 6);
   assert.equal(state.today.meals, 3);
   assert.equal(state.lastMeal.open, true);

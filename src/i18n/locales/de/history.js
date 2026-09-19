@@ -3,7 +3,8 @@ export default {
   // The view's heading — the same word as the tab (shell.tab.history), kept
   // apart so a language may shorten the tab without touching the heading.
   title: 'Verlauf',
-  // The segmented switch in the head: its accessible name and the three views
+  // The segmented switch in the head: its accessible name and the views (the
+  // fourth, «Grafik», sits with its own keys further down)
   'viewSwitch.label': 'Ansicht',
   'view.entries': 'Einträge',
   'view.days': 'Tage',

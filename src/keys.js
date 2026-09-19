@@ -1,4 +1,4 @@
-// The daily key on this device (plan §2 "materialisation helper"): the raw
+// The daily key on this device: the raw
 // Family Data Key, obtained by unwrapping the server copy with a password,
 // is imported as a NON-extractable AES-GCM CryptoKey and that object is put
 // into IndexedDB meta 'fdk' as {key}. A browser whose structured clone

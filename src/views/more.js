@@ -120,13 +120,9 @@ function homeCardNoteHtml() {
   )}</button></p>`;
 }
 
-/** Encryption status: the legacy seal pass while it runs, undecryptable rows, else all good. */
+/** Encryption status: undecryptable rows, else all good. */
 function cryptoStatusHtml() {
   const lines = [];
-  const legacy = store.legacy;
-  if (legacy.pending) {
-    lines.push(t('more.crypto.sealing', { sealed: legacy.sealed, remaining: legacy.remaining }));
-  }
   const n = store.decryptErrors;
   if (n >= 1) lines.push(tn('more.crypto.undecryptable', n));
   if (lines.length === 0) {
@@ -595,7 +591,7 @@ export function renderMore(el) {
       setHomeCard('reminders');
     });
 
-    // --- encryption status: follows the store (sync, seal progress, writes) ---
+    // --- encryption status: follows the store (sync, writes) ---
     const cryptoNode = el.querySelector('[data-crypto]');
     if (unsubscribe) unsubscribe();
     unsubscribe = store.subscribe(() => {

@@ -4,10 +4,10 @@
 //   - askHidden() never lets a typed character reach its output stream (a
 //     backspace made the previous version re-render the whole secret), on
 //     PassThrough streams — no pty needed;
-//   - the command itself, run against a v3 fixture database built with the
+//   - the command itself, run against a fixture database built with the
 //     sqlite3 CLI and real key material from src/crypto.js: family password
-//     and recovery code both decrypt the two encrypted rows, the legacy
-//     plaintext row rides along, the tombstone stays out, a wrong password
+//     and recovery code both decrypt the two encrypted rows, the tombstones
+//     (one of them without any content) stay out, a wrong password
 //     and an ambiguous family fail cleanly, and the secret never shows up on
 //     stderr. Skipped when sqlite3 is not in PATH (the tool needs it anyway).
 
@@ -94,7 +94,7 @@ function q(s) {
   return "'" + String(s).replace(/'/g, "''") + "'";
 }
 
-/** The v3 tables the tool reads (as api/lib/db.php creates them). */
+/** The tables the tool reads (as api/lib/db.php creates them). */
 const DDL = `
 CREATE TABLE families (
   id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE,
@@ -107,19 +107,18 @@ CREATE TABLE users (
   profile_blob TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d','now'))
 );
 CREATE TABLE entries (
-  eid TEXT PRIMARY KEY, family_id INTEGER, seq INTEGER NOT NULL, blob TEXT,
-  legacy_type TEXT, legacy_started_at TEXT, legacy_ended_at TEXT, legacy_details TEXT, legacy_logged_by TEXT,
+  eid TEXT PRIMARY KEY, family_id INTEGER NOT NULL, seq INTEGER NOT NULL, blob TEXT,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT
 );
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
-INSERT INTO settings (key, value) VALUES ('schema_version', '3'), ('legacy_max_seq', '1'),
+INSERT INTO settings (key, value) VALUES ('schema_version', '4'),
   ('salt_secret', lower(hex(randomblob(32)))), ('feed_id', lower(hex(randomblob(16))));
 `;
 
 /**
  * Build the fixture: family 1 (Testfamilie) with a real wrapped FDK under
  * PASSWORD, user mama with an encrypted profile, two encrypted entries, one
- * legacy plaintext row, one encrypted tombstone; family 2 (Andere) with its
+ * encrypted tombstone and one without content; family 2 (Andere) with its
  * own key and one row that must never show up. Returns what the assertions
  * need.
  */
@@ -160,7 +159,7 @@ async function buildFixture(dir) {
       loggedBy: 'Papa',
     },
   };
-  const legacyEid = randomEid();
+  const emptyEid = randomEid();
   const otherFdk = await importFdk(await generateFdkRaw(), false);
   const otherEid = randomEid();
   const otherBlob = await encryptEntry(otherFdk, 2, {
@@ -183,8 +182,8 @@ async function buildFixture(dir) {
        VALUES (1, 1, 'mama', 'x', 's', 600000, 'w', ${q(await encryptProfile(fdk, 'mama', { displayName: DISPLAY_NAME }))});`,
     `INSERT INTO users (id, family_id, username, auth_hash, kdf_salt, kdf_iter, fdk_wrapped, profile_blob)
        VALUES (2, 1, 'papa', 'x', 's', 600000, 'w', NULL);`,
-    `INSERT INTO entries (eid, family_id, seq, blob, legacy_type, legacy_started_at, legacy_ended_at, legacy_details, legacy_logged_by, created_at, updated_at, deleted_at)
-       VALUES (${q(legacyEid)}, 1, 1, NULL, 'bottle', '2026-08-30T08:00:00Z', NULL, '{"amount_ml":90}', 'Mama', '2026-08-30', '2026-08-30', NULL);`,
+    `INSERT INTO entries (eid, family_id, seq, blob, created_at, updated_at, deleted_at)
+       VALUES (${q(emptyEid)}, 1, 1, NULL, '2026-08-30', '2026-08-31', '2026-08-31');`,
     `INSERT INTO entries (eid, family_id, seq, blob, created_at, updated_at, deleted_at)
        VALUES (${q(plain.breastfeed.eid)}, 1, 2, ${q(await encryptEntry(fdk, FAMILY_ID, plain.breastfeed))}, '2026-09-05', '2026-09-05', NULL);`,
     `INSERT INTO entries (eid, family_id, seq, blob, created_at, updated_at, deleted_at)
@@ -196,7 +195,7 @@ async function buildFixture(dir) {
   ].join('\n');
   const res = spawnSync('sqlite3', [dbFile], { input: sql, encoding: 'utf8' });
   assert.equal(res.status, 0, `sqlite3 failed to build the fixture: ${res.stderr}`);
-  return { dbFile, plain, legacyEid, otherEid, recoveryCode: recoveryCode(fdkRaw) };
+  return { dbFile, plain, emptyEid, otherEid, recoveryCode: recoveryCode(fdkRaw) };
 }
 
 function runTool(args, stdin) {
@@ -217,14 +216,15 @@ function assertExport(res, fixture, secret) {
     { username: 'papa', displayName: null },
   ]);
 
-  const { plain, legacyEid } = fixture;
-  assert.equal(out.entries.length, 3, '2 decrypted + 1 legacy');
+  const { plain } = fixture;
+  assert.equal(out.entries.length, 2);
   assert.deepEqual(
     out.entries.map((e) => e.eid),
-    [plain.diaper.eid, plain.breastfeed.eid, legacyEid],
+    [plain.diaper.eid, plain.breastfeed.eid],
     'newest first'
   );
   assert.ok(!res.stdout.includes(plain.tombstone.eid), 'the tombstone is absent');
+  assert.ok(!res.stdout.includes(fixture.emptyEid), 'so is the tombstone without content');
   assert.ok(!res.stdout.includes(fixture.otherEid), 'the other family is absent');
 
   assert.deepEqual(out.entries[0], {
@@ -249,23 +249,11 @@ function assertExport(res, fixture, secret) {
     details: { side: 'L' },
     loggedBy: 'Mamä',
   });
-  assert.deepEqual(out.entries[2], {
-    eid: legacyEid,
-    seq: 1,
-    createdAt: '2026-08-30',
-    updatedAt: '2026-08-30',
-    legacy: true,
-    type: 'bottle',
-    startedAt: '2026-08-30T08:00:00Z',
-    endedAt: null,
-    details: { amount_ml: 90 },
-    loggedBy: 'Mama',
-  });
-  assert.match(res.stderr, /Exported 3 entries \(0 failed to decrypt, 1 deleted left out\)/);
+  assert.match(res.stderr, /Exported 2 entries \(0 failed to decrypt, 2 deleted left out\)/);
   return out;
 }
 
-test('export-plain.mjs decrypts a v3 database with the family password and with the recovery code', { skip: haveSqlite3 ? false : 'sqlite3 CLI not in PATH' }, async () => {
+test('export-plain.mjs decrypts a database with the family password and with the recovery code', { skip: haveSqlite3 ? false : 'sqlite3 CLI not in PATH' }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bt-export-'));
   try {
     const fixture = await buildFixture(dir);

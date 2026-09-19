@@ -19,7 +19,7 @@
  *
  * Output: {family, exportedAt, users: [{username, displayName}], entries:
  * [{eid, seq, createdAt, updatedAt, type, startedAt, endedAt, details,
- * loggedBy[, legacy: true]}], errors: [{eid, error}]} — entries newest first;
+ * loggedBy}], errors: [{eid, error}]} — entries newest first;
  * a row that will not open (wrong key, tampering) lands in errors.
  *
  * askHidden() is exported for the unit test (src/tests/export-plain.test.mjs);
@@ -152,13 +152,12 @@ async function main(args) {
   }
   const fdk = await importFdk(fdkRaw, false);
 
-  // Tombstones stay out: a soft-deleted entry was deleted on purpose (or its
-  // legacy plaintext was scrubbed at the seal); the count goes to stderr.
+  // Tombstones stay out: a soft-deleted entry was deleted on purpose; the
+  // count goes to stderr.
   const fid = Number(family.id);
   const rows = sql(
-    `SELECT eid, seq, blob, legacy_type, legacy_started_at, legacy_ended_at, legacy_details, legacy_logged_by,
-            created_at, updated_at
-       FROM entries WHERE family_id = ${fid} AND deleted_at IS NULL ORDER BY seq`
+    `SELECT eid, seq, blob, created_at, updated_at
+       FROM entries WHERE family_id = ${fid} AND deleted_at IS NULL AND blob IS NOT NULL ORDER BY seq`
   );
   const deleted = sql(`SELECT COUNT(*) AS n FROM entries WHERE family_id = ${fid} AND deleted_at IS NOT NULL`)[0].n;
   const users = sql(`SELECT username, profile_blob FROM users WHERE family_id = ${fid} ORDER BY id`);
@@ -174,20 +173,6 @@ async function main(args) {
   }
   for (const r of rows) {
     const meta = { eid: r.eid, seq: r.seq, createdAt: r.created_at, updatedAt: r.updated_at };
-    if (r.blob === null) {
-      if (r.legacy_type) {
-        out.entries.push({
-          ...meta,
-          legacy: true,
-          type: r.legacy_type,
-          startedAt: r.legacy_started_at,
-          endedAt: r.legacy_ended_at,
-          details: r.legacy_details ? JSON.parse(r.legacy_details) : {},
-          loggedBy: r.legacy_logged_by,
-        });
-      }
-      continue;
-    }
     try {
       const plain = await decryptEntry(fdk, fid, r.eid, r.blob);
       out.entries.push({

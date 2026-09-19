@@ -18,8 +18,9 @@
  * iteration count; bt_auth_params serves them, with a stable HMAC-derived
  * fake for unknown usernames so the endpoint cannot enumerate accounts), the
  * wrapped FDK and an opaque encrypted profile blob (the display name lives
- * inside it — the server no longer validates or shows names). A family
- * additionally stores bcrypt(recoveryAuthKey), the recovery code's auth value.
+ * inside it — the server never sees a name it could validate or show). A
+ * family additionally stores bcrypt(recoveryAuthKey), the recovery code's
+ * auth value.
  *
  * Registration (bt_register) is ONE request in two modes: 'create' brings
  * the complete family key set (family auth key + KDF, both FDK wrappings,
@@ -29,13 +30,6 @@
  * join normally also brings `rotateFamily`, fresh family credentials that
  * replace the old ones in the same transaction: the family password is a
  * one-time invite, not a standing secret (see bt_register).
- *
- * Legacy adoption: entries with family_id IS NULL are the plaintext rows of
- * the shared-password era. While the deploy config carries
- * 'legacy_password_hash' (bcrypt of the old APP_PASSWORD), only a family
- * CREATOR who proves that password adopts them (403 on a wrong one, no
- * adoption and no error without one). Without the config key the first
- * family ever created adopts them, as before.
  *
  * Sessions: DB-backed bearer tokens (auth_tokens.token_hash = sha256(token),
  * so a leaked file exposes no usable token) bound to a user, delivered in the
@@ -54,10 +48,6 @@
  * so a higher cost buys nothing but CPU. The dummy verification for unknown
  * usernames stays (response timing must not reveal which names exist).
  *
- * Any request body still carrying 'password' / 'familyPassword' comes from
- * the service-worker-cached previous shell: 400 with an update hint
- * (bt_reject_old_shell) before any work.
- *
  * Target: PHP 7.4+.
  */
 
@@ -68,11 +58,12 @@ const BT_TOKEN_TTL_SECONDS = 15552000; // 180 days
 
 // Bcrypt cost, pinned so it does NOT vary with the host's PASSWORD_BCRYPT
 // default (tests lower it via the BABY_BCRYPT_COST env var, see
-// bt_bcrypt_cost). BT_DUMMY_HASH is a real hash at cost 10, used to make a
-// failed login take the same time whether or not the username exists (a
+// bt_bcrypt_cost). BT_DUMMY_HASH is a real hash at cost 10 — of 32 random
+// bytes that were thrown away, so nothing verifies against it — used to make
+// a failed login take the same time whether or not the username exists (a
 // login with an unknown user must still pay one bcrypt verification).
 const BT_BCRYPT_COST = 10;
-const BT_DUMMY_HASH = '$2y$10$c9XQr.EBUMCgYrBNtzRfj.QRLcXuodW5DIgiIRfLm.AFotNzhpx6m';
+const BT_DUMMY_HASH = '$2y$10$erYG9hPbTFOBVeshTOw7rOGaXfTirizyX3g3wLUFrekAzA1XyiJbG';
 
 // Key material sizes (bytes) and the PBKDF2 iteration window the client may
 // pick from; the client floor is the same 600000 (src/crypto.js KDF_MIN_ITER).
@@ -90,7 +81,6 @@ const BT_PROFILE_BLOB_MAX_CHARS = 4096;
 
 const BT_AUTH_ERR_KEYS = 'Ungültige Schlüsseldaten';
 const BT_AUTH_ERR_BLOB = 'Ungültiger Datensatz';
-const BT_AUTH_OLD_SHELL_MSG = 'Neue App-Version – bitte die App schliessen und neu öffnen, dann anmelden';
 
 // --- bcrypt on auth keys -----------------------------------------------------
 
@@ -200,18 +190,6 @@ function bt_valid_blob_field($value, int $maxChars, bool $nullable): ?string
         throw new HttpError(400, BT_AUTH_ERR_BLOB, 'request.badBlob');
     }
     return $value;
-}
-
-/**
- * 400 with the update hint when the body carries raw password fields — the
- * shape only the previous (service-worker-cached) shell sends. Called before
- * any other work by every body-taking function here.
- */
-function bt_reject_old_shell(array $body): void
-{
-    if (array_key_exists('password', $body) || array_key_exists('familyPassword', $body)) {
-        throw new HttpError(400, BT_AUTH_OLD_SHELL_MSG, 'auth.oldShell');
-    }
 }
 
 /**
@@ -623,7 +601,6 @@ function bt_verify_family_credential(array $family, array $cred): void
  */
 function bt_family_unlock(PDO $pdo, array $body): array
 {
-    bt_reject_old_shell($body);
     $name = bt_valid_family_name($body['familyName'] ?? null);
     $cred = bt_family_credential($body);
     $family = bt_family_by_key($pdo, bt_name_key($name));
@@ -661,13 +638,11 @@ function bt_rethrow_register_conflict(PDOException $e): void
  *                rotateFamily (null, or the validated {familyAuthKey,
  *                familyKdf, fdkWrappedFamily} the family gets the moment the
  *                join commits — see bt_register)
- *   legacyPassword (string|null; ignored unless the legacy gate is on)
  * Exposed so index.php can validate BEFORE counting the attempt against the
  * throttle: typos stay free, everything that reaches bcrypt/the DB is counted.
  */
 function bt_validate_registration(array $body): array
 {
-    bt_reject_old_shell($body);
     $mode = $body['familyMode'] ?? null;
     if ($mode !== 'create' && $mode !== 'join') {
         throw new HttpError(400, 'Ungültige Anfrage', 'auth.badFamilyMode');
@@ -685,7 +660,6 @@ function bt_validate_registration(array $body): array
         'familyKdf' => null,
         'fdkWrappedFamily' => null,
         'rotateFamily' => null,
-        'legacyPassword' => null,
     ];
     if ($mode === 'create') {
         $reg['familyAuthKey'] = bt_valid_auth_key($body['familyAuthKey'] ?? null);
@@ -706,10 +680,6 @@ function bt_validate_registration(array $body): array
                 'fdkWrappedFamily' => bt_valid_wrapped($rotate['fdkWrappedFamily'] ?? null),
             ];
         }
-    }
-    $legacy = $body['legacyPassword'] ?? null;
-    if (is_string($legacy) && $legacy !== '') {
-        $reg['legacyPassword'] = $legacy;
     }
     return $reg;
 }
@@ -732,31 +702,21 @@ function bt_validate_registration(array $body): array
  *     partner's join, and the next person is let in by a member setting a
  *     fresh one (bt_update_family_password). Members never need it again:
  *     their own password unlocks every device (bt_authenticate). Without
- *     the field (an older shell) the family stays open as before.
+ *     the field (an older shell) the family stays open.
  * Either way the user row stores bcrypt(authKey), the KDF parameters, the
  * member-wrapped FDK (NOT NULL from birth) and the opaque profile blob.
  *
- * Legacy adoption (create only; a joined family already has an FDK and its
- * own seq sequence): entries with family_id IS NULL are adopted when
- *   - $config['legacy_password_hash'] is a non-empty string (the deploy
- *     config of the migration release) AND body.legacyPassword verifies
- *     against it (403 'Falsches Alt-Passwort' on a wrong one; without one
- *     the rows simply stay unadopted), or
- *   - the config key is absent/null AND this is the first family ever.
- * Adopted rows keep their seq (the v1 ids, unique among themselves).
- *
  * Returns ['user' => [id, username, familyId, familyName, profileBlob],
  *          'familyCreated' => bool, 'familyClosed' => bool (a join that
- *          rotated the family credentials), 'adoptedEntries' => int,
- *          'legacyRemaining' => int (the family's rows with blob IS NULL)].
- * Errors: 400 validation / old shell, 403, 404, 409 username taken / family
- * created concurrently. The auth cookie is NOT issued here (index.php does).
+ *          rotated the family credentials)].
+ * Errors: 400 validation, 403, 404, 409 username taken / family created
+ * concurrently. The auth cookie is NOT issued here (index.php does).
  *
  * All bcrypt work happens OUTSIDE the write lock; BEGIN IMMEDIATE then
- * serialises concurrent registrations so the username check, the create /
- * join decision and the adoption are race-free.
+ * serialises concurrent registrations so the username check and the create /
+ * join decision are race-free.
  */
-function bt_register(PDO $pdo, array $body, array $config = [], ?string $nowIso = null): array
+function bt_register(PDO $pdo, array $body, ?string $nowIso = null): array
 {
     // 1. Validate everything before any DB write or bcrypt work.
     $reg = bt_validate_registration($body);
@@ -770,18 +730,7 @@ function bt_register(PDO $pdo, array $body, array $config = [], ?string $nowIso 
             : ['kind' => 'recovery', 'key' => $reg['recoveryAuthKey']];
     }
 
-    // 2. Legacy adoption gate (create only, outside the lock).
-    $gateHash = $config['legacy_password_hash'] ?? null;
-    $gated = is_string($gateHash) && $gateHash !== '';
-    $adoptByGate = false;
-    if ($create && $gated && $reg['legacyPassword'] !== null) {
-        if (!password_verify($reg['legacyPassword'], $gateHash)) {
-            throw new HttpError(403, 'Falsches Alt-Passwort', 'auth.badLegacyPassword');
-        }
-        $adoptByGate = true;
-    }
-
-    // 3. Outside the lock: the create/join precondition (no bcrypt wasted on
+    // 2. Outside the lock: the create/join precondition (no bcrypt wasted on
     //    a 409/404/403) and the hashes.
     $existing = bt_family_by_key($pdo, $fKey);
     $famHash = null;
@@ -803,10 +752,10 @@ function bt_register(PDO $pdo, array $body, array $config = [], ?string $nowIso 
     }
     $userHash = bt_hash_auth($reg['authKey']);
 
-    // 4. Under the write lock: username, family create-or-join (+ rotation), user, adoption.
+    // 3. Under the write lock: username, family create-or-join (+ rotation), user.
     try {
         return bt_auth_txn($pdo, function () use (
-            $pdo, $reg, $fKey, $today, $create, $cred, $existing, $famHash, $recHash, $userHash, $gated, $adoptByGate
+            $pdo, $reg, $fKey, $today, $create, $cred, $existing, $famHash, $recHash, $userHash
         ) {
             $stmt = $pdo->prepare('SELECT 1 FROM users WHERE username = ?');
             $stmt->execute([$reg['username']]);
@@ -816,13 +765,11 @@ function bt_register(PDO $pdo, array $body, array $config = [], ?string $nowIso 
 
             $familyCreated = false;
             $familyClosed = false;
-            $adopted = 0;
             $family = bt_family_by_key($pdo, $fKey);
             if ($create) {
                 if ($family !== null) {
                     throw new HttpError(409, 'Familie wurde gerade angelegt – bitte nochmals versuchen', 'auth.familyExists');
                 }
-                $first = (int) $pdo->query('SELECT COUNT(*) FROM families')->fetchColumn() === 0;
                 $pdo->prepare(
                     'INSERT INTO families
                        (name, name_key, auth_hash, kdf_salt, kdf_iter, fdk_wrapped, recovery_hash, created_at)
@@ -835,20 +782,12 @@ function bt_register(PDO $pdo, array $body, array $config = [], ?string $nowIso 
                 $familyId = (int) $pdo->lastInsertId();
                 $familyName = $reg['familyName'];
                 $familyCreated = true;
-                if ($adoptByGate || (!$gated && $first)) {
-                    $upd = $pdo->prepare('UPDATE entries SET family_id = ? WHERE family_id IS NULL');
-                    $upd->execute([$familyId]);
-                    $adopted = $upd->rowCount();
-                    if ($adopted > 0) {
-                        error_log("[baby-tracker] family $familyId adopted $adopted legacy entries");
-                    }
-                }
             } else {
                 if ($family === null) {
-                    // Deleted by hand between step 3 and the lock.
+                    // Deleted by hand between step 2 and the lock.
                     throw new HttpError(404, 'Familie nicht gefunden – bitte Namen prüfen', 'auth.familyUnknown');
                 }
-                // Rotated by the partner between step 3 and the lock: verify again.
+                // Rotated by the partner between step 2 and the lock: verify again.
                 $col = $cred['kind'] === 'family' ? 'auth_hash' : 'recovery_hash';
                 if ((string) $family[$col] !== (string) $existing[$col]) {
                     bt_verify_family_credential($family, $cred);
@@ -876,10 +815,6 @@ function bt_register(PDO $pdo, array $body, array $config = [], ?string $nowIso 
             ]);
             $userId = (int) $pdo->lastInsertId();
 
-            $cnt = $pdo->prepare('SELECT COUNT(*) FROM entries WHERE family_id = ? AND blob IS NULL');
-            $cnt->execute([$familyId]);
-            $legacyRemaining = (int) $cnt->fetchColumn();
-
             return [
                 'user' => [
                     'id' => $userId,
@@ -890,8 +825,6 @@ function bt_register(PDO $pdo, array $body, array $config = [], ?string $nowIso 
                 ],
                 'familyCreated' => $familyCreated,
                 'familyClosed' => $familyClosed,
-                'adoptedEntries' => $adopted,
-                'legacyRemaining' => $legacyRemaining,
             ];
         });
     } catch (PDOException $e) {
@@ -942,7 +875,6 @@ function bt_user_keys(PDO $pdo, int $userId): array
  */
 function bt_unlock_user_keys(PDO $pdo, array $user, array $body): array
 {
-    bt_reject_old_shell($body);
     $authKey = bt_valid_auth_key($body['authKey'] ?? null);
     bt_verify_own_auth($pdo, (int) $user['id'], $authKey);
     return bt_user_keys($pdo, (int) $user['id']);
@@ -951,7 +883,6 @@ function bt_unlock_user_keys(PDO $pdo, array $user, array $body): array
 /** Replace the logged-in user's opaque profile blob from {profileBlob}; returns the refreshed user array. */
 function bt_update_profile(PDO $pdo, array $user, array $body): array
 {
-    bt_reject_old_shell($body);
     $blob = bt_valid_blob_field($body['profileBlob'] ?? null, BT_PROFILE_BLOB_MAX_CHARS, false);
     $pdo->prepare('UPDATE users SET profile_blob = ? WHERE id = ?')->execute([$blob, (int) $user['id']]);
     $user['profileBlob'] = $blob;
@@ -967,7 +898,6 @@ function bt_update_profile(PDO $pdo, array $user, array $body): array
  */
 function bt_update_password(PDO $pdo, array $user, array $body): void
 {
-    bt_reject_old_shell($body);
     $current = bt_valid_current_auth_key($body);
     $authKey = bt_valid_auth_key($body['authKey'] ?? null);
     $kdf = bt_valid_kdf($body['kdf'] ?? null);
@@ -996,7 +926,6 @@ function bt_update_password(PDO $pdo, array $user, array $body): void
  */
 function bt_update_family_password(PDO $pdo, array $user, array $body): void
 {
-    bt_reject_old_shell($body);
     $current = bt_valid_current_auth_key($body);
     $familyAuthKey = bt_valid_auth_key($body['familyAuthKey'] ?? null);
     $kdf = bt_valid_kdf($body['familyKdf'] ?? null);
@@ -1120,7 +1049,11 @@ function bt_charge_write(PDO $pdo, string $ip): void
     bt_record_login_failure($pdo, $key);
 }
 
-/** Clear a key's attempt budget (no longer called on login success — see file docblock). */
+/**
+ * Clear a key's attempt budget. Nothing calls it on a successful login, on
+ * purpose: with open registration a guesser could reset the budget by
+ * logging into an account of their own.
+ */
 function bt_clear_login_failures(PDO $pdo, string $ip): void
 {
     $pdo->prepare('DELETE FROM login_attempts WHERE ip = ?')->execute([$ip]);

@@ -7,7 +7,6 @@ data/
 !.env.example
 *.log
 .DS_Store
-deploy-v1-live/
 
 # The repo is public: nothing that holds family data may ever be tracked.
 # Databases and their backups (data/ is ignored above; these catch a copy

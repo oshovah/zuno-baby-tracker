@@ -34,10 +34,8 @@ require_once __DIR__ . '/../index.php';
 
 const T_NOW = '2026-09-01T10:00:00Z';
 const T_IP = '203.0.113.10';
-const T_OLD_SHELL = 'Neue App-Version – bitte die App schliessen und neu öffnen';
-const T_OLD_SHELL_LOGIN = 'Neue App-Version – bitte die App schliessen und neu öffnen, dann anmelden';
 const T_USER_KEYS = ['username', 'familyId', 'familyName', 'profileBlob'];
-const T_ROW_KEYS = ['eid', 'seq', 'blob', 'plain', 'createdAt', 'updatedAt', 'deletedAt'];
+const T_ROW_KEYS = ['eid', 'seq', 'blob', 'createdAt', 'updatedAt', 'deletedAt'];
 
 $GLOBALS['__bt_db_file'] = tempnam(sys_get_temp_dir(), 'baby-test-');
 $GLOBALS['__bt_fix'] = null;
@@ -97,14 +95,13 @@ function fake_eid(): string
 // Shared scratch database + accounts
 // ---------------------------------------------------------------------------
 
-/** The shared scratch database (v3, via bt_db) with every table wiped and no account. */
+/** The shared scratch database (via bt_db) with every table wiped and no account. */
 function empty_db(): PDO
 {
     $pdo = bt_db(['db_path' => $GLOBALS['__bt_db_file']]);
     foreach (['entries', 'auth_tokens', 'login_attempts', 'users', 'families', 'sqlite_sequence'] as $table) {
         $pdo->exec("DELETE FROM $table");
     }
-    $pdo->exec("UPDATE settings SET value = '0' WHERE key = 'legacy_max_seq'");
     logout();
     $GLOBALS['__bt_fix'] = null;
     return $pdo;
@@ -151,7 +148,7 @@ function fresh_db(): PDO
 {
     $pdo = empty_db();
     $body = create_body();
-    $res = bt_register($pdo, $body, [], T_NOW);
+    $res = bt_register($pdo, $body, T_NOW);
     $GLOBALS['__bt_fix'] = ['body' => $body, 'user' => $res['user']];
     return $pdo;
 }
@@ -181,7 +178,7 @@ function fam(): int
 function second_family(PDO $pdo): array
 {
     $body = create_body(['username' => 'papa2', 'familyName' => 'Andere']);
-    return bt_register($pdo, $body, [], T_NOW) + ['body' => $body];
+    return bt_register($pdo, $body, T_NOW) + ['body' => $body];
 }
 
 /** Put a real session cookie for $user (a bt_register user array) into $_COOKIE. */
@@ -193,24 +190,6 @@ function login_as(PDO $pdo, array $user): void
 function logout(): void
 {
     unset($_COOKIE[BT_COOKIE]);
-}
-
-/**
- * $n unadopted plaintext rows from the shared-password era (family_id NULL,
- * seq = the v1 id, legacy_max_seq stamped accordingly).
- */
-function seed_legacy(PDO $pdo, int $n): void
-{
-    $stmt = $pdo->prepare(
-        "INSERT INTO entries (eid, family_id, seq, blob, legacy_type, legacy_started_at, legacy_details,
-                              legacy_logged_by, created_at, updated_at)
-         VALUES (?, NULL, ?, NULL, 'bottle', '2026-08-30T08:00:00Z', '{\"amount_ml\":90}', 'Mama',
-                 '2026-08-30', '2026-08-30')"
-    );
-    for ($i = 1; $i <= $n; $i++) {
-        $stmt->execute([fake_eid(), $i]);
-    }
-    $pdo->prepare("UPDATE settings SET value = ? WHERE key = 'legacy_max_seq'")->execute([(string) $n]);
 }
 
 /** Throttle counter of a key ('' when no row). */
@@ -326,7 +305,6 @@ function assert_row_shape(array $row, string $msg = ''): void
     assert_true(preg_match('/^[0-9a-f]{32}$/D', $row['eid']) === 1, $p . 'eid');
     assert_true(is_int($row['seq']) && $row['seq'] >= 1, $p . 'seq');
     assert_true($row['blob'] === null || is_string($row['blob']), $p . 'blob');
-    assert_true($row['plain'] === null || is_array($row['plain']), $p . 'plain');
     foreach (['createdAt', 'updatedAt'] as $k) {
         assert_true(preg_match('/^\d{4}-\d{2}-\d{2}$/D', $row[$k]) === 1, $p . $k);
     }
@@ -392,8 +370,8 @@ bt_test('bt_handle maps HttpError, a locked SQLite file (503) and anything else 
     assert_eq(bt_handle(function () {
         return [201, ['ok' => true]];
     }), [201, ['ok' => true]]);
-    // The envelope: {error} alone without a code (as before), {error, code}
-    // with one, {params} only when there are any.
+    // The envelope: {error} alone without a code, {error, code} with one,
+    // {params} only when there are any.
     assert_eq(bt_handle(function () {
         throw new HttpError(409, 'Konflikt');
     }), [409, ['error' => 'Konflikt']]);
@@ -484,7 +462,6 @@ bt_test('routes: GET /me health check, JSON guard 415, unknown routes 401/404, w
     ]]);
     assert_eq(array_keys($res[1]['user']), T_USER_KEYS, 'user JSON shape');
     assert_error(api_call('GET', '/nope'), 404, 'Nicht gefunden', '', 'request.notFound');
-    assert_error(api_call('GET', '/entries/seal/x'), 404, 'Nicht gefunden');
     assert_error(api_call('DELETE', '/me'), 405, 'Methode nicht erlaubt', '', 'request.methodNotAllowed');
     assert_error(api_call('GET', '/login'), 405, 'Methode nicht erlaubt');
     assert_error(api_call('GET', '/register'), 405, 'Methode nicht erlaubt');
@@ -496,42 +473,6 @@ bt_test('routes: GET /me health check, JSON guard 415, unknown routes 401/404, w
     assert_error(api_call('GET', '/me/keys/unlock'), 405, 'Methode nicht erlaubt');
     assert_error(api_call('POST', '/me/password', []), 405, 'Methode nicht erlaubt');
     assert_error(api_call('POST', '/families/password', []), 405, 'Methode nicht erlaubt');
-    assert_error(api_call('GET', '/entries/seal'), 405, 'Methode nicht erlaubt');
-});
-
-bt_test('routes: the pre-encryption shell gets 410 on its reads and integer ids, 400 hints on its bodies', function () {
-    $pdo = fresh_db();
-    // No cookie (its v1 tokens are gone): the hint still arrives.
-    assert_error(api_call('GET', '/state'), 410, T_OLD_SHELL, '', 'request.oldShell');
-    assert_error(api_call('GET', '/entries?from=2026-08-25&to=2026-09-01'), 410, T_OLD_SHELL);
-    assert_error(api_call('GET', '/entries'), 410, T_OLD_SHELL);
-    assert_error(api_call('PATCH', '/entries/123', ['endedAt' => T_NOW, 'ifOpen' => true]), 410, T_OLD_SHELL);
-    assert_error(api_call('DELETE', '/entries/7'), 410, T_OLD_SHELL);
-    assert_error(api_call('POST', '/entries/7/restore', []), 410, T_OLD_SHELL);
-    assert_error(api_call('POST', '/state', []), 410, T_OLD_SHELL, 'any method on /state');
-    assert_error(api_call('POST', '/login', ['password' => 'geheim']), 400, T_OLD_SHELL_LOGIN, 'v1 login form', 'auth.oldShell');
-    assert_error(api_call('POST', '/login', ['username' => 'mama', 'password' => 'geheim']), 400, T_OLD_SHELL_LOGIN, 'v2 login form');
-    assert_error(api_call('POST', '/register', [
-        'username' => 'papa', 'password' => 'x', 'displayName' => 'Papa', 'familyName' => 'Testfamilie', 'familyPassword' => 'y',
-    ]), 400, T_OLD_SHELL_LOGIN, 'v2 registration form');
-    assert_error(api_call('POST', '/families/unlock', ['familyName' => 'Testfamilie', 'familyPassword' => 'y']), 400, T_OLD_SHELL_LOGIN);
-    assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM login_attempts'), 0, 'hints are free');
-
-    // With a cookie: the v2 write shapes get the hint too.
-    login_as($pdo, me());
-    assert_error(api_call('GET', '/state'), 410, T_OLD_SHELL, '', 'request.oldShell');
-    assert_error(api_call('POST', '/entries', ['type' => 'diaper', 'startedAt' => T_NOW, 'details' => ['kind' => 'pee']]), 400, T_OLD_SHELL, '', 'request.oldShell');
-    $eid = fake_eid();
-    assert_response(api_call('POST', '/entries', ['eid' => $eid, 'blob' => fake_blob()]), 201);
-    assert_error(api_call('PATCH', "/entries/$eid", ['endedAt' => T_NOW, 'ifOpen' => true]), 400, T_OLD_SHELL);
-    assert_error(api_call('PATCH', '/me', ['displayName' => 'Mami', 'password' => 'x']), 400, T_OLD_SHELL_LOGIN);
-    assert_error(api_call('PATCH', '/me/password', ['currentPassword' => 'a', 'password' => 'b']), 400, T_OLD_SHELL_LOGIN);
-    assert_error(api_call('PATCH', '/families/password', ['currentPassword' => 'a', 'familyPassword' => 'b']), 400, T_OLD_SHELL_LOGIN);
-    assert_error(api_call('POST', '/me/keys/unlock', ['password' => 'a']), 400, T_OLD_SHELL_LOGIN);
-    // The three entries mutations above drew on the write budget (old-shell
-    // bodies included); the hints themselves were free.
-    assert_eq(fails_of($pdo, 'write:' . T_IP), 3);
-    assert_eq(count_of($pdo, "SELECT COUNT(*) FROM login_attempts WHERE ip NOT LIKE 'write:%'"), 0);
 });
 
 bt_test('routes: GET /auth/params and GET /families/check are public and shaped for the client', function () {
@@ -588,7 +529,7 @@ bt_test('routes: POST /families/unlock hands out the family wrapping against the
     assert_response(api_call('POST', '/families/unlock', ['familyName' => 'Testfamilie', 'familyAuthKey' => fix('familyAuthKey')], ['ip' => '203.0.113.11']), 200, $expected);
 });
 
-bt_test('routes: POST /register creates (201, session, legacy gate via config) and joins; counted under reg:; 429', function () {
+bt_test('routes: POST /register creates (201, session) and joins; counted under reg:; 429', function () {
     $pdo = empty_db();
     $key = 'reg:' . T_IP;
     $body = create_body();
@@ -598,8 +539,6 @@ bt_test('routes: POST /register creates (201, session, legacy gate via config) a
         'user' => ['username' => 'mama', 'familyId' => 1, 'familyName' => 'Testfamilie', 'profileBlob' => $body['profileBlob']],
         'familyCreated' => true,
         'familyClosed' => false,
-        'adoptedEntries' => 0,
-        'legacyRemaining' => 0,
     ]);
     assert_eq(array_keys($res[1]['user']), T_USER_KEYS);
     assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM auth_tokens WHERE user_id = 1'), 1, 'a session token was issued');
@@ -614,8 +553,6 @@ bt_test('routes: POST /register creates (201, session, legacy gate via config) a
         'user' => ['username' => 'papa', 'familyId' => 1, 'familyName' => 'Testfamilie', 'profileBlob' => $join['profileBlob']],
         'familyCreated' => false,
         'familyClosed' => false,
-        'adoptedEntries' => 0,
-        'legacyRemaining' => 0,
     ]);
     assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM auth_tokens'), 2);
     assert_eq(fails_of($pdo, $key), 2);
@@ -630,20 +567,6 @@ bt_test('routes: POST /register creates (201, session, legacy gate via config) a
     assert_error(api_call('POST', '/register', join_body(['username' => 'oma', 'familyAuthKey' => fake_auth_key()])), 403, 'Falsches Familien-Passwort');
     assert_eq(fails_of($pdo, $key), 5);
     assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM users'), 2);
-
-    // The legacy gate is fed from the config the front controller passes on.
-    $pdo = empty_db();
-    seed_legacy($pdo, 3);
-    $config = ['legacy_password_hash' => password_hash('altes-passwort', PASSWORD_BCRYPT, ['cost' => 4])];
-    assert_error(api_call('POST', '/register', create_body(['legacyPassword' => 'falsch']), ['config' => $config]), 403, 'Falsches Alt-Passwort');
-    $owner = api_call('POST', '/register', create_body(['legacyPassword' => 'altes-passwort']), ['config' => $config]);
-    assert_eq($owner[0], 201);
-    assert_eq([$owner[1]['adoptedEntries'], $owner[1]['legacyRemaining']], [3, 3]);
-    assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 0);
-    // Without the config key (dev), the first family adopts.
-    $pdo = empty_db();
-    seed_legacy($pdo, 2);
-    assert_eq(api_call('POST', '/register', create_body())[1]['adoptedEntries'], 2);
 
     // Budget: 10 counted attempts, then 429 (before the body is even looked at).
     $pdo = empty_db();
@@ -795,7 +718,6 @@ bt_test('routes: 401 without a cookie; keys unlock, profile, own + family passwo
         ['PATCH', "/entries/$eid", ['blob' => fake_blob(), 'ifSeq' => 1]],
         ['DELETE', "/entries/$eid", null],
         ['POST', "/entries/$eid/restore", null],
-        ['POST', '/entries/seal', ['items' => []]],
     ] as $case) {
         list($method, $path, $body) = $case;
         assert_error(api_call($method, $path, $body), 401, 'Nicht angemeldet', "$method $path");
@@ -879,12 +801,11 @@ bt_test('routes: entries mutations draw on the address write budget (429 with it
     assert_eq(api_call('PATCH', "/entries/$eid", ['blob' => fake_blob(), 'ifSeq' => 1])[0], 200);
     assert_eq(api_call('DELETE', "/entries/$eid")[0], 200);
     assert_eq(api_call('POST', "/entries/$eid/restore")[0], 200);
-    assert_eq(api_call('POST', '/entries/seal', ['items' => []])[0], 200);
     assert_eq(api_call('POST', '/entries', ['eid' => 'kaputt'])[0], 400);
-    assert_eq(fails_of($pdo, $wKey), 6, 'every mutation counts, invalid ones included');
+    assert_eq(fails_of($pdo, $wKey), 5, 'every mutation counts, invalid ones included');
     assert_eq(api_call('GET', '/sync')[0], 200);
     assert_eq(api_call('GET', '/me')[0], 200);
-    assert_eq(fails_of($pdo, $wKey), 6, 'reads are free');
+    assert_eq(fails_of($pdo, $wKey), 5, 'reads are free');
     assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM login_attempts'), 1, 'no other key touched');
 
     $pdo->prepare('UPDATE login_attempts SET fails = ? WHERE ip = ?')->execute([BT_WRITE_MAX_PER_WINDOW, $wKey]);
@@ -892,7 +813,7 @@ bt_test('routes: entries mutations draw on the address write budget (429 with it
     assert_error(api_call('POST', '/entries', ['eid' => fake_eid(), 'blob' => fake_blob()]), 429, $msg, 'create', 'request.writeBudget', ['minutes' => 15]);
     assert_error(api_call('PATCH', "/entries/$eid", ['blob' => fake_blob(), 'ifSeq' => 4]), 429, $msg, 'edit');
     assert_error(api_call('DELETE', "/entries/$eid"), 429, $msg, 'delete');
-    assert_error(api_call('POST', '/entries/seal', ['items' => []]), 429, $msg, 'seal');
+    assert_error(api_call('POST', "/entries/$eid/restore"), 429, $msg, 'restore');
     assert_eq(api_call('GET', '/sync')[0], 200, 'reads still work');
     assert_eq(api_call('POST', '/entries', ['eid' => fake_eid(), 'blob' => fake_blob()], ['ip' => '203.0.113.20'])[0], 201, 'another address');
     assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM entries'), 2);
@@ -908,7 +829,7 @@ bt_test('routes: entries mutations draw on the address write budget (429 with it
 // Authenticated routes: entries
 // ---------------------------------------------------------------------------
 
-bt_test('routes: entries – create 201, sync paging + params, CAS 409, delete/restore, seal, family scoping', function () {
+bt_test('routes: entries – create 201, sync paging + params, CAS 409, delete/restore, family scoping', function () {
     $pdo = fresh_db();
     login_as($pdo, me());
     $today = gmdate('Y-m-d');
@@ -917,7 +838,7 @@ bt_test('routes: entries – create 201, sync paging + params, CAS 409, delete/r
     $blob = fake_blob(256);
     $created = api_call('POST', '/entries', ['eid' => $eid, 'blob' => $blob]);
     assert_response($created, 201, [
-        'eid' => $eid, 'seq' => 1, 'blob' => $blob, 'plain' => null,
+        'eid' => $eid, 'seq' => 1, 'blob' => $blob,
         'createdAt' => $today, 'updatedAt' => $today, 'deletedAt' => null,
     ]);
     assert_row_shape($created[1], 'create');
@@ -931,13 +852,12 @@ bt_test('routes: entries – create 201, sync paging + params, CAS 409, delete/r
     // Sync: defaults, paging, parameter validation.
     $sync = api_call('GET', '/sync');
     assert_eq($sync[0], 200);
-    assert_eq(array_keys($sync[1]), ['serverNow', 'feed', 'rows', 'next', 'legacyRemaining']);
+    assert_eq(array_keys($sync[1]), ['serverNow', 'feed', 'rows', 'next']);
     assert_true(preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/D', $sync[1]['serverNow']) === 1, 'serverNow canonical');
     assert_true(preg_match('/^[0-9a-f]{32}$/D', $sync[1]['feed']) === 1, 'feed is the install\'s 32-hex token');
     assert_eq($sync[1]['feed'], bt_feed_id($pdo));
     assert_eq(array_column($sync[1]['rows'], 'eid'), [$eid, $eid2]);
     assert_eq($sync[1]['next'], null);
-    assert_eq($sync[1]['legacyRemaining'], 0);
     foreach ($sync[1]['rows'] as $row) {
         assert_row_shape($row, 'sync row');
     }
@@ -968,7 +888,7 @@ bt_test('routes: entries – create 201, sync paging + params, CAS 409, delete/r
     assert_error(api_call('PATCH', '/entries/' . fake_eid(), ['blob' => $newBlob, 'ifSeq' => 1]), 404, 'Eintrag nicht gefunden');
     $updated = api_call('PATCH', "/entries/$eid", ['blob' => $newBlob, 'ifSeq' => 1]);
     assert_response($updated, 200, [
-        'eid' => $eid, 'seq' => 3, 'blob' => $newBlob, 'plain' => null,
+        'eid' => $eid, 'seq' => 3, 'blob' => $newBlob,
         'createdAt' => $today, 'updatedAt' => $today, 'deletedAt' => null,
     ]);
     assert_error(api_call('GET', "/entries/$eid"), 405, 'Methode nicht erlaubt');
@@ -1010,49 +930,12 @@ bt_test('routes: entries – create 201, sync paging + params, CAS 409, delete/r
     assert_eq([$plain[1]['seq'], $plain[1]['deletedAt']], [6, $today], 'plain delete');
     assert_response(api_call('POST', "/entries/$eid2/restore"), 200); // seq 7
 
-    // Seal: legacy rows adopted by this family reach the client as plain and come back encrypted.
-    assert_response(api_call('POST', '/entries/seal', ['items' => []]), 200, ['done' => [], 'skipped' => [], 'remaining' => 0]);
-    assert_error(api_call('POST', '/entries/seal', ['items' => 'x']), 400, '"items" fehlt');
-    assert_error(api_call('POST', '/entries/seal', []), 400, '"items" fehlt');
-    assert_error(api_call('POST', '/entries/seal', ['items' => [['eid' => $eid, 'blob' => fake_blob()]]]), 400, '"seq" fehlt');
-    $pdo = empty_db();
-    seed_legacy($pdo, 2);
-    $reg = api_call('POST', '/register', create_body());
-    assert_eq([$reg[1]['adoptedEntries'], $reg[1]['legacyRemaining']], [2, 2]);
-    $_COOKIE[BT_COOKIE] = bt_create_token($pdo, 1);
-    $legacy = api_call('GET', '/sync');
-    assert_eq($legacy[1]['legacyRemaining'], 2);
-    assert_eq(count($legacy[1]['rows']), 2);
-    foreach ($legacy[1]['rows'] as $row) {
-        assert_row_shape($row, 'legacy row');
-        assert_eq($row['blob'], null);
-        assert_eq($row['plain'], [
-            'type' => 'bottle', 'startedAt' => '2026-08-30T08:00:00Z', 'endedAt' => null,
-            'details' => ['amount_ml' => 90], 'loggedBy' => 'Mama',
-        ]);
-    }
-    $items = [];
-    foreach ($legacy[1]['rows'] as $row) {
-        $items[] = ['eid' => $row['eid'], 'seq' => $row['seq'], 'blob' => fake_blob(256)];
-    }
-    $items[] = ['eid' => fake_eid(), 'seq' => 1, 'blob' => fake_blob(256)];
-    $sealed = api_call('POST', '/entries/seal', ['items' => $items]);
-    assert_eq($sealed[0], 200);
-    assert_eq(array_keys($sealed[1]), ['done', 'skipped', 'remaining']);
-    assert_eq(array_column($sealed[1]['done'], 'eid'), [$items[0]['eid'], $items[1]['eid']]);
-    assert_eq(array_column($sealed[1]['done'], 'seq'), [3, 4]);
-    assert_eq($sealed[1]['skipped'], [$items[2]['eid']]);
-    assert_eq($sealed[1]['remaining'], 0);
-    $after = api_call('GET', '/sync');
-    assert_eq($after[1]['legacyRemaining'], 0);
-    foreach ($after[1]['rows'] as $row) {
-        assert_true(is_string($row['blob']));
-        assert_eq($row['plain'], null);
-    }
-    assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM entries WHERE legacy_type IS NOT NULL'), 0, 'plaintext gone');
+    // The server has no route that takes or returns an entry's content.
+    assert_error(api_call('POST', '/entries/seal', ['items' => []]), 400, 'Ungültiger Eintrag', 'no seal route: "seal" is just a bad eid');
+    assert_error(api_call('POST', '/entries', ['eid' => fake_eid(), 'type' => 'diaper', 'details' => ['kind' => 'pee']]), 400, 'Ungültiger Datensatz');
 
     // Scoping: another family sees nothing and cannot touch these rows (404, never 403).
-    $mine = $after[1]['rows'][0]['eid'];
+    $mine = $eid;
     $other = second_family($pdo);
     login_as($pdo, $other['user']);
     assert_eq(api_call('GET', '/sync')[1]['rows'], []);
@@ -1060,7 +943,6 @@ bt_test('routes: entries – create 201, sync paging + params, CAS 409, delete/r
     assert_error(api_call('DELETE', "/entries/$mine"), 404, 'Eintrag nicht gefunden');
     assert_error(api_call('POST', "/entries/$mine/restore"), 404, 'Eintrag nicht gefunden');
     assert_error(api_call('POST', '/entries', ['eid' => $mine, 'blob' => fake_blob()]), 409, 'Eintrag existiert bereits', 'eids are global');
-    assert_eq(api_call('POST', '/entries/seal', ['items' => [['eid' => $mine, 'seq' => 3, 'blob' => fake_blob()]]])[1]['skipped'], [$mine]);
     $theirs = api_call('POST', '/entries', ['eid' => fake_eid(), 'blob' => fake_blob()]);
     assert_eq($theirs[1]['seq'], 1, 'own seq space');
     $_COOKIE[BT_COOKIE] = bt_create_token($pdo, 1);

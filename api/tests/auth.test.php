@@ -1,12 +1,11 @@
 <?php
 /**
  * Accounts + families + key custody tests (api/lib/auth.php): KDF parameter
- * lookup with the stable fake, register create/join/recovery, the legacy
- * adoption gate, login with key material, family unlock, own-key unlock,
- * profile/password/family-password changes, tokens, throttle, old-shell 400s
- * and the request-guard 415.
+ * lookup with the stable fake, register create/join/recovery, login with
+ * key material, family unlock, own-key unlock, profile/password/
+ * family-password changes, tokens, throttle and the request-guard 415.
  *
- * Runs against its OWN in-memory SQLite database carrying the v3 DDL (so it
+ * Runs against its OWN in-memory SQLite database carrying the schema's DDL (so it
  * never depends on db.php's memoised handle or on the migration driver);
  * every test starts from wiped tables, most from ONE registered account
  * (mama in Testfamilie, see auth_fresh). Key material comes from the shared
@@ -58,20 +57,14 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE TABLE IF NOT EXISTS entries (
   eid TEXT PRIMARY KEY,
-  family_id INTEGER,
+  family_id INTEGER NOT NULL,
   seq INTEGER NOT NULL,
   blob TEXT,
-  legacy_type TEXT,
-  legacy_started_at TEXT,
-  legacy_ended_at TEXT,
-  legacy_details TEXT,
-  legacy_logged_by TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_entries_family_seq ON entries (family_id, seq);
-CREATE INDEX IF NOT EXISTS idx_entries_legacy ON entries (family_id) WHERE blob IS NULL;
 CREATE TABLE IF NOT EXISTS auth_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -143,11 +136,11 @@ function auth_join_body(array $over = []): array
 }
 
 /** Wiped database with the default account registered (its body kept for auth_fix). */
-function auth_fresh(array $config = []): PDO
+function auth_fresh(): PDO
 {
     $pdo = auth_db();
     $body = auth_create_body();
-    $res = bt_register($pdo, $body, $config, AUTH_NOW);
+    $res = bt_register($pdo, $body, AUTH_NOW);
     $GLOBALS['__auth_fix'] = ['body' => $body, 'user' => $res['user']];
     return $pdo;
 }
@@ -172,20 +165,6 @@ function auth_fam(): int
 function auth_count(PDO $pdo, string $sql): int
 {
     return (int) $pdo->query($sql)->fetchColumn();
-}
-
-/** $n unadopted plaintext rows from the shared-password era (family_id NULL, seq = the v1 id). */
-function auth_seed_legacy(PDO $pdo, int $n): void
-{
-    $stmt = $pdo->prepare(
-        "INSERT INTO entries (eid, family_id, seq, blob, legacy_type, legacy_started_at, legacy_details,
-                              legacy_logged_by, created_at, updated_at)
-         VALUES (lower(hex(randomblob(16))), NULL, ?, NULL, 'bottle', '2026-08-30T08:00:00Z',
-                 '{\"amount_ml\":90}', 'Mama', '2026-08-30', '2026-08-30')"
-    );
-    for ($i = 1; $i <= $n; $i++) {
-        $stmt->execute([$i]);
-    }
 }
 
 /** Assert that $fn throws an HttpError with the given status AND exact message (and, when given, $code; a code is always required). */
@@ -303,43 +282,6 @@ bt_test('bt_valid_blob_field: opaque b64u between one empty envelope and the cap
     }, 400, 'Ungültiger Datensatz', 'nullable does not lift the cap');
 });
 
-bt_test('bt_reject_old_shell: bodies with raw password fields get the update hint', function () {
-    $msg = 'Neue App-Version – bitte die App schliessen und neu öffnen, dann anmelden';
-    foreach ([['password' => 'x'], ['familyPassword' => 'x'], ['password' => null, 'username' => 'mama'],
-              ['currentPassword' => 'a', 'familyPassword' => 'b']] as $body) {
-        auth_assert_error(function () use ($body) {
-            bt_reject_old_shell($body);
-        }, 400, $msg);
-    }
-    bt_reject_old_shell([]);
-    bt_reject_old_shell(['username' => 'mama', 'authKey' => fake_auth_key(), 'currentAuthKey' => fake_auth_key()]);
-
-    // Every body-taking entry point rejects it before touching anything.
-    $pdo = auth_fresh();
-    $user = auth_user();
-    $old = ['username' => 'papa', 'password' => 'papa-geheim', 'displayName' => 'Papa',
-            'familyName' => 'Testfamilie', 'familyPassword' => 'familie-geheim'];
-    auth_assert_error(function () use ($pdo, $old) {
-        bt_register($pdo, $old, [], AUTH_NOW);
-    }, 400, $msg, 'register');
-    auth_assert_error(function () use ($pdo) {
-        bt_family_unlock($pdo, ['familyName' => 'Testfamilie', 'familyPassword' => 'familie-geheim']);
-    }, 400, $msg, 'unlock');
-    auth_assert_error(function () use ($pdo, $user) {
-        bt_update_family_password($pdo, $user, ['currentPassword' => 'x', 'familyPassword' => 'neu']);
-    }, 400, $msg, 'family password');
-    auth_assert_error(function () use ($pdo, $user) {
-        bt_update_password($pdo, $user, ['currentPassword' => 'x', 'password' => 'neu']);
-    }, 400, $msg, 'own password');
-    auth_assert_error(function () use ($pdo, $user) {
-        bt_update_profile($pdo, $user, ['displayName' => 'X', 'password' => 'neu']);
-    }, 400, $msg, 'profile');
-    auth_assert_error(function () use ($pdo, $user) {
-        bt_unlock_user_keys($pdo, $user, ['password' => 'x']);
-    }, 400, $msg, 'keys unlock');
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM users'), 1, 'nothing written');
-});
-
 // ---------------------------------------------------------------------------
 // KDF parameters
 // ---------------------------------------------------------------------------
@@ -381,10 +323,9 @@ bt_test('bt_auth_params: stored values for known users, a stable fake of the sam
 bt_test('register create: bcrypt of the auth values (never the values), salts/wrapped/profile stored verbatim', function () {
     $pdo = auth_db();
     $body = auth_create_body(['username' => 'Mama ']); // stored lowercased + trimmed
-    $res = bt_register($pdo, $body, [], AUTH_NOW);
+    $res = bt_register($pdo, $body, AUTH_NOW);
     assert_true($res['familyCreated']);
-    assert_eq($res['adoptedEntries'], 0);
-    assert_eq($res['legacyRemaining'], 0);
+    assert_eq(array_keys($res), ['user', 'familyCreated', 'familyClosed']);
     assert_eq($res['user']['username'], 'mama');
     assert_eq($res['user']['familyName'], 'Testfamilie');
     assert_eq($res['user']['profileBlob'], $body['profileBlob']);
@@ -427,9 +368,8 @@ bt_test('register create: bcrypt of the auth values (never the values), salts/wr
 
 bt_test('register join: family auth key or recovery auth key; wrong ones 403; unknown family 404; name folded', function () {
     $pdo = auth_fresh();
-    $papa = bt_register($pdo, auth_join_body(['familyName' => ' TESTFAMILIE ']), [], AUTH_NOW);
+    $papa = bt_register($pdo, auth_join_body(['familyName' => ' TESTFAMILIE ']), AUTH_NOW);
     assert_false($papa['familyCreated']);
-    assert_eq($papa['adoptedEntries'], 0);
     assert_eq($papa['user']['familyId'], auth_fam());
     assert_eq($papa['user']['familyName'], 'Testfamilie', 'stored casing returned');
     $row = $pdo->query("SELECT * FROM users WHERE username = 'papa'")->fetch(PDO::FETCH_ASSOC);
@@ -440,39 +380,39 @@ bt_test('register join: family auth key or recovery auth key; wrong ones 403; un
     // Recovery code path: recoveryAuthKey instead of the family auth key.
     $oma = bt_register($pdo, auth_join_body([
         'username' => 'oma', 'familyAuthKey' => null, 'recoveryAuthKey' => auth_fix('recoveryAuthKey'),
-    ]), [], AUTH_NOW);
+    ]), AUTH_NOW);
     assert_eq($oma['user']['familyId'], auth_fam());
 
     // Wrong family auth key / wrong recovery key / unknown family: no user row.
     auth_assert_error(function () use ($pdo) {
-        bt_register($pdo, auth_join_body(['username' => 'x1', 'familyAuthKey' => fake_auth_key()]), [], AUTH_NOW);
+        bt_register($pdo, auth_join_body(['username' => 'x1', 'familyAuthKey' => fake_auth_key()]), AUTH_NOW);
     }, 403, 'Falsches Familien-Passwort');
     auth_assert_error(function () use ($pdo) {
         bt_register($pdo, auth_join_body([
             'username' => 'x2', 'familyAuthKey' => null, 'recoveryAuthKey' => fake_auth_key(),
-        ]), [], AUTH_NOW);
+        ]), AUTH_NOW);
     }, 403, 'Ungültiger Wiederherstellungscode');
     auth_assert_error(function () use ($pdo) {
         // The recovery value is not a family auth key and vice versa.
-        bt_register($pdo, auth_join_body(['username' => 'x3', 'familyAuthKey' => auth_fix('recoveryAuthKey')]), [], AUTH_NOW);
+        bt_register($pdo, auth_join_body(['username' => 'x3', 'familyAuthKey' => auth_fix('recoveryAuthKey')]), AUTH_NOW);
     }, 403, 'Falsches Familien-Passwort');
     auth_assert_error(function () use ($pdo) {
-        bt_register($pdo, auth_join_body(['username' => 'x4', 'familyName' => 'Unbekannt']), [], AUTH_NOW);
+        bt_register($pdo, auth_join_body(['username' => 'x4', 'familyName' => 'Unbekannt']), AUTH_NOW);
     }, 404, 'Familie nicht gefunden – bitte Namen prüfen');
     auth_assert_error(function () use ($pdo) {
-        bt_register($pdo, auth_join_body(['username' => 'x5', 'familyAuthKey' => null]), [], AUTH_NOW);
+        bt_register($pdo, auth_join_body(['username' => 'x5', 'familyAuthKey' => null]), AUTH_NOW);
     }, 400, 'Bitte Familien-Passwort oder Wiederherstellungscode angeben');
     assert_eq(auth_count($pdo, "SELECT COUNT(*) FROM users WHERE username LIKE 'x%'"), 0);
     assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM users'), 3);
 
     // Unicode folding (mb_strtolower, not SQLite's ASCII-only NOCASE).
     $mBody = auth_create_body(['username' => 'mueller1', 'familyName' => ' Müller ']);
-    $m = bt_register($pdo, $mBody, [], AUTH_NOW);
+    $m = bt_register($pdo, $mBody, AUTH_NOW);
     assert_true($m['familyCreated']);
     assert_eq($m['user']['familyName'], 'Müller');
     $m2 = bt_register($pdo, auth_join_body([
         'username' => 'mueller2', 'familyName' => 'MÜLLER', 'familyAuthKey' => $mBody['familyAuthKey'],
-    ]), [], AUTH_NOW);
+    ]), AUTH_NOW);
     assert_false($m2['familyCreated']);
     assert_eq($m2['user']['familyId'], $m['user']['familyId']);
     assert_eq($m2['user']['familyName'], 'Müller');
@@ -502,12 +442,12 @@ bt_test('register join with rotateFamily: the family credentials are replaced in
 
     // A wrong family key rotates nothing.
     auth_assert_error(function () use ($pdo, $rot) {
-        bt_register($pdo, auth_join_body(['username' => 'x1', 'familyAuthKey' => fake_auth_key(), 'rotateFamily' => $rot]), [], AUTH_NOW);
+        bt_register($pdo, auth_join_body(['username' => 'x1', 'familyAuthKey' => fake_auth_key(), 'rotateFamily' => $rot]), AUTH_NOW);
     }, 403, 'Falsches Familien-Passwort');
     assert_eq($pdo->query('SELECT auth_hash, kdf_salt, kdf_iter, fdk_wrapped, recovery_hash FROM families')->fetch(PDO::FETCH_ASSOC), $before, 'untouched');
 
     // The join: user row + rotated family in one go.
-    $papa = bt_register($pdo, auth_join_body(['rotateFamily' => $rot]), [], AUTH_NOW);
+    $papa = bt_register($pdo, auth_join_body(['rotateFamily' => $rot]), AUTH_NOW);
     assert_eq([$papa['familyCreated'], $papa['familyClosed']], [false, true]);
     assert_eq($papa['user']['familyId'], auth_fam());
     $fam = $pdo->query('SELECT auth_hash, kdf_salt, kdf_iter, fdk_wrapped, recovery_hash FROM families')->fetch(PDO::FETCH_ASSOC);
@@ -525,10 +465,10 @@ bt_test('register join with rotateFamily: the family credentials are replaced in
     $rot2 = ['familyAuthKey' => fake_auth_key(), 'familyKdf' => fake_kdf(), 'fdkWrappedFamily' => fake_wrapped()];
     $oma = bt_register($pdo, auth_join_body([
         'username' => 'oma', 'familyAuthKey' => null, 'recoveryAuthKey' => auth_fix('recoveryAuthKey'), 'rotateFamily' => $rot2,
-    ]), [], AUTH_NOW);
+    ]), AUTH_NOW);
     assert_true($oma['familyClosed']);
     assert_true(password_verify($rot2['familyAuthKey'], $pdo->query('SELECT auth_hash FROM families')->fetchColumn()));
-    $opa = bt_register($pdo, auth_join_body(['username' => 'opa', 'familyAuthKey' => $rot2['familyAuthKey']]), [], AUTH_NOW);
+    $opa = bt_register($pdo, auth_join_body(['username' => 'opa', 'familyAuthKey' => $rot2['familyAuthKey']]), AUTH_NOW);
     assert_false($opa['familyClosed']);
     assert_true(password_verify($rot2['familyAuthKey'], $pdo->query('SELECT auth_hash FROM families')->fetchColumn()), 'still open');
     assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM users'), 4);
@@ -538,13 +478,13 @@ bt_test('register join with rotateFamily: the family credentials are replaced in
 bt_test('register: create on an existing name 409, duplicate usernames 409, validation 400s leave no rows', function () {
     $pdo = auth_fresh();
     auth_assert_error(function () use ($pdo) {
-        bt_register($pdo, auth_create_body(['username' => 'papa', 'familyName' => 'testfamilie']), [], AUTH_NOW);
+        bt_register($pdo, auth_create_body(['username' => 'papa', 'familyName' => 'testfamilie']), AUTH_NOW);
     }, 409, 'Familie wurde gerade angelegt – bitte nochmals versuchen', 'create on an existing name');
     auth_assert_error(function () use ($pdo) {
-        bt_register($pdo, auth_join_body(['username' => 'MAMA']), [], AUTH_NOW);
+        bt_register($pdo, auth_join_body(['username' => 'MAMA']), AUTH_NOW);
     }, 409, 'Dieser Benutzername ist bereits vergeben', 'duplicate username (case)');
     auth_assert_error(function () use ($pdo) {
-        bt_register($pdo, auth_create_body(['username' => ' mama ', 'familyName' => 'Neu']), [], AUTH_NOW);
+        bt_register($pdo, auth_create_body(['username' => ' mama ', 'familyName' => 'Neu']), AUTH_NOW);
     }, 409, 'Dieser Benutzername ist bereits vergeben', 'duplicate username (trimmed), no family created');
     assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM families'), 1, 'the 409 rolled the family insert back');
     assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM users'), 1);
@@ -584,11 +524,11 @@ bt_test('register: create on an existing name 409, duplicate usernames 409, vali
     foreach ($bad as $label => $case) {
         list($override, $message) = $case;
         auth_assert_error(function () use ($pdo, $override) {
-            bt_register($pdo, auth_create_body(array_merge(['username' => 'neu', 'familyName' => 'Neu'], $override)), [], AUTH_NOW);
+            bt_register($pdo, auth_create_body(array_merge(['username' => 'neu', 'familyName' => 'Neu'], $override)), AUTH_NOW);
         }, 400, $message, $label);
     }
     auth_assert_error(function () use ($pdo) {
-        bt_register($pdo, auth_join_body(['fdkWrappedUser' => null]), [], AUTH_NOW);
+        bt_register($pdo, auth_join_body(['fdkWrappedUser' => null]), AUTH_NOW);
     }, 400, 'Ungültige Schlüsseldaten', 'join without the wrapped FDK');
     assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM users'), 1, 'no rows written by 400s');
     assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM families'), 1);
@@ -600,112 +540,12 @@ bt_test('register: create on an existing name 409, duplicate usernames 409, vali
     assert_eq($join['familyAuthKey'], auth_fix('familyAuthKey'));
     assert_eq($join['recoveryAuthKey'], null);
     assert_eq($join['familyKdf'], null);
-    assert_eq($join['legacyPassword'], null);
-    $create = bt_validate_registration(auth_create_body(['legacyPassword' => 'altes-passwort', 'familyName' => "  Neue\tFamilie "]));
+    $create = bt_validate_registration(auth_create_body(['familyName' => "  Neue\tFamilie "]));
     assert_eq($create['familyName'], 'Neue Familie');
-    assert_eq($create['legacyPassword'], 'altes-passwort');
-    assert_eq(bt_validate_registration(auth_create_body(['legacyPassword' => '']))['legacyPassword'], null, 'empty = absent');
-});
-
-// ---------------------------------------------------------------------------
-// Legacy adoption
-// ---------------------------------------------------------------------------
-
-bt_test('legacy adoption without the gate: the first family created adopts, later ones never', function () {
-    $pdo = auth_db();
-    auth_seed_legacy($pdo, 3);
-    $body = auth_create_body();
-    $res = bt_register($pdo, $body, [], AUTH_NOW);
-    assert_true($res['familyCreated']);
-    assert_eq($res['adoptedEntries'], 3);
-    assert_eq($res['legacyRemaining'], 3, 'adopted rows are still plaintext until sealed');
-    $fid = (int) $res['user']['familyId'];
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 0);
-    assert_eq(auth_count($pdo, "SELECT COUNT(*) FROM entries WHERE family_id = $fid"), 3);
-    assert_eq($pdo->query("SELECT GROUP_CONCAT(seq) FROM entries WHERE family_id = $fid ORDER BY seq")->fetchColumn(), '1,2,3', 'seq kept');
-
-    // A NULL row appearing later is NOT adopted by a second family.
-    auth_seed_legacy($pdo, 1);
-    $res2 = bt_register($pdo, auth_create_body(['username' => 'fremd', 'familyName' => 'Fremde']), [], AUTH_NOW);
-    assert_true($res2['familyCreated']);
-    assert_eq($res2['adoptedEntries'], 0);
-    assert_eq($res2['legacyRemaining'], 0);
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 1, 'stays unadopted');
-
-    // A join never adopts; legacyRemaining reports the joined family's rows
-    // that are still unsealed (blob IS NULL), sealed ones excluded.
-    $pdo->prepare('UPDATE entries SET blob = ?, legacy_type = NULL WHERE family_id = ? AND seq = 1')
-        ->execute([fake_blob(256), $fid]);
-    $partner = bt_register($pdo, [
-        'username' => 'papa', 'authKey' => fake_auth_key(), 'kdf' => fake_kdf(), 'profileBlob' => fake_blob(),
-        'familyName' => 'Testfamilie', 'familyMode' => 'join', 'familyAuthKey' => $body['familyAuthKey'],
-        'fdkWrappedUser' => fake_wrapped(),
-    ], [], AUTH_NOW);
-    assert_false($partner['familyCreated']);
-    assert_eq($partner['adoptedEntries'], 0);
-    assert_eq($partner['legacyRemaining'], 2);
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 1);
-
-    // A config whose key is null behaves like no config at all.
-    $pdo = auth_db();
-    auth_seed_legacy($pdo, 2);
-    assert_eq(bt_register($pdo, auth_create_body(), ['legacy_password_hash' => null], AUTH_NOW)['adoptedEntries'], 2);
-});
-
-bt_test('legacy adoption gate: only a creator proving the old shared password adopts; wrong one 403', function () {
-    $config = ['legacy_password_hash' => password_hash('altes-passwort', PASSWORD_BCRYPT, ['cost' => 4])];
-
-    // The stranger registers first without the password: nothing is adopted, no error.
-    $pdo = auth_db();
-    auth_seed_legacy($pdo, 3);
-    $stranger = bt_register($pdo, auth_create_body(['username' => 'fremd', 'familyName' => 'Fremde']), $config, AUTH_NOW);
-    assert_true($stranger['familyCreated']);
-    assert_eq($stranger['adoptedEntries'], 0);
-    assert_eq($stranger['legacyRemaining'], 0);
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 3, 'sealed under no key');
-
-    // A wrong old password is a 403 and writes nothing.
-    auth_assert_error(function () use ($pdo, $config) {
-        bt_register($pdo, auth_create_body(['legacyPassword' => 'falsch']), $config, AUTH_NOW);
-    }, 403, 'Falsches Alt-Passwort');
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM users'), 1);
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM families'), 1);
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 3);
-
-    // The owner creates the SECOND family with the right password: adopted.
-    $ownerBody = auth_create_body(['legacyPassword' => 'altes-passwort']);
-    $owner = bt_register($pdo, $ownerBody, $config, AUTH_NOW);
-    assert_true($owner['familyCreated']);
-    assert_eq($owner['adoptedEntries'], 3);
-    assert_eq($owner['legacyRemaining'], 3);
-    $fid = (int) $owner['user']['familyId'];
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 0);
-    assert_eq(auth_count($pdo, "SELECT COUNT(*) FROM entries WHERE family_id = $fid"), 3);
-
-    // Joining with the password proves nothing extra and adopts nothing
-    // (rows appearing later stay in the pool), and its value is not checked.
-    auth_seed_legacy($pdo, 1);
-    $partner = bt_register($pdo, [
-        'username' => 'papa', 'authKey' => fake_auth_key(), 'kdf' => fake_kdf(), 'profileBlob' => fake_blob(),
-        'familyName' => 'Testfamilie', 'familyMode' => 'join', 'familyAuthKey' => $ownerBody['familyAuthKey'],
-        'fdkWrappedUser' => fake_wrapped(), 'legacyPassword' => 'egal',
-    ], $config, AUTH_NOW);
-    assert_false($partner['familyCreated']);
-    assert_eq($partner['adoptedEntries'], 0);
-    assert_eq($partner['legacyRemaining'], 3, 'the joined family still has its 3 unsealed rows');
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 1);
-
-    // With the gate on, the FIRST family does not adopt without the password
-    // (the race the gate exists for) — and an empty string counts as absent.
-    $pdo = auth_db();
-    auth_seed_legacy($pdo, 2);
-    $first = bt_register($pdo, auth_create_body(['legacyPassword' => '']), $config, AUTH_NOW);
-    assert_eq($first['adoptedEntries'], 0);
-    assert_eq(auth_count($pdo, 'SELECT COUNT(*) FROM entries WHERE family_id IS NULL'), 2);
-    // An empty config string means "no gate": the first family adopts.
-    $pdo = auth_db();
-    auth_seed_legacy($pdo, 2);
-    assert_eq(bt_register($pdo, auth_create_body(), ['legacy_password_hash' => ''], AUTH_NOW)['adoptedEntries'], 2);
+    assert_eq(array_keys($create), [
+        'username', 'authKey', 'kdf', 'profileBlob', 'familyName', 'familyMode', 'fdkWrappedUser',
+        'familyAuthKey', 'recoveryAuthKey', 'familyKdf', 'fdkWrappedFamily', 'rotateFamily',
+    ], 'nothing but the documented fields');
 });
 
 // ---------------------------------------------------------------------------
@@ -852,7 +692,7 @@ bt_test('bt_update_password re-wraps (auth hash, kdf, fdk) and revokes the user\
     $pdo = auth_fresh();
     $user = auth_user();
     $uid = (int) $user['id'];
-    $papa = bt_register($pdo, auth_join_body(), [], AUTH_NOW)['user'];
+    $papa = bt_register($pdo, auth_join_body(), AUTH_NOW)['user'];
     $mine = bt_create_token($pdo, $uid);
     $otherPhone = bt_create_token($pdo, $uid);
     $papaToken = bt_create_token($pdo, (int) $papa['id']);
@@ -938,7 +778,7 @@ bt_test('bt_update_family_password: any member rotates hash + kdf + wrapping wit
     assert_eq(bt_family_exists($pdo, 'Testfamilie')['kdf'], $new['familyKdf'], 'joiners get the new salt');
 
     auth_assert_error(function () use ($pdo) {
-        bt_register($pdo, auth_join_body(['username' => 'papa1']), [], AUTH_NOW);
+        bt_register($pdo, auth_join_body(['username' => 'papa1']), AUTH_NOW);
     }, 403, 'Falsches Familien-Passwort', 'old family auth key no longer joins');
     auth_assert_error(function () use ($pdo) {
         bt_family_unlock($pdo, ['familyName' => 'Testfamilie', 'familyAuthKey' => auth_fix('familyAuthKey')]);
@@ -949,7 +789,7 @@ bt_test('bt_update_family_password: any member rotates hash + kdf + wrapping wit
     assert_eq(bt_family_unlock($pdo, ['familyName' => 'Testfamilie', 'recoveryAuthKey' => auth_fix('recoveryAuthKey')])['fdkWrapped'],
         $new['fdkWrappedFamily'], 'recovery still unlocks (the new wrapping)');
     $joinBody = auth_join_body(['username' => 'papa2', 'familyAuthKey' => $new['familyAuthKey']]);
-    $joined = bt_register($pdo, $joinBody, [], AUTH_NOW);
+    $joined = bt_register($pdo, $joinBody, AUTH_NOW);
     assert_false($joined['familyCreated']);
     assert_eq($joined['user']['familyId'], auth_fam());
 
@@ -957,7 +797,7 @@ bt_test('bt_update_family_password: any member rotates hash + kdf + wrapping wit
     // existing member stays logged in regardless.
     $third = ['familyAuthKey' => fake_auth_key(), 'familyKdf' => fake_kdf(), 'fdkWrappedFamily' => fake_wrapped()];
     bt_update_family_password($pdo, $joined['user'], $third + ['currentAuthKey' => $joinBody['authKey']]);
-    bt_register($pdo, auth_join_body(['username' => 'papa3', 'familyAuthKey' => $third['familyAuthKey']]), [], AUTH_NOW);
+    bt_register($pdo, auth_join_body(['username' => 'papa3', 'familyAuthKey' => $third['familyAuthKey']]), AUTH_NOW);
     $_COOKIE[BT_COOKIE] = bt_create_token($pdo, (int) $user['id']);
     assert_eq(bt_require_auth($pdo)['username'], 'mama', 'still logged in');
     unset($_COOKIE[BT_COOKIE]);

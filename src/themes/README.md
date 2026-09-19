@@ -91,10 +91,11 @@ the build inlines them into the CSS. `icons/swiss/` (bold geometric) and
 - The Schoppen sheet with the target block, the ★ chips and the sum line;
   the entry form date pickers; Einstellungen › Trinkmenge (a date and a
   number input side by side).
-- Verlauf in all three views: «Einträge» with a day of entries, «Tage» with
-  one day unfolded and «Mahlzeiten» with one meal unfolded (the folded rows,
-  their `--surface-2` open state and the turning chevrons); the delete
-  button in the edit sheet.
+- Verlauf in all four views: «Einträge» with a day of entries, «Tage» with
+  one day unfolded, «Mahlzeiten» with one meal unfolded (the folded rows,
+  their `--surface-2` open state and the turning chevrons) and «Grafik» with
+  a few days of data (lines, bars and legend take `--milk`, `--diaper`,
+  `--sleep` and `--measure`); the delete button in the edit sheet.
 - Login and registration screens, including an error and an ⓘ overlay.
 - A toast with an action (stop a timer → «Rückgängig»).
 - Both light and dark, if the design has both.

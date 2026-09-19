@@ -304,7 +304,7 @@ async function main() {
     // Filters are ORDERED (first match wins): data/ itself and data/.htaccess
     // are let through, then everything else under data/ is excluded — so a
     // database copy left in deploy/data/ by a preview rehearsal (baby.db,
-    // -wal/-shm, a .v1.bak) never ships, whatever its name. The *.db patterns
+    // -wal/-shm, a migration's .bak) never ships, whatever its name. The *.db patterns
     // after that are belt and braces for the rest of the tree.
     const args = [
       '-avz',
@@ -493,9 +493,9 @@ async function main() {
   // needs no credentials and must return 200 on a healthy install.
   // It is also the FIRST request after the upload: bt_create_or_migrate
   // (api/lib/db.php) runs the schema migration on it, inside one transaction
-  // (a v1 file is backed up to data/baby.db.v1.bak first). 200 = migration
-  // committed (or nothing to migrate); 500 = rolled back, the DB is still v1
-  // (see README, "Rollback").
+  // (the file is copied to data/baby.db.<version>.bak first). 200 = migration
+  // committed (or nothing to migrate); 500 = rolled back or refused, the DB
+  // is untouched and the PHP error log says why.
   if (deployUrl !== '') {
     const checkUrl = `${deployUrl}/api/me`;
     const curlArgs = ['-sS', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '20'];

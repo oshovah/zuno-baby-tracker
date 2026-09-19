@@ -13,11 +13,9 @@
     "package": "node scripts/package.mjs",
     "deploy": "node scripts/deploy.mjs",
     "preview": "php -S 127.0.0.1:8081 scripts/preview-router.php",
-    "screenshots": "node scripts/make-screenshots.mjs",
-    "spike": "vite --config scripts/spike/vite.config.mjs"
+    "screenshots": "node scripts/make-screenshots.mjs"
   },
   "devDependencies": {
-    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "concurrently": "^9.1.2",
     "vite": "^6.3.5"
   }

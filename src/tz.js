@@ -1,7 +1,6 @@
-// Europe/Zurich calendar days — the port of bt_day_window_utc /
-// bt_local_date_of / bt_seconds_between from api/lib/entries.php. "Today" on
-// the home screen and the history range are Zurich days no matter where the
-// phone is, exactly as the server computed them before E2EE.
+// Europe/Zurich calendar days. "Today" on the home screen and the history
+// range are Zurich days no matter where the phone is or what its own time
+// zone says — both phones must count the same day.
 //
 // Built on Intl.DateTimeFormat (DST-safe, no tz table shipped): the wall
 // clock of an instant comes from formatToParts; local midnight is found by

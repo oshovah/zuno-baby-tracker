@@ -1,6 +1,5 @@
-// Port of the create/update validation cases from api/tests/api.test.php —
-// same fixtures, same NOW (2026-09-01T10:00:00Z), and the exact German texts
-// of api/lib/entries.php v2 (the UI toasts them verbatim).
+// Create/update validation. NOW is 2026-09-01T10:00:00Z; the German texts are
+// asserted exactly (the UI toasts them verbatim).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -18,7 +17,6 @@ import {
   validateCreate,
   validateUpdate,
   validatePlain,
-  validateLegacyPlain,
   EVENT_TYPES,
   SETTINGS_TYPE,
   REMINDER_TYPE,
@@ -467,15 +465,6 @@ test('validatePlain rejects every malformed shape with "Ungültiger Datensatz"',
   for (const obj of bad) {
     throwsMsg(() => validatePlain(obj), MSG);
   }
-});
-
-test('validateLegacyPlain checks the five legacy fields without rev/eid', () => {
-  const legacy = { type: 'bottle', startedAt: '2026-08-30T08:00:00Z', endedAt: null, details: { amount_ml: 90 }, loggedBy: 'Mama' };
-  assert.equal(validateLegacyPlain(legacy), legacy);
-  validateLegacyPlain({ ...legacy, loggedBy: null });
-  throwsMsg(() => validateLegacyPlain({ ...legacy, details: {} }), 'Ungültiger Datensatz');
-  throwsMsg(() => validateLegacyPlain({ ...legacy, startedAt: 'x' }), 'Ungültiger Datensatz');
-  throwsMsg(() => validateLegacyPlain(null), 'Ungültiger Datensatz');
 });
 
 // ---------------------------------------------------------------------------

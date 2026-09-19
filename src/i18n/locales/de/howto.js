@@ -35,7 +35,7 @@ export default {
   // «Nachtragen»
   'log.title': 'Nachtragen',
   'log.body': 'Für alles, was nicht gerade eben passiert ist: Art wählen, Zeit anpassen, speichern. Stillen und Schlaf haben Start und Ende – «Ende» leer lassen, und der Timer läuft auf «Jetzt» weiter; beim Stillen setzen die Chips «10» bis «30 Min» das Ende ab dem Start. Gewicht, Temperatur, Medikament (die letzten Namen als Chips) und «Erledigt» gibt es nur hier.',
-  // «Verlauf» — the three views and paging
+  // «Verlauf» — the four views and paging
   'history.title': 'Verlauf',
   'history.body': 'Alle Einträge nach Tag, die neusten zuoberst, mit einer Tageszeile: Mahlzeiten, nasse Windeln («5/~6» – etwa sechs am Tag sind das Ziel), volle Windeln, Schlaf, Erledigtes. Der Schalter oben rechts wählt die Ansicht: «Einträge» zeigt jeden Tag mit all seinen Einträgen, «Tage» nur die Tageszeilen – ein Tipp auf einen Tag klappt seine Einträge auf, ein zweiter wieder zu –, «Mahlzeiten» nur die Mahlzeiten, zugeklappt: ein Tipp zeigt die Seiten und Schoppen darin – und «Grafik» Kurven für 7, 14 oder 28 Tage: Gewicht, Mahlzeiten gegen euer Tagesziel, Stillminuten je Seite, Schoppen-Milliliter (Muttermilch und Milch nebeneinander), Windeln, Schlaf, Temperatur, jede nur, wenn es dazu Einträge gibt; das Filter-Symbol neben den Tagen blendet einzelne Grafiken aus, nur auf diesem Handy. Einen Eintrag antippen, um Zeit, Menge oder Seite zu ändern – oder ihn zu löschen. «Frühere Einträge laden» und «Frühere Mahlzeiten laden» holen jeweils eine Woche mehr, «Frühere Tage laden» vier.',
   // «Erinnerungen»

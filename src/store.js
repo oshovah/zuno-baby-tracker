@@ -1,14 +1,14 @@
-// Client-side state for the end-to-end encrypted model (plan §5).
+// Client-side state for the end-to-end encrypted model.
 //
 // The server is a dumb per-family sync store of opaque blobs; this module
 // holds the decrypted entries in memory (a Map keyed by eid), mirrors the
 // server rows verbatim in IndexedDB (db.js) and derives the home-screen
-// state (model.deriveState) locally. The public surface the views knew —
-// `snapshot {ts, data}` in the exact old /api/state shape, `isStale`,
-// `lastError`, `subscribe`, `refresh`, `refreshAfterWrite`, `start/stop/
-// clear`, `prefs` — is unchanged; `store.entries.*` replaces the old
-// `api.post('api/entries', …)` write calls and `store.keyState` /
-// `store.ready` / `store.unlockWith` drive the unlock flow.
+// state (model.deriveState) locally. What the views use: `snapshot {ts,
+// data}` (data = model.deriveState), `isStale`, `lastError`, `subscribe`,
+// `refresh`, `refreshAfterWrite`, `start/stop/clear` and `prefs`; every
+// write goes through `store.entries.*` (views never call the API), and
+// `store.keyState` / `store.ready` / `store.unlockWith` drive the unlock
+// flow.
 //
 // Instant paint: the derived state is still cached in localStorage
 // ('bt.state', plaintext — the same trust boundary as the daily key living
@@ -26,17 +26,17 @@
 // one IndexedDB transaction, `reset:true` wipes rows + cursor and starts
 // over, `serverNow` feeds the clock skew. Every page also names the server
 // database it came from (`feed`, settings.feed_id): the mirror remembers it
-// (meta.feed) and a page from a different feed — a restored backup whose seq
-// counter happens to be AHEAD of our cursor, so reset:true never fires — is
-// treated exactly like reset:true. Polling 60 s in the foreground + refresh
-// on focus, as before.
+// (meta.feed) and a page from a different feed — another database file whose
+// seq counter happens to be AHEAD of our cursor, so reset:true never fires —
+// is treated exactly like reset:true. Polling 60 s in the foreground + refresh
+// on focus.
 //
-// Writes: validated locally (validate.js — the old server rules), the
-// one-open-timer rule via model.openTimer, encrypted, sent, and the
+// Writes: validated locally (validate.js), the one-open-timer rule via
+// model.openTimer, encrypted, sent, and the
 // returned row applied locally with its seq. A PATCH carries ifSeq; on 409
 // the store syncs, re-reads and retries ONCE when the caller's precondition
-// still holds on the fresh row (the old `ifOpen` semantics), otherwise the
-// 409 surfaces. A precondition is checked on the LOCAL row first, so a
+// still holds on the fresh row (e.g. "the timer is still open"), otherwise
+// the 409 surfaces. A precondition is checked on the LOCAL row first, so a
 // partner's end that a sync already applied is never overwritten. A server
 // 404 on update/remove/restore syncs once (best effort) before it surfaces,
 // so the model reflects why (the other phone deleted it).
@@ -50,12 +50,11 @@ import * as realDb from './db.js';
 import * as realKeys from './keys.js';
 import { toast as realToast, setClockSkew as realSetClockSkew, nowMs as realNowMs } from './ui.js';
 import { randomEid, importFdk, encryptEntry, decryptEntry } from './crypto.js';
-import { t, tn } from './i18n/index.js';
+import { t } from './i18n/index.js';
 import {
   validateCreate,
   validateUpdate,
   validatePlain,
-  validateLegacyPlain,
   isTimerType,
   timerRunningMessage,
   isoFromMs,
@@ -75,11 +74,9 @@ import {
 } from './model.js';
 
 const STATE_KEY = 'bt.state';
-// Stamp of the cached snapshot's shape: entries carry eid + seq since the
-// encryption release; a cache left by the pre-encryption shell (entries keyed
-// by integer id) must not paint, its timers could not be stopped. 4 = the
-// state carries lastMeal + today.meals (the home view reads them unguarded),
-// 5 = reminders + todos.
+// Stamp of the cached snapshot's shape. A cache written by an older shell
+// must not paint — the home view reads the newer fields unguarded: 4 = the
+// state carries lastMeal + today.meals, 5 = reminders + todos.
 const SNAPSHOT_V = 5;
 const IDENTITY_KEY = 'bt.identity';
 const POLL_MS = 60000;
@@ -88,7 +85,6 @@ export const STALE_AFTER_MS = 2 * 60000;
 const SYNC_LIMIT = 1000;
 const SYNC_TIMEOUT_MS = 60000;
 const DECRYPT_CHUNK = 256;
-const SEAL_BATCH = 200;
 const DUP_WINDOW_MS = 15 * 60000;
 
 // Error messages are read from the translations (errors.store.*) at the
@@ -161,9 +157,10 @@ export const DEFAULT_FORMULA_PRESETS = [...DEFAULT_FAMILY_SETTINGS.formulaPreset
 /**
  * Small per-device settings over a storage. Design, light/dark, the wake
  * lock and what the home screen's fourth slot shows are about the phone and
- * stay here. The Schoppen amounts and the meal interval moved to the family
- * (store.settings, an encrypted entry); their keys below are read only as
- * this device's older values (localFamilyValues) and never written any more.
+ * stay here. The Schoppen amounts and the meal interval belong to the family
+ * (store.settings, an encrypted entry); their keys below are only READ, as
+ * this device's fallback until the family has saved a value
+ * (localFamilyValues), and never written.
  */
 export function createPrefs(storage) {
   const read = (k) => {
@@ -433,13 +430,11 @@ export function createStore(deps) {
   let decryptErrors = 0;
   let noticeType = null; // the entry type with two open timers too far apart (store.notice)
   let artVersion; // private artwork (src/art.js): undefined = no sync heard yet, null = none for us
-  const legacy = { pending: false, remaining: 0, sealed: 0 };
 
   let pollTimer = null;
   let inFlight = null; // the running sync
   let booting = null; // the running boot
   let booted = false;
-  let sealing = false;
   let generation = 0; // bumped by every reset: a sync from before it must not write into the new state
   let readyResolve = null;
   let readyDone = false;
@@ -533,25 +528,14 @@ export function createStore(deps) {
   // --- decrypt + apply ---------------------------------------------------------
 
   /**
-   * The plaintext (or {error}) for one server row. Legacy rows (blob null,
-   * `plain` set) are accepted only while the legacy pass is pending; after
-   * that a plain row is ignored and counted — the server can never launder
-   * content into a trusted blob later. A blob whose rev is lower than the
-   * rev already known for that eid is a rollback and rejected.
+   * The plaintext (or {error}) for one server row. Content is only ever
+   * taken from a blob this family's key opens — whatever else a row
+   * carries is ignored, so the server cannot hand the phone an entry. A row
+   * without a blob has no content (a tombstone). A blob whose rev is lower
+   * than the rev already known for that eid is a rollback and rejected.
    */
   async function decryptRow(row, existing) {
-    if (row.blob == null) {
-      if (row.plain == null || typeof row.plain !== 'object') {
-        return { src: { error: t('errors.store.noContent') } };
-      }
-      if (!legacy.pending) return { src: { error: t('errors.store.plainIgnored') } };
-      try {
-        validateLegacyPlain(row.plain);
-        return { src: row.plain, legacy: true };
-      } catch (e) {
-        return { src: { error: e.message } };
-      }
-    }
+    if (row.blob == null) return { src: { error: t('errors.store.noContent') } };
     try {
       const plain = await decryptEntry(fdk, familyId, row.eid, row.blob);
       validatePlain(plain);
@@ -571,7 +555,6 @@ export function createStore(deps) {
    */
   async function ingest(rows) {
     let changed = false;
-    let sawLegacy = false;
     let errors = 0;
     let withBlob = 0;
     for (let i = 0; i < rows.length; i++) {
@@ -582,15 +565,14 @@ export function createStore(deps) {
       if (!row || typeof row.eid !== 'string' || !EID_RE.test(row.eid)) continue;
       const existing = model.get(row.eid);
       if (existing && Number(existing.seq) >= Number(row.seq)) continue;
-      const { src, legacy: isLegacy } = await decryptRow(row, existing);
+      const { src } = await decryptRow(row, existing);
       if (row.blob != null) {
         withBlob += 1;
         if (src.error) errors += 1;
       }
-      if (isLegacy) sawLegacy = true;
       if (applyRow(model, row, src)) changed = true;
     }
-    return { changed, sawLegacy, errors, withBlob };
+    return { changed, errors, withBlob };
   }
 
   /** Apply the row a write returned (with the plaintext we sent) — never the cursor. */
@@ -612,9 +594,6 @@ export function createStore(deps) {
     decryptErrors = 0;
     noticeType = null;
     artVersion = undefined;
-    legacy.pending = false;
-    legacy.remaining = 0;
-    legacy.sealed = 0;
     snapshot = null;
     lastSyncTs = 0;
     lastDataKey = null;
@@ -742,13 +721,6 @@ export function createStore(deps) {
     } catch {
       feed = null;
     }
-    try {
-      // The flag set by setLegacyPending in this session (register-create
-      // before the first sync) survives even when its meta write failed.
-      legacy.pending = legacy.pending || (await db.getMeta('legacyPending')) === true;
-    } catch {
-      /* keep the memory flag */
-    }
     rows.sort((a, b) => Number(b.seq) - Number(a.seq)); // newest first
     const res = await ingest(rows);
     return !(res.withBlob > 0 && res.errors === res.withBlob);
@@ -858,7 +830,6 @@ export function createStore(deps) {
           const skew = Date.parse(page.serverNow) - Date.now();
           if (Number.isFinite(skew)) setClockSkew(skew);
         }
-        if (Number.isInteger(page.legacyRemaining)) legacy.remaining = page.legacyRemaining;
         // Members of the installation's artwork family get the version of
         // their pictures with every page; everyone else gets no key at all.
         artVersion = typeof page.art === 'string' && /^[0-9a-f]{6,64}$/.test(page.art) ? page.art : null;
@@ -919,7 +890,6 @@ export function createStore(deps) {
       const c = recompute({ persist: true });
       notify(c || changed);
       resolveDuplicates();
-      if (legacy.pending) sealPass().catch(() => {});
       return snapshot;
     } catch (err) {
       if (gen !== generation) throw err; // the state it failed for is gone — leave the new one alone
@@ -931,7 +901,7 @@ export function createStore(deps) {
 
   /**
    * Two-phone race: both started a Schlaf within the poll interval. Keep the
-   * one with the LOWER seq (first committed — the old server semantics);
+   * one with the LOWER seq (the one the server committed first);
    * when the starts lie within 15 min the other is a duplicate and is
    * soft-deleted (toast, once per eid). Further apart, recompute() shows
    * the notice instead — a human has to decide. The DELETE presents the seq
@@ -954,68 +924,6 @@ export function createStore(deps) {
           });
       }
     }
-  }
-
-  // --- legacy seal pass ----------------------------------------------------------------
-
-  /**
-   * Encrypt the plaintext rows adopted at family creation and hand them to
-   * POST api/entries/seal in batches of 200, newest first. Done items get
-   * their new seq + blob applied locally (never the cursor: the next sync
-   * re-fetches them as blobs and finds nothing to change). Skipped items
-   * are left to the next sync. remaining 0 ends the pass for good.
-   */
-  async function sealPass() {
-    if (sealing || !legacy.pending || keyState !== 'ready') return;
-    sealing = true;
-    const gen = generation;
-    try {
-      const todo = [...model.values()].filter((e) => e.legacy && !e.error && e.deletedAt == null).sort(sortNewest);
-      if (todo.length === 0) {
-        if (legacy.remaining === 0) finishLegacy();
-        return;
-      }
-      for (let i = 0; i < todo.length && legacy.pending; i += SEAL_BATCH) {
-        const batch = todo.slice(i, i + SEAL_BATCH);
-        const prepared = new Map();
-        const items = [];
-        for (const e of batch) {
-          const plain = { ...plainOf(e), rev: 1 };
-          const blob = await encryptEntry(fdk, familyId, plain);
-          prepared.set(e.eid, { plain, blob, entry: e });
-          items.push({ eid: e.eid, seq: e.seq, blob });
-        }
-        const res = await api.post('api/entries/seal', { items });
-        if (gen !== generation) return; // logged out meanwhile
-        for (const d of (res && res.done) || []) {
-          const p = prepared.get(d.eid);
-          if (!p) continue;
-          const row = {
-            eid: d.eid,
-            seq: d.seq,
-            blob: p.blob,
-            plain: null,
-            createdAt: p.entry.createdAt,
-            updatedAt: d.updatedAt || p.entry.updatedAt,
-            deletedAt: null,
-          };
-          applyRow(model, row, p.plain);
-          db.putRow(row).catch(() => {});
-          legacy.sealed += 1;
-        }
-        if (res && Number.isInteger(res.remaining)) legacy.remaining = res.remaining;
-        if (legacy.remaining === 0) finishLegacy();
-        notify(recompute({ persist: true }));
-      }
-    } finally {
-      sealing = false;
-    }
-  }
-
-  function finishLegacy() {
-    legacy.pending = false;
-    db.setMeta('legacyPending', false).catch(() => {});
-    if (legacy.sealed > 0) toast(tn('errors.store.sealed', legacy.sealed), 'success');
   }
 
   // --- writes -------------------------------------------------------------------------
@@ -1106,10 +1014,10 @@ export function createStore(deps) {
     },
 
     /**
-     * Create from {type, startedAt?, endedAt?, details?} (the old POST body):
-     * validated like the server did, loggedBy from the account's display
-     * name, one open timer per type, rev 1. Returns the entry in the old
-     * JSON shape (eid instead of id).
+     * Create from {type, startedAt?, endedAt?, details?}: validated
+     * (validate.validateCreate), loggedBy from the account's display name,
+     * one open timer per type, rev 1. Returns the entry as the model holds
+     * it.
      */
     async create(input) {
       requireKey();
@@ -1168,33 +1076,14 @@ export function createStore(deps) {
 
     /**
      * Soft delete; the tombstone keeps its plaintext locally so restore can
-     * check the timer rule. A legacy (plaintext) row is sealed first — a
-     * PATCH with an empty patch — so every tombstone on the server carries
-     * a blob and a restore never depends on the client's copy. opts.ifSeq
-     * (the duplicate-timer resolver) is a compare-and-set: the server 409s
-     * when the row moved meanwhile — for a legacy row the seal carries it
-     * and the DELETE then presents the sealed seq.
+     * check the timer rule. opts.ifSeq (the duplicate-timer resolver) is a
+     * compare-and-set: the server 409s when the row moved meanwhile.
      */
     async remove(eid, opts = {}) {
       requireKey();
-      let local = model.get(eid);
+      const local = model.get(eid);
       if (!local || local.deletedAt != null) throw fail(t('errors.store.notFound'), 404);
-      let ifSeq = Number.isInteger(opts.ifSeq) ? opts.ifSeq : null;
-      if (local.legacy && !local.error) {
-        try {
-          await entries.update(eid, {}, ifSeq === null ? {} : { ifSeq });
-        } catch (err) {
-          // The row moved under the seal — this device's own batch pass got
-          // there first (the 409 path synced it in as a blob). A caller seq
-          // makes that the answer; a plain delete goes on with the row as
-          // it stands now.
-          const fresh = model.get(eid);
-          if (ifSeq !== null || !fresh || fresh.legacy || fresh.deletedAt != null) throw err;
-        }
-        local = model.get(eid);
-        if (!local || local.deletedAt != null) throw fail(t('errors.store.notFound'), 404);
-        if (ifSeq !== null) ifSeq = local.seq;
-      }
+      const ifSeq = Number.isInteger(opts.ifSeq) ? opts.ifSeq : null;
       const row = await serverCall(
         () => api.del(`api/entries/${eid}`, ifSeq === null ? undefined : { ifSeq }),
         ON_404
@@ -1213,15 +1102,6 @@ export function createStore(deps) {
       }
       const row = await serverCall(() => api.post(`api/entries/${eid}/restore`), ON_404);
       applyLocal(row, local.error ? { error: local.error } : plainOf(local));
-      if (row && row.blob == null && !local.error) {
-        // A restored legacy row lost its `plain` on the server (its seq moved
-        // past the migration mark): write our copy back as a blob.
-        try {
-          await entries.update(eid, {});
-        } catch {
-          /* the next edit seals it */
-        }
-      }
       return entryCopy(eid);
     },
   };
@@ -1323,7 +1203,7 @@ export function createStore(deps) {
   }
 
   const store = {
-    /** { ts, data } | null — data in the old /api/state shape; ts = last successful sync. */
+    /** { ts, data } | null — data = model.deriveState(); ts = last successful sync. */
     get snapshot() {
       return snapshot;
     },
@@ -1361,11 +1241,6 @@ export function createStore(deps) {
      *  worded in the language of the moment it is read. */
     get notice() {
       return noticeType ? t('errors.store.duplicateTimers', { type: label(noticeType) }) : null;
-    },
-
-    /** {pending, remaining, sealed} of the plaintext-migration pass. */
-    get legacy() {
-      return { ...legacy };
     },
 
     /** The last synced seq (tests/debugging). */
@@ -1463,17 +1338,6 @@ export function createStore(deps) {
       await activate(key, { fromPassword: true });
     },
 
-    /** Register-create adopted plaintext rows: run the seal pass on the syncs to come. */
-    async setLegacyPending(remaining) {
-      legacy.pending = true;
-      if (Number.isInteger(remaining)) legacy.remaining = remaining;
-      try {
-        await db.setMeta('legacyPending', true);
-      } catch {
-        /* memory flag still drives this session */
-      }
-    },
-
     /** Every decrypted entry (deleted ones flagged), newest first — the export. */
     exportPlain() {
       return [...model.values()]
@@ -1514,14 +1378,6 @@ export function createStore(deps) {
 // --- the real instance -------------------------------------------------------------------
 
 const defaultStorage = browserStorage();
-
-// The pre-accounts "who is logging" name lived per device under bt.name; the
-// display name now belongs to the account (prefs.user). One-time cleanup.
-try {
-  defaultStorage.removeItem('bt.name');
-} catch {
-  /* ignore */
-}
 
 export const prefs = createPrefs(defaultStorage);
 

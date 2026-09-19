@@ -1,5 +1,5 @@
 // store.js under node: createStore() over a fake api (an in-memory port of
-// api/lib/entries.php's sync / CAS / seal semantics), a fake IndexedDB
+// api/lib/entries.php's sync / CAS semantics), a fake IndexedDB
 // mirror and a fake key store — real crypto. Two instances over one server
 // play the two phones.
 import { test } from 'node:test';
@@ -25,7 +25,7 @@ function httpError(status, message) {
 const newFeed = () => randomEid();
 
 /** The server: one family's rows with per-family seq, exactly like entries.php. */
-function fakeServer({ legacyMaxSeq = 0 } = {}) {
+function fakeServer() {
   const rows = new Map();
   let seq = 0;
   const next = () => ++seq;
@@ -35,16 +35,14 @@ function fakeServer({ legacyMaxSeq = 0 } = {}) {
   const hook = async (method, path, body) => {
     if (server.hook) await server.hook(method, path, body);
   };
-  const remaining = () =>
-    [...rows.values()].filter((r) => r.blob == null && r.deletedAt == null && r.seq <= legacyMaxSeq).length;
   const json = (r) => ({
     eid: r.eid,
     seq: r.seq,
     blob: r.blob,
-    plain: r.blob == null && r.legacy && r.deletedAt == null && r.seq <= legacyMaxSeq ? { ...r.legacy } : null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     deletedAt: r.deletedAt,
+    ...r.smuggled, // what a tampering server adds to the row JSON (tests only)
   });
   const live = (eid) => {
     const r = rows.get(eid);
@@ -56,14 +54,13 @@ function fakeServer({ legacyMaxSeq = 0 } = {}) {
     calls,
     offline: false,
     hook: null,
-    sealFails: false, // POST api/entries/seal answers 503 (the batch pass never lands)
     feed: newFeed(),
     get maxSeq() {
       return seq;
     },
-    /** Seed an encrypted row (blob) or a legacy plaintext row (legacy). */
-    put({ eid = randomEid(), blob = null, legacy = null, deletedAt = null }) {
-      const r = { eid, seq: next(), blob, legacy, createdAt: TODAY, updatedAt: TODAY, deletedAt };
+    /** Seed an encrypted row (blob); `smuggled` = extra fields a tampering server puts into its JSON. */
+    put({ eid = randomEid(), blob = null, deletedAt = null, smuggled = null }) {
+      const r = { eid, seq: next(), blob, createdAt: TODAY, updatedAt: TODAY, deletedAt, smuggled };
       rows.set(eid, r);
       return r;
     },
@@ -92,7 +89,7 @@ function fakeServer({ legacyMaxSeq = 0 } = {}) {
         const limit = Math.max(1, Math.min(1000, Number(m[2])));
         const feed = server.feed === null ? {} : { feed: server.feed };
         if (since > seq) {
-          return { serverNow: NOW, rows: [], next: null, legacyRemaining: remaining(), reset: true, ...feed };
+          return { serverNow: NOW, rows: [], next: null, reset: true, ...feed };
         }
         const page = [...rows.values()]
           .filter((r) => r.seq > since && (since !== 0 || r.deletedAt == null))
@@ -103,7 +100,6 @@ function fakeServer({ legacyMaxSeq = 0 } = {}) {
           serverNow: NOW,
           rows: page,
           next: page.length === limit ? page[page.length - 1].seq : null,
-          legacyRemaining: remaining(),
           ...feed,
           ...(server.art === undefined ? {} : { art: server.art }), // members of the artwork family only
         };
@@ -115,24 +111,6 @@ function fakeServer({ legacyMaxSeq = 0 } = {}) {
         if (path === 'api/entries') {
           if (rows.has(body.eid)) throw httpError(409, 'Eintrag existiert bereits');
           return json(server.put({ eid: body.eid, blob: body.blob }));
-        }
-        if (path === 'api/entries/seal') {
-          if (server.sealFails) throw httpError(503, 'Kurz überlastet – bitte nochmals versuchen');
-          const done = [];
-          const skipped = [];
-          for (const it of body.items) {
-            const r = rows.get(it.eid);
-            if (r && r.blob == null && r.deletedAt == null && r.seq === it.seq) {
-              r.blob = it.blob;
-              r.legacy = null;
-              r.seq = next();
-              r.updatedAt = TODAY;
-              done.push({ eid: r.eid, seq: r.seq, updatedAt: TODAY });
-            } else {
-              skipped.push(it.eid);
-            }
-          }
-          return { done, skipped, remaining: remaining() };
         }
         const m = /^api\/entries\/([0-9a-f]{32})\/restore$/.exec(path);
         if (m) {
@@ -156,7 +134,7 @@ function fakeServer({ legacyMaxSeq = 0 } = {}) {
           throw httpError(409, 'Der Eintrag wurde inzwischen auf einem anderen Gerät geändert');
         }
         r.blob = body.blob;
-        r.legacy = null;
+        r.smuggled = null;
         r.seq = next();
         r.updatedAt = TODAY;
         return json(r);
@@ -320,7 +298,7 @@ async function online(p, fdkRaw) {
   return p;
 }
 
-/** Wait (up to ~1 s) for a detached follow-up (duplicate delete, seal pass). */
+/** Wait (up to ~1 s) for a detached follow-up (the duplicate delete). */
 async function until(cond) {
   for (let i = 0; i < 200; i++) {
     if (cond()) return;
@@ -411,7 +389,7 @@ test('boot from the mirror paints before the network and survives an offline syn
   const a = await seed(server, entry({ startedAt: minus(90) }));
   const b = await seed(server, entry({ type: 'bottle', details: { amount_ml: 90 }, startedAt: minus(10) }));
   const db = fakeDb();
-  const rowOf = (r) => ({ ...r, plain: null, legacy: undefined });
+  const rowOf = ({ smuggled, ...r }) => r;
   await db.putRows([rowOf(a), rowOf(b)], 2);
   db.meta.set('identity', 'mama');
   server.offline = true;
@@ -440,7 +418,7 @@ test('a stored key that decrypts nothing is dropped: locked, forgetFdk called', 
   const e = entry();
   const r = server.put({ eid: e.eid, blob: await encryptEntry(other, FAMILY, e) });
   const db = fakeDb();
-  await db.putRows([{ ...r, plain: null }], 1);
+  await db.putRows([{ ...r }], 1);
   db.meta.set('identity', 'mama');
   const keys = fakeKeys(FDK);
   const p = phone(server, { db, keys });
@@ -953,169 +931,27 @@ test('two open timers further apart: a notice, nothing deleted', async () => {
   assert.equal(p.store.notice, null);
 });
 
-// --- legacy seal pass -------------------------------------------------------------------------
+// --- a server that tries to hand the phone content ---------------------------------------------
 
-const legacyPlain = (over = {}) => ({
-  type: 'bottle',
-  startedAt: minus(200),
-  endedAt: null,
-  details: { amount_ml: 60 },
-  loggedBy: 'Mama',
-  ...over,
-});
+test('plaintext a server slips into the feed is never taken in: no entry, no state, nothing sent back', async () => {
+  const server = fakeServer();
+  const real = await seed(server, entry({ type: 'diaper', details: { kind: 'pee' }, startedAt: minus(30) }));
+  const fake = { type: 'bottle', startedAt: minus(5), endedAt: null, details: { amount_ml: 500 }, loggedBy: 'Mama' };
+  // A row without a blob that carries content in the clear — in every shape a client might trust.
+  const bare = server.put({ smuggled: { plain: fake } });
+  const flat = server.put({ smuggled: { ...fake, rev: 1 } });
+  const p = await online(phone(server), FDK_RAW);
 
-test('the creator seals adopted plaintext rows in batches; done rows get blob + new seq', async () => {
-  const server = fakeServer({ legacyMaxSeq: 250 });
-  for (let i = 0; i < 205; i++) server.put({ legacy: legacyPlain({ startedAt: minus(600 - i) }) });
-  const p = phone(server);
-  await p.store.setLegacyPending(205);
-  assert.equal(p.db.meta.get('legacyPending'), true);
-  await online(p, FDK_RAW);
-  await until(() => p.store.legacy.pending === false);
-  assert.deepEqual(p.toasts, ['205 Einträge verschlüsselt']);
-  assert.equal(p.store.legacy.remaining, 0);
-  assert.equal(p.store.legacy.sealed, 205);
-  assert.equal(p.db.meta.get('legacyPending'), false);
-  const seals = server.calls.filter((c) => c[1] === 'api/entries/seal');
-  assert.deepEqual(seals.map((c) => c[2].items.length), [200, 5]);
-  // Newest first: the first batch starts with the newest legacy row.
-  const newest = [...server.rows.values()].sort((a, b) => a.seq - b.seq);
-  assert.ok([...server.rows.values()].every((r) => r.blob && r.legacy === null), 'no plaintext left');
-  assert.equal(p.store.decryptErrors, 0);
-  assert.equal(p.store.entries.range('2026-08-30', TODAY).length, 205);
-  assert.ok(p.store.entries.range('2026-08-30', TODAY).every((e) => !e.legacy && e.rev === 1));
-  assert.ok(newest.length === 205);
-  // A later sync re-fetches the sealed rows as blobs and finds nothing new.
-  p.events.length = 0;
-  await p.store.refresh();
-  assert.ok(p.events.every((c) => c === false));
-  assert.equal(p.store.cursor, server.maxSeq);
-});
-
-test('a joiner ignores and counts plain rows; editing a legacy row seals it', async () => {
-  const server = fakeServer({ legacyMaxSeq: 10 });
-  const r1 = server.put({ legacy: legacyPlain() });
-  const r2 = server.put({ legacy: legacyPlain({ type: 'diaper', details: { kind: 'both' }, startedAt: minus(100) }) });
-  const joiner = await online(phone(server, { username: 'papa' }), FDK_RAW);
-  assert.equal(joiner.store.decryptErrors, 2);
-  assert.equal(joiner.store.entries.get(r1.eid).error, 'Unverschlüsselter Eintrag ignoriert');
-  assert.equal(joiner.store.snapshot.data.lastFeed, null);
-  assert.equal(server.calls.filter((c) => c[1] === 'api/entries/seal').length, 0);
-
-  const creator = phone(server);
-  await creator.store.setLegacyPending(2);
-  server.offline = false;
-  // Hold the seal pass back by editing first: an edit of a legacy row PATCHes it into a blob.
-  await creator.store.unlockWith(new Uint8Array(FDK_RAW));
-  await creator.store.refresh();
-  await until(() => creator.store.legacy.pending === false);
-  assert.ok(server.rows.get(r2.eid).blob);
-  await joiner.store.refresh();
-  assert.equal(joiner.store.decryptErrors, 0);
-  assert.equal(joiner.store.entries.get(r2.eid).details.kind, 'both');
-  assert.equal(joiner.store.snapshot.data.lastFeed.eid, r1.eid);
-});
-
-test('editing a legacy row before the seal pass converts it (rev 0 → 1)', async () => {
-  const server = fakeServer({ legacyMaxSeq: 10 });
-  const r = server.put({ legacy: legacyPlain() });
-  const p = phone(server);
-  await p.store.setLegacyPending(1);
-  server.offline = true; // the seal pass after the first sync fails …
-  await p.store.unlockWith(new Uint8Array(FDK_RAW));
-  await rejects(p.store.refresh(), 'Keine Verbindung zum Server');
-  server.offline = false;
-  await p.store.refresh();
-  // … race the pass with an edit: whichever wins, the row ends up a blob.
-  await until(() => server.rows.get(r.eid).blob != null);
-  const e = p.store.entries.get(r.eid);
-  assert.equal(e.legacy, undefined);
-  assert.equal(e.rev, 1);
-  assert.equal(e.type, 'bottle');
-  const edited = await p.store.entries.update(r.eid, { details: { amount_ml: 70 } });
-  assert.equal(edited.rev, 2);
-  assert.equal(edited.details.amount_ml, 70);
-  assert.equal(server.rows.get(r.eid).legacy, null);
-});
-
-test('removing a legacy row seals it first: the tombstone carries a blob, the restore needs no re-seal', async () => {
-  const server = fakeServer({ legacyMaxSeq: 10 });
-  const r = server.put({ legacy: legacyPlain() });
-  const p = phone(server);
-  await p.store.setLegacyPending(1);
-  server.sealFails = true; // the batch pass never lands: the row stays plaintext
-  await online(p, FDK_RAW);
-  await new Promise((res) => setTimeout(res, 20));
-  assert.equal(p.store.entries.get(r.eid).legacy, true);
-  assert.equal(server.rows.get(r.eid).blob, null);
-
-  const gone = await p.store.entries.remove(r.eid);
-  assert.equal(gone.deletedAt, TODAY);
-  assert.equal(gone.legacy, undefined);
-  assert.equal(gone.rev, 1);
-  assert.equal(gone.details.amount_ml, 60, 'the tombstone keeps its plaintext locally');
-  const srv = server.rows.get(r.eid);
-  assert.ok(srv.blob, 'sealed before the delete');
-  assert.equal(srv.legacy, null);
-  assert.equal(srv.deletedAt, TODAY);
-  const order = server.calls.filter((c) => c[1] === `api/entries/${r.eid}`).map((c) => c[0]);
-  assert.deepEqual(order, ['PATCH', 'DELETE']);
-  assert.equal(server.calls.find((c) => c[0] === 'DELETE')[2], undefined, 'no ifSeq without a caller seq');
-
-  // Restore: the server row already carries the blob — no re-seal fallback.
-  const back = await p.store.entries.restore(r.eid);
-  assert.equal(back.deletedAt, null);
-  assert.equal(back.details.amount_ml, 60);
-  assert.ok(server.rows.get(r.eid).blob);
-  assert.equal(server.calls.filter((c) => c[0] === 'PATCH').length, 1, 'exactly one seal, none after the restore');
-  assert.equal(p.store.legacy.pending, true, 'the pass itself is still pending – nothing left for it');
-});
-
-test('a plain delete whose seal loses against the batch pass goes on with the sealed row', async () => {
-  const server = fakeServer({ legacyMaxSeq: 10 });
-  const plain = legacyPlain();
-  const r = server.put({ legacy: plain });
-  const p = phone(server);
-  await p.store.setLegacyPending(1);
-  server.sealFails = true;
-  await online(p, FDK_RAW);
-  await new Promise((res) => setTimeout(res, 20));
-  // The batch pass lands on the server right before our seal PATCH.
-  const sealed = await seal({ ...plain, eid: r.eid, rev: 1 });
-  server.hook = async (m) => {
-    if (m === 'PATCH') {
-      server.hook = null;
-      const row = server.rows.get(r.eid);
-      row.blob = sealed;
-      row.legacy = null;
-      server.touch(r.eid);
-    }
-  };
-  const gone = await p.store.entries.remove(r.eid);
-  assert.equal(gone.deletedAt, TODAY);
-  assert.equal(gone.rev, 1);
-  assert.equal(server.rows.get(r.eid).deletedAt, TODAY);
-  const own = server.calls.filter((c) => c[1] === `api/entries/${r.eid}`).map((c) => c[0]);
-  assert.deepEqual(own, ['PATCH', 'DELETE'], 'one (lost) seal, then the delete of the synced row');
-  assert.equal(server.calls.find((c) => c[0] === 'DELETE')[2], undefined);
-});
-
-test('a legacy duplicate timer: the seal carries the caller\'s ifSeq, the DELETE presents the sealed seq', async () => {
-  const server = fakeServer({ legacyMaxSeq: 10 });
-  const keep = server.put({ legacy: legacyPlain({ type: 'sleep', details: {}, startedAt: minus(10) }) });
-  const dup = server.put({ legacy: legacyPlain({ type: 'sleep', details: {}, startedAt: minus(4) }) });
-  const p = phone(server);
-  await p.store.setLegacyPending(2);
-  server.sealFails = true;
-  await online(p, FDK_RAW);
-  await until(() => server.rows.get(dup.eid).deletedAt != null);
-  assert.equal(server.rows.get(keep.eid).deletedAt, null);
-  const patch = server.calls.find((c) => c[0] === 'PATCH' && c[1] === `api/entries/${dup.eid}`);
-  assert.equal(patch[2].ifSeq, 2, 'the seal is the compare-and-set on the seen seq');
-  const del = server.calls.find((c) => c[0] === 'DELETE');
-  assert.deepEqual(del[2], { ifSeq: 3 }, 'the DELETE presents the sealed seq');
-  assert.deepEqual(p.toasts, ['Doppelter Schlaf-Timer entfernt']);
-  assert.ok(server.rows.get(dup.eid).blob, 'the tombstone carries a blob');
+  assert.deepEqual(p.store.entries.range('2026-08-30', TODAY).map((e) => e.eid), [real.eid], 'only the decrypted entry exists');
+  for (const row of [bare, flat]) {
+    const held = p.store.entries.get(row.eid);
+    assert.equal(held.error, 'Inhalt nicht verfügbar', 'kept as a row without content …');
+    assert.deepEqual([held.type, held.startedAt, held.loggedBy, held.details], [undefined, undefined, undefined, {}], '… and with none of the smuggled fields');
+  }
+  assert.equal(p.store.snapshot.data.lastByType.bottle, null, 'the home screen never heard of the bottle');
+  assert.equal(p.store.exportPlain().length, 1);
+  assert.equal(p.store.decryptErrors, 2, 'Mehr › Konto reports two entries it could not read — the tampering shows');
+  assert.deepEqual(server.calls.filter((c) => c[0] !== 'GET'), [], 'and the phone writes nothing in response');
 });
 
 // --- prefs / clear -----------------------------------------------------------------------------
@@ -1382,7 +1218,7 @@ function authServer(entries) {
           };
           users.set(username, u);
           current = username;
-          return { ok: true, user: userJson(u), familyCreated: body.familyMode === 'create', adoptedEntries: 0, legacyRemaining: 0 };
+          return { ok: true, user: userJson(u), familyCreated: body.familyMode === 'create' };
         }
         if (path === 'api/login') {
           const u = users.get(String(body.username).trim().toLowerCase());
@@ -1462,7 +1298,7 @@ test('session: register-create → entry → logout → login round-trips the FD
     assert.equal(res.user.username, 'mama');
     assert.equal(res.user.displayName, 'Mama Bär');
     assert.equal(res.user.familyName, 'Familie Muster');
-    assert.equal(res.adoptedEntries, 0);
+    assert.deepEqual(Object.keys(res).sort(), ['recoveryCode', 'user']);
     assert.match(res.recoveryCode, /^([A-Za-z0-9_-]{4} ){10}[A-Za-z0-9_-]{3}$/, 'grouped by 4 with spaces');
     assert.equal(livePrefs.authed, true);
     assert.equal(livePrefs.user.kdf.iter, 600000);
@@ -1485,7 +1321,7 @@ test('session: register-create → entry → logout → login round-trips the FD
       'recoveryAuthKey',
       'username',
     ]);
-    assert.ok(!('password' in reg) && !('familyPassword' in reg) && !('legacyPassword' in reg));
+    assert.ok(!('password' in reg) && !('familyPassword' in reg), 'no password ever leaves the phone');
 
     await liveStore.refresh();
     const e = await liveStore.entries.create({ type: 'diaper', details: { kind: 'poop' } });
