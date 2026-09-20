@@ -31,7 +31,9 @@ export default {
   'dose.manual': 'Empfohlen: <b>{ml} ml</b> pro Mahlzeit',
   'dose.manualWithDay': 'Empfohlen: <b>{ml} ml</b> pro Mahlzeit · {day}. Lebenstag',
   'dose.rule': '{day}. Lebenstag · Ziel <b>≈ {ml} ml</b> pro Mahlzeit ({daily} ml am Tag)',
-  'dose.expired': '{day}. Lebenstag – die Faustregel gilt bis zum {maxDay}.: die Menge der Hebamme unter Mehr › Einstellungen eintragen.',
+  'dose.byWeight': '{week}. Lebenswoche · Ziel <b>≈ {ml} ml</b> pro Mahlzeit ({daily} ml am Tag nach Gewicht, {grams} g)',
+  'dose.byAge': '{week}. Lebenswoche · Ziel <b>≈ {ml} ml</b> pro Mahlzeit ({daily} ml am Tag, Richtwert nach Alter)',
+  'dose.expired': '{day}. Lebenstag – die Richtwerte der App gelten bis zum {maxDay}.: die empfohlene Menge unter Mehr › Einstellungen eintragen.',
   'dose.birthDay': '1. Lebenstag – noch kein Tagesziel.',
   'dose.noBirthDate': 'Kein Tagesziel – das Geburtsdatum steht unter Mehr › Einstellungen.',
   // … the day's tally («Heute schon 190 ml im Schoppen (120 Muttermilch · 70 Formula).»)

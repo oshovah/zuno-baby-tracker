@@ -35,17 +35,27 @@ export default {
   'family.meta.changedBy': 'Last changed by {name} · {day} {time}',
   'family.meta.changed': 'Last changed · {day} {time}',
   'dose.title': 'Feeding amount',
+  // The rules (dose.js): the first days, then by weight, else by age …
   'dose.hint':
-    'Rule of thumb for the first {days} days: (day of life − 1) × {ml} ml a day, spread over the meals. Nurse first; top up what is missing with pumped breast milk, then with formula. The bottle form shows the target per meal and what has already been in the bottle today.',
+    'Up to day {days} of life the rule of thumb applies: (day of life − 1) × {ml} ml a day. After that the app goes by a sixth of the body weight a day – from the last weight entry, at most {dayMax} ml a day and {mealMax} ml per meal. Without a weight from the last {weightDays} days a guide by age applies: {ageStart} ml a day in week 2 of life, {ageStep} ml more each week, up to {ageTop} ml. The day\'s amount is spread over your meals.',
+  // … and the plan the target serves
+  'dose.hintPlan':
+    'Nurse first; top up what is missing with pumped breast milk, then with formula. The bottle form shows the target per meal and what has already been in the bottle today.',
   'dose.birthDate': 'Birth date',
   'dose.mealsPerDay': 'Meals a day',
   // What the settings amount to today (dosePreviewHtml) — sentences joined by a space
   'dose.noBirthDate': 'No birth date, no daily target.',
   'dose.birthInFuture': 'The birth date is in the future – no daily target yet.',
   'dose.firstDay': 'Today is day 1 – no daily target yet.',
-  'dose.ruleExpired': 'Today is day {day} – the rule of thumb applies up to day {max}.',
-  'dose.afterRule': 'From now on the amount recommended by the midwife counts (below).',
+  'dose.ruleExpired': "Today is day {day} – the app's guide values apply up to day {max}.",
+  'dose.afterRule': 'From now on the recommended amount counts (below) – for example from your child health nurse.',
   'dose.today': 'Today is day {day}: {daily} ml a day, ≈ {share} ml per meal over {meals} meals.',
+  // {weighed} = the day of the weighing ("Today", "Yesterday", "Sat, 12 Sept")
+  'dose.todayByWeight':
+    'Today is day {day} (week {week} of life). By weight ({grams} g · {weighed}): {daily} ml a day, ≈ {share} ml per meal over {meals} meals.',
+  'dose.todayByAge':
+    'Today is day {day} (week {week} of life). Guide by age: {daily} ml a day, ≈ {share} ml per meal over {meals} meals.',
+  'dose.weightHint': 'With a weight entry from the last {days} days the app works it out more precisely.',
   'dose.manualApplies': 'The recommended amount applies: {ml} ml per meal.',
   'dose.manualOverrides': 'The recommended amount applies instead: {ml} ml.',
   'dose.birthDateSet': 'Birth date: {date}',
@@ -62,7 +72,7 @@ export default {
   'presets.resetDone': 'Presets reset to default',
   'recommended.title': 'Recommended amount',
   'recommended.hint':
-    'A fixed amount per meal, for example from the midwife – it replaces the rule of thumb and appears as a marked chip (★) in the bottle form. Leave empty as long as the rule should apply.',
+    'A fixed amount per meal, for example from the midwife – it replaces the calculated feeding amount (above), at any age, and appears as a marked chip (★) in the bottle form. Leave empty as long as the app should work it out.',
   'recommended.placeholder': 'e.g. 70',
   'recommended.inputLabel': 'Recommended amount (ml)',
   'recommended.set': 'Recommended amount: {ml} ml',

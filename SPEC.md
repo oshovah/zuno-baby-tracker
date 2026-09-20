@@ -150,13 +150,17 @@ and «Nur dieses Handy».
 
 **Trinkmenge** (the drinking target, `src/dose.js`): the plan is breast
 first, then pumped Muttermilch to fill up, then formula. The target per
-meal for a day is the midwife's `recommendedMl` when set, else the rule of
-thumb for the first ten days — (Lebenstag − 1) × 60 ml over the day, shared
-by `mealsPerDay` (default 6), rounded to 5 ml; the Lebenstag counts Zurich
-calendar days from `birthDate` (1 on the birth day, which has no target).
-Past day ten the rule says nothing (`source: 'expired'`) and the form asks
-for the midwife's number. Einstellungen › Trinkmenge holds the two keys and
-previews today's numbers. When the bottle's meal already has a Stillen side
+meal for a day is the midwife's `recommendedMl` when set, else the day's
+amount shared by `mealsPerDay` (default 6), rounded to 5 ml, never above
+230 ml. The day's amount is the rule of thumb for the first ten days —
+(Lebenstag − 1) × 60 ml; the Lebenstag counts Zurich calendar days from
+`birthDate` (1 on the birth day, which has no target) —, after that a sixth
+of the body weight (the last `weight` entry up to that day, at most three
+weeks old; never above 1000 ml), and without such a weight a guide by age:
+600 ml in the second week of life, 50 ml more each week, up to 800 ml.
+Past day 150 the rules say nothing (`source: 'expired'`) and the form asks
+for a recommended amount. Einstellungen › Trinkmenge holds the two keys and
+previews today's numbers; «Empfohlene Menge» sits right below it. When the bottle's meal already has a Stillen side
 (`meals.nursingBeforeBottle`, the same join rule as the meals), the form takes
 `nursingMl` off the target (`dose.supplementFor`) and aims for the rest.
 

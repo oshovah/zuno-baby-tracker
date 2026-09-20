@@ -74,6 +74,8 @@ list first so the same thing reads the same on every screen.
 | Schoppen                      | Bottle                   |
 | Muttermilch · Milch (Formula) | Breast milk · Formula    |
 | Trinkmenge                    | Feeding amount           |
+| Lebenstag · Lebenswoche       | day of life · week of life |
+| Faustregel · Richtwert        | rule of thumb · guide    |
 | Windel · Pipi · Gaggi · Beides | Diaper · Pee · Poo · Both |
 | Schlaf · wach seit            | Sleep · awake for        |
 | Mahlzeit · seit letzter Mahlzeit | Meal · since last meal |
@@ -81,6 +83,7 @@ list first so the same thing reads the same on every screen.
 | Wiederherstellungscode        | Recovery code            |
 | Benutzername · Anzeigename    | Username · Display name  |
 | Hebamme · Wochenbett          | Midwife · postpartum weeks |
+| Mütter- und Väterberatung     | child health nurse       |
 | Mama · Papa                   | Mom · Dad                |
 | Min. · Std. · Tagen           | min · h · days           |
 | Heute · Gestern · gerade eben | Today · Yesterday · just now |

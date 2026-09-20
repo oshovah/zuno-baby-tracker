@@ -15,8 +15,17 @@ import { escapeHtml, toast, localToday, fmtClock, fmtDayHeading, localDateOf, ic
 import {
   doseFor,
   mealTargetMl,
+  lastWeight,
+  lifeWeek,
   ML_PER_LIFE_DAY,
   FORMULA_MAX_LIFE_DAY,
+  GUIDE_MAX_LIFE_DAY,
+  WEIGHT_MAX_AGE_DAYS,
+  DAILY_MAX_ML,
+  MEAL_MAX_ML,
+  AGE_DAILY_START_ML,
+  AGE_DAILY_STEP_ML,
+  AGE_DAILY_TOP_ML,
   MEALS_PER_DAY_MIN,
   MEALS_PER_DAY_MAX,
   DEFAULT_MEALS_PER_DAY,
@@ -65,26 +74,40 @@ function familyMetaHtml() {
 
 /** «Heute Tag 8: 420 ml am Tag, ≈ 70 ml pro Mahlzeit.» — what the drinking
  *  target settings amount to today (dose.doseFor over the Zurich day, like
- *  «Heute» on the home screen). */
+ *  «Heute» on the home screen), by the first days' rule, by the last weight
+ *  (the snapshot's latest reading, so the cached paint has it) or by age. */
 function dosePreviewHtml(fam) {
-  const dose = doseFor(fam, zurichDateOf(isoNow()));
+  const last = store.snapshot && store.snapshot.data.lastByType && store.snapshot.data.lastByType.weight;
+  const weight = lastWeight(last ? [last] : []);
+  const dose = doseFor(fam, zurichDateOf(isoNow()), weight);
   // Whole sentences, joined by a space — never fragments of one.
   const sentences = (...parts) => parts.filter(Boolean).join(' ');
   const manual = dose.source === 'manual' ? t('more.dose.manualApplies', { ml: dose.mealMl }) : '';
   if (!fam.birthDate) return sentences(t('more.dose.noBirthDate'), manual);
   if (!dose.lifeDay) return sentences(t('more.dose.birthInFuture'), manual);
   if (dose.lifeDay === 1) return sentences(t('more.dose.firstDay'), manual);
-  if (dose.lifeDay > FORMULA_MAX_LIFE_DAY) {
+  if (dose.lifeDay > GUIDE_MAX_LIFE_DAY) {
     return sentences(
-      t('more.dose.ruleExpired', { day: dose.lifeDay, max: FORMULA_MAX_LIFE_DAY }),
+      t('more.dose.ruleExpired', { day: dose.lifeDay, max: GUIDE_MAX_LIFE_DAY }),
       manual || t('more.dose.afterRule')
     );
   }
-  const share = mealTargetMl(dose.dailyMl, dose.mealsPerDay);
-  return sentences(
-    t('more.dose.today', { day: dose.lifeDay, daily: dose.dailyMl, share, meals: dose.mealsPerDay }),
-    manual ? t('more.dose.manualOverrides', { ml: dose.mealMl }) : ''
-  );
+  const params = {
+    day: dose.lifeDay,
+    week: lifeWeek(dose.lifeDay),
+    daily: dose.dailyMl,
+    share: mealTargetMl(dose.dailyMl, dose.mealsPerDay),
+    meals: dose.mealsPerDay,
+  };
+  let today;
+  if (dose.rule === 'weight') {
+    today = t('more.dose.todayByWeight', { ...params, grams: weight.grams, weighed: escapeHtml(fmtDayHeading(localDateOf(weight.at))) });
+  } else if (dose.rule === 'age') {
+    today = sentences(t('more.dose.todayByAge', params), t('more.dose.weightHint', { days: WEIGHT_MAX_AGE_DAYS }));
+  } else {
+    today = t('more.dose.today', params);
+  }
+  return sentences(today, manual ? t('more.dose.manualOverrides', { ml: dose.mealMl }) : '');
 }
 
 /** The family's reminders as tappable rows (from the snapshot, so the cached
@@ -327,7 +350,17 @@ export function renderMore(el) {
       <p class="hint">${t('more.settings.familyHint')} <span data-family-meta>${familyMetaHtml()}</span></p>
 
       <h2 class="section-title">${t('more.dose.title')}</h2>
-      <p class="hint">${t('more.dose.hint', { days: FORMULA_MAX_LIFE_DAY, ml: ML_PER_LIFE_DAY })}</p>
+      <p class="hint">${t('more.dose.hint', {
+        days: FORMULA_MAX_LIFE_DAY,
+        ml: ML_PER_LIFE_DAY,
+        dayMax: DAILY_MAX_ML,
+        mealMax: MEAL_MAX_ML,
+        weightDays: WEIGHT_MAX_AGE_DAYS,
+        ageStart: AGE_DAILY_START_ML,
+        ageStep: AGE_DAILY_STEP_ML,
+        ageTop: AGE_DAILY_TOP_ML,
+      })}</p>
+      <p class="hint">${t('more.dose.hintPlan')}</p>
       <div class="dose-row">
         <label class="field"><span>${t('more.dose.birthDate')}</span>
           <input type="date" value="${fam.birthDate || ''}" max="${localToday()}" data-birth-date />
@@ -338,6 +371,13 @@ export function renderMore(el) {
         </label>
       </div>
       <p class="hint" data-dose-preview>${dosePreviewHtml(fam)}</p>
+
+      <h2 class="section-title">${t('more.recommended.title')}</h2>
+      <p class="hint">${t('more.recommended.hint')}</p>
+      <div class="preset-row">
+        <input type="number" inputmode="numeric" min="1" max="1000" placeholder="${attr('more.recommended.placeholder')}"
+          value="${fam.recommendedMl || ''}" data-recommended aria-label="${attr('more.recommended.inputLabel')}" />
+      </div>
 
       <h2 class="section-title">${t('more.presets.title')}</h2>
       <p class="hint">${t('more.presets.hint')}</p>
@@ -356,13 +396,6 @@ export function renderMore(el) {
       </div>`
         )
         .join('')}
-
-      <h2 class="section-title">${t('more.recommended.title')}</h2>
-      <p class="hint">${t('more.recommended.hint')}</p>
-      <div class="preset-row">
-        <input type="number" inputmode="numeric" min="1" max="1000" placeholder="${attr('more.recommended.placeholder')}"
-          value="${fam.recommendedMl || ''}" data-recommended aria-label="${attr('more.recommended.inputLabel')}" />
-      </div>
 
       <h2 class="section-title">${t('more.nursing.title')}</h2>
       <label class="confirm-row switch-row">

@@ -35,17 +35,27 @@ export default {
   'family.meta.changedBy': 'Zuletzt geändert von {name} · {day} {time}',
   'family.meta.changed': 'Zuletzt geändert · {day} {time}',
   'dose.title': 'Trinkmenge',
+  // The rules (dose.js): the first days, then by weight, else by age …
   'dose.hint':
-    'Faustregel für die ersten {days} Tage: (Lebenstag − 1) × {ml} ml am Tag, verteilt auf die Mahlzeiten. Zuerst stillen; was fehlt, mit abgepumpter Muttermilch auffüllen, dann mit Milch (Formula). Das Schoppen-Formular zeigt das Ziel pro Mahlzeit und was am Tag schon im Schoppen war.',
+    'Bis zum {days}. Lebenstag gilt die Faustregel (Lebenstag − 1) × {ml} ml am Tag. Danach rechnet die App mit einem Sechstel des Körpergewichts am Tag – nach dem letzten Gewichtseintrag, höchstens {dayMax} ml am Tag und {mealMax} ml pro Mahlzeit. Ohne Gewicht aus den letzten {weightDays} Tagen gilt ein Richtwert nach Alter: {ageStart} ml am Tag in der 2. Lebenswoche, jede Woche {ageStep} ml mehr, bis {ageTop} ml. Die Tagesmenge wird auf eure Mahlzeiten verteilt.',
+  // … and the plan the target serves
+  'dose.hintPlan':
+    'Zuerst stillen; was fehlt, mit abgepumpter Muttermilch auffüllen, dann mit Milch (Formula). Das Schoppen-Formular zeigt das Ziel pro Mahlzeit und was am Tag schon im Schoppen war.',
   'dose.birthDate': 'Geburtsdatum',
   'dose.mealsPerDay': 'Mahlzeiten pro Tag',
   // What the settings amount to today (dosePreviewHtml) — sentences joined by a space
   'dose.noBirthDate': 'Ohne Geburtsdatum kein Tagesziel.',
   'dose.birthInFuture': 'Das Geburtsdatum liegt in der Zukunft – noch kein Tagesziel.',
   'dose.firstDay': 'Heute ist der 1. Lebenstag – noch kein Tagesziel.',
-  'dose.ruleExpired': 'Heute ist der {day}. Lebenstag – die Faustregel gilt bis zum {max}.',
-  'dose.afterRule': 'Ab jetzt zählt die empfohlene Menge von der Hebamme (unten).',
+  'dose.ruleExpired': 'Heute ist der {day}. Lebenstag – die Richtwerte der App gelten bis zum {max}.',
+  'dose.afterRule': 'Ab jetzt zählt die empfohlene Menge (unten) – zum Beispiel von der Mütter- und Väterberatung.',
   'dose.today': 'Heute ist der {day}. Lebenstag: {daily} ml am Tag, ≈ {share} ml pro Mahlzeit bei {meals} Mahlzeiten.',
+  // {weighed} = the day of the weighing («Heute», «Gestern», «Sa., 12. Sept.»)
+  'dose.todayByWeight':
+    'Heute ist der {day}. Lebenstag ({week}. Lebenswoche). Nach Gewicht ({grams} g · {weighed}): {daily} ml am Tag, ≈ {share} ml pro Mahlzeit bei {meals} Mahlzeiten.',
+  'dose.todayByAge':
+    'Heute ist der {day}. Lebenstag ({week}. Lebenswoche). Richtwert nach Alter: {daily} ml am Tag, ≈ {share} ml pro Mahlzeit bei {meals} Mahlzeiten.',
+  'dose.weightHint': 'Mit einem Gewichtseintrag aus den letzten {days} Tagen rechnet die App genauer.',
   'dose.manualApplies': 'Es gilt die empfohlene Menge: {ml} ml pro Mahlzeit.',
   'dose.manualOverrides': 'Es gilt aber die empfohlene Menge: {ml} ml.',
   'dose.birthDateSet': 'Geburtsdatum: {date}',
@@ -62,7 +72,7 @@ export default {
   'presets.resetDone': 'Schnellwahl auf Standard zurückgesetzt',
   'recommended.title': 'Empfohlene Menge',
   'recommended.hint':
-    'Eine feste Menge pro Mahlzeit, zum Beispiel von der Hebamme – gilt dann statt der Faustregel und erscheint als markierter Chip (★) im Schoppen-Formular. Leer lassen, solange die Regel gelten soll.',
+    'Eine feste Menge pro Mahlzeit, zum Beispiel von der Hebamme – gilt dann statt der berechneten Trinkmenge (oben), in jedem Alter, und erscheint als markierter Chip (★) im Schoppen-Formular. Leer lassen, solange die App rechnen soll.',
   'recommended.placeholder': 'z.B. 70',
   'recommended.inputLabel': 'Empfohlene Menge (ml)',
   'recommended.set': 'Empfohlene Menge: {ml} ml',

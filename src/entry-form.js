@@ -10,7 +10,7 @@ import { store } from './store.js';
 import { t } from './i18n/index.js';
 import { openSheet } from './sheet.js';
 import { WHO_LABELS } from './reminders.js';
-import { doseFor, supplementFor, FORMULA_MAX_LIFE_DAY } from './dose.js';
+import { doseFor, supplementFor, lastWeight, lifeWeek, GUIDE_MAX_LIFE_DAY } from './dose.js';
 import { nursingBeforeBottle } from './meals.js';
 import { zurichDateOf, shiftZurichDate } from './tz.js';
 import {
@@ -234,8 +234,9 @@ function readDetails(type, body, existing = null) {
 
 /**
  * The Schoppen form's target: the day's rule (dose.doseFor over the family
- * settings, for the Zurich day of the form's time — a Nachtragen for
- * yesterday gets yesterday's Lebenstag), what that day already had in the
+ * settings and the baby's last weight, for the Zurich day of the form's time
+ * — a Nachtragen for yesterday gets yesterday's Lebenstag and the weight
+ * known then), what that day already had in the
  * bottle (store.entries.range, the edited entry included as it stands), the
  * ★ chip that fills Muttermilch to the target, the «Rest» chip that fills the
  * formula up to it, and the sum line under the fields. Everything re-reads
@@ -254,6 +255,22 @@ function wireBottleDose(body, form, excludeEid) {
     return Number.isFinite(n) && n > 0 ? n : 0;
   };
   let rowsReady = false;
+
+  let weightMemo = null; // { day, weight } — one look through the rows per day, not per keystroke
+
+  /** The baby's last weight up to `day` (dose.lastWeight): from the decrypted
+   *  rows once they are in, from the cached snapshot's latest reading before that. */
+  function weightUpTo(day) {
+    if (!rowsReady) {
+      const last = store.snapshot && store.snapshot.data.lastByType && store.snapshot.data.lastByType.weight;
+      const weight = lastWeight(last ? [last] : []);
+      return weight && weight.date <= day ? weight : null;
+    }
+    if (!weightMemo || weightMemo.day !== day) {
+      weightMemo = { day, weight: lastWeight(store.entries.range('2000-01-01', day)) };
+    }
+    return weightMemo.weight;
+  }
 
   /** «Heute schon 190 ml im Schoppen (120 Muttermilch · 70 Formula)» for
    *  `day` — the other bottles of the day, not the one being edited. */
@@ -284,7 +301,8 @@ function wireBottleDose(body, form, excludeEid) {
     const at = fromLocalInput(form.startedAt.value) || isoNow();
     const day = zurichDateOf(at);
     const fam = store.settings.current;
-    const dose = doseFor(fam, day);
+    const weight = weightUpTo(day);
+    const dose = doseFor(fam, day, weight);
     // Nurse first, then top up: the nursing this bottle shares its meal with
     // takes the family's estimate off the target (dose.supplementFor) — once
     // the rows are in; before that the whole target stands, like the tally.
@@ -295,8 +313,9 @@ function wireBottleDose(body, form, excludeEid) {
     // What the ★ chips and the sum line aim for: the rest after nursing.
     const target = sup.remaining !== null && sup.remaining > 0 ? sup.remaining : null;
 
-    // The target line: the midwife's number, the rule's share, or why there
-    // is none (the rule's horizon passed; no birth date yet).
+    // The target line: the midwife's number, the day's share (by the first
+    // days' rule, by weight or by age), or why there is none (the rules'
+    // horizon passed; no birth date yet).
     let line;
     if (dose.source === 'manual') {
       line = dose.lifeDay
@@ -304,8 +323,12 @@ function wireBottleDose(body, form, excludeEid) {
         : t('forms.dose.manual', { ml: dose.mealMl });
     } else if (dose.source === 'formula') {
       line = t('forms.dose.rule', { day: dose.lifeDay, ml: dose.mealMl, daily: dose.dailyMl });
+    } else if (dose.source === 'weight') {
+      line = t('forms.dose.byWeight', { week: lifeWeek(dose.lifeDay), ml: dose.mealMl, daily: dose.dailyMl, grams: weight.grams });
+    } else if (dose.source === 'age') {
+      line = t('forms.dose.byAge', { week: lifeWeek(dose.lifeDay), ml: dose.mealMl, daily: dose.dailyMl });
     } else if (dose.source === 'expired') {
-      line = t('forms.dose.expired', { day: dose.lifeDay, maxDay: FORMULA_MAX_LIFE_DAY });
+      line = t('forms.dose.expired', { day: dose.lifeDay, maxDay: GUIDE_MAX_LIFE_DAY });
     } else if (dose.lifeDay === 1) {
       line = t('forms.dose.birthDay');
     } else {

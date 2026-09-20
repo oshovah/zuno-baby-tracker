@@ -31,7 +31,9 @@ export default {
   'dose.manual': 'Recommended: <b>{ml} ml</b> per meal',
   'dose.manualWithDay': 'Recommended: <b>{ml} ml</b> per meal · day {day} of life',
   'dose.rule': 'Day {day} of life · target <b>≈ {ml} ml</b> per meal ({daily} ml a day)',
-  'dose.expired': "Day {day} of life – the rule of thumb only runs to day {maxDay}: enter the midwife's amount under More › Settings.",
+  'dose.byWeight': 'Week {week} of life · target <b>≈ {ml} ml</b> per meal ({daily} ml a day by weight, {grams} g)',
+  'dose.byAge': 'Week {week} of life · target <b>≈ {ml} ml</b> per meal ({daily} ml a day, a guide by age)',
+  'dose.expired': "Day {day} of life – the app's guide values only run to day {maxDay}: enter the recommended amount under More › Settings.",
   'dose.birthDay': 'Day 1 of life – no daily target yet.',
   'dose.noBirthDate': 'No daily target – the birth date is set under More › Settings.',
   // … the day's tally ("Today already 190 ml from the bottle (120 breast milk · 70 formula).")

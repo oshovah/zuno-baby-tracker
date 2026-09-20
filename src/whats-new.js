@@ -15,6 +15,17 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-20',
+    de: [
+      'Die Trinkmenge rechnet jetzt auch nach dem 10. Lebenstag: ein Sechstel des Körpergewichts am Tag, nach eurem letzten Gewichtseintrag (Nachtragen › Gewicht) – höchstens 1000 ml am Tag und 230 ml pro Mahlzeit. Ohne Gewicht aus den letzten drei Wochen gilt ein Richtwert nach Alter. Eine empfohlene Menge von der Hebamme geht weiterhin vor.',
+      'Unter Mehr › Einstellungen steht «Empfohlene Menge» neu direkt unter «Trinkmenge».',
+    ],
+    en: [
+      'The feeding amount now keeps calculating after day 10 of life: a sixth of the body weight a day, from your last weight entry (Log › Weight) – at most 1000 ml a day and 230 ml per meal. Without a weight from the last three weeks a guide by age applies. An amount recommended by the midwife still comes first.',
+      'Under More › Settings, "Recommended amount" now sits right below "Feeding amount".',
+    ],
+  },
+  {
     id: '2026-09-18-b',
     de: [
       'Die App hat einen Namen: «Zuno – Baby Tracker». Unter dem App-Symbol steht er erst, wenn du die App neu zum Home-Bildschirm hinzufügst – nötig ist das nicht.',
