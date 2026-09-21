@@ -93,3 +93,55 @@ bt_test('art: helpers — the default folder, membership by name key, null users
     assert_false(bt_art_member(['private_art_family' => 'müller meier'], null), 'no user');
     assert_eq(bt_art_version(['private_art_family' => 'müller meier'], null), null);
 });
+
+bt_test('art: the capability link — files and the manifest for whoever holds the key, the same 404 for everything else, no session involved', function () {
+    $pdo = fresh_db();
+    $other = second_family($pdo);
+    $dir = art_dir(['favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'secret.txt']);
+    $opts = ['config' => ['private_art_family' => 'Testfamilie', 'private_art_dir' => $dir]];
+
+    // Before any member synced there is no key: guesses create nothing.
+    $pdo->exec("DELETE FROM settings WHERE key = 'art_key'");
+    assert_error(api_call('GET', '/art/k/' . str_repeat('0', 32) . '/icon-192.png', null, $opts), 404, 'Nicht gefunden', 'no key yet', 'request.notFound');
+    assert_eq(bt_setting($pdo, 'art_key'), null, 'a stranger never makes the key');
+
+    // Members get the key with the version; nobody else does.
+    login_as($pdo, $other['user']);
+    assert_false(array_key_exists('artKey', api_call('GET', '/sync?since=0', null, $opts)[1]), 'another family: no key');
+    login_as($pdo, me());
+    assert_false(array_key_exists('artKey', api_call('GET', '/sync?since=0')[1]), 'feature off: no key');
+    $page = api_call('GET', '/sync?since=0', null, $opts)[1];
+    $key = $page['artKey'] ?? null;
+    assert_true(is_string($key) && preg_match('/^[0-9a-f]{32}$/', $key) === 1, 'member: 32 hex digits');
+    assert_eq(api_call('GET', '/sync?since=0', null, $opts)[1]['artKey'], $key, 'stable');
+
+    // The link works WITHOUT a session — that is its point.
+    logout();
+    $res = api_call('GET', "/art/k/$key/icon-512.png", null, $opts);
+    assert_eq($res[0], 200);
+    assert_true($res[1] instanceof BtFileResponse, 'a file answer');
+    assert_eq($res[1]->path, $dir . '/icon-512.png');
+
+    $m = api_call('GET', "/art/k/$key/manifest.webmanifest", null, $opts);
+    assert_eq($m[0], 200);
+    assert_eq($m[1]['start_url'], '../../../../');
+    assert_eq($m[1]['scope'], '../../../../');
+    assert_eq($m[1]['id'], './', 'the same app id as the public manifest');
+    assert_eq($m[1]['short_name'], 'Zuno');
+    assert_eq(array_column($m[1]['icons'], 'src'), ['icon-192.png', 'icon-192.png', 'icon-512.png', 'icon-512.png']);
+    assert_eq(array_column($m[1]['icons'], 'purpose'), ['any', 'maskable', 'any', 'maskable']);
+
+    // Wrong key, unknown name, traversal, other verbs, feature off: the same 404 / 405.
+    $wrong = strrev($key) === $key ? str_repeat('1', 32) : strrev($key);
+    assert_error(api_call('GET', "/art/k/$wrong/icon-512.png", null, $opts), 404, 'Nicht gefunden', 'wrong key', 'request.notFound');
+    assert_error(api_call('GET', "/art/k/$key/secret.txt", null, $opts), 404, 'Nicht gefunden', 'a file outside the list', 'request.notFound');
+    assert_error(api_call('GET', "/art/k/$key/zuno.png", null, $opts), 404, 'Nicht gefunden', 'a listed name without a file', 'request.notFound');
+    assert_error(api_call('GET', "/art/k/$key/..%2Ficon-512.png", null, $opts), 404, 'Nicht gefunden', 'traversal', 'request.notFound');
+    assert_error(api_call('POST', "/art/k/$key/icon-512.png", [], $opts), 405, 'Methode nicht erlaubt', 'GET only', 'request.methodNotAllowed');
+    assert_error(api_call('GET', "/art/k/$key/icon-512.png"), 404, 'Nicht gefunden', 'feature off', 'request.notFound');
+
+    // No install icons in the folder: no manifest either (the public one stays in use).
+    $few = art_dir(['favicon.png']);
+    $fewOpts = ['config' => ['private_art_family' => 'Testfamilie', 'private_art_dir' => $few]];
+    assert_error(api_call('GET', "/art/k/$key/manifest.webmanifest", null, $fewOpts), 404, 'Nicht gefunden', 'no icons', 'request.notFound');
+});

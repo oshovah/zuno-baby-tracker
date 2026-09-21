@@ -328,7 +328,12 @@ One baby only — no `babies` table until reality demands it.
   behind a deny rule and leave the server only through this route, for that
   family's sessions — everyone and everything else gets the same 404. The
   family's sync pages carry `art` (a version string); the phone keeps its copy
-  per version (`src/art.js`) and drops it on logout.
+  per version (`src/art.js`) and drops it on logout. The install icon cannot
+  come through a session (the manifest and its icons are fetched without the
+  cookie, Android's install service downloads by URL): members also get
+  `artKey`, the installation's random key, and `GET /art/k/<key>/<name>`
+  serves the files and a `manifest.webmanifest` with the family's icons (same
+  start, scope and id) to whoever holds it — a wrong key is the same 404.
 
 ## Non-goals (don't build)
 

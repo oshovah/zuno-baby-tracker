@@ -29,11 +29,14 @@
  *   PATCH  /api/me                    {profileBlob} -> {ok, user}
  *   PATCH  /api/me/password           {currentAuthKey, authKey, kdf, fdkWrappedUser} -> {ok}
  *   PATCH  /api/families/password     {currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily} -> {ok}
- *   GET    /api/sync?since=&limit=    {serverNow, feed, rows, next[, reset][, art]}
+ *   GET    /api/sync?since=&limit=    {serverNow, feed, rows, next[, reset][, art, artKey]}
  *   POST   /api/entries               {eid, blob} -> 201 row (507 at the family's or the database's row cap)
  *   PATCH  /api/entries/:eid          {blob, ifSeq} -> row (409 when the seq moved)
  *   DELETE /api/entries/:eid          [{ifSeq}] -> row (soft delete; with a body, 409 when the seq moved)
  *   POST   /api/entries/:eid/restore  -> row
+ *   GET    /api/art/k/<key>/<name>    the same files plus `manifest.webmanifest` for whoever holds the
+ *                                     installation's random key (members get it as `artKey` on sync) —
+ *                                     what a browser fetches without the session: the install icon
  *   GET    /api/art/<name>            a private artwork file (image/png) for members of the configured
  *                                     family; the same 404 for everyone and everything else (lib/art.php)
  * User JSON everywhere: {username, familyId, familyName, profileBlob}; row
@@ -350,6 +353,12 @@ function bt_dispatch(PDO $pdo, array $config, string $method, array $segments, ?
         bt_require_method($method, ['GET']);
         return [200, bt_art_response($config, bt_current_user($pdo), $segments[1])];
     }
+    // The capability link for what a browser fetches without the session
+    // (the web manifest and the install icons): the key is the credential.
+    if (count($segments) === 4 && $segments[0] === 'art' && $segments[1] === 'k') {
+        bt_require_method($method, ['GET']);
+        return [200, bt_art_key_response($pdo, $config, $segments[2], $segments[3])];
+    }
 
     // --- authenticated (scoped to the user's family) --------------------------
 
@@ -429,6 +438,7 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
         $art = bt_art_version($config, $user);
         if ($art !== null) {
             $page['art'] = $art;
+            $page['artKey'] = bt_art_key($pdo);
         }
         return [200, $page];
     }

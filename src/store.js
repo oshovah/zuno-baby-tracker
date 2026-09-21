@@ -430,6 +430,7 @@ export function createStore(deps) {
   let decryptErrors = 0;
   let noticeType = null; // the entry type with two open timers too far apart (store.notice)
   let artVersion; // private artwork (src/art.js): undefined = no sync heard yet, null = none for us
+  let artKey = null; // … and the installation's capability key for the install icon (members only)
 
   let pollTimer = null;
   let inFlight = null; // the running sync
@@ -594,6 +595,7 @@ export function createStore(deps) {
     decryptErrors = 0;
     noticeType = null;
     artVersion = undefined;
+    artKey = null;
     snapshot = null;
     lastSyncTs = 0;
     lastDataKey = null;
@@ -833,6 +835,7 @@ export function createStore(deps) {
         // Members of the installation's artwork family get the version of
         // their pictures with every page; everyone else gets no key at all.
         artVersion = typeof page.art === 'string' && /^[0-9a-f]{6,64}$/.test(page.art) ? page.art : null;
+        artKey = artVersion && typeof page.artKey === 'string' && /^[0-9a-f]{32}$/.test(page.artKey) ? page.artKey : null;
         const pageFeed = typeof page.feed === 'string' && page.feed !== '' ? page.feed : null;
         if (pageFeed && feed && pageFeed !== feed) {
           // Another database behind the same URL (restored backup, re-run
@@ -1253,6 +1256,12 @@ export function createStore(deps) {
      *  answered yet on this start. main.js hands it to src/art.js. */
     get artVersion() {
       return artVersion;
+    },
+
+    /** The key of the capability link the install icon comes through
+     *  (api/lib/art.php), or null — only ever set together with artVersion. */
+    get artKey() {
+      return artKey;
     },
 
     entries,

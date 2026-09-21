@@ -52,7 +52,7 @@ labelShell();
 // Private artwork (src/art.js): a member's phone shows its kept pictures at
 // once; every sync page then says which version the server holds.
 applyKeptArt();
-store.subscribe(() => syncArt(store.artVersion));
+store.subscribe(() => syncArt(store.artVersion, store.artKey));
 
 let cleanup = null;
 let mode = 'boot'; // 'boot' | 'auth' | 'app'

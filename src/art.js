@@ -16,9 +16,14 @@
 // 404 (the CSP allows `img-src data:`). A logout or a 401 drops the copy —
 // on a login screen nobody is a member.
 //
-// What this cannot reach: an icon already on a home screen (iOS never
-// refreshes it) and the Android install icon, which comes from the public
-// web manifest.
+// The INSTALL icon needs a real URL that works without the session: Android
+// builds the installed app from the web manifest and has the icon downloaded
+// by URL, iOS reads the touch icon at «Zum Home-Bildschirm». Members get the
+// installation's capability key with the version (store.artKey); with it the
+// manifest link and the touch icon point at api/art/k/<key>/… instead
+// (api/lib/art.php). What this still cannot reach: an icon already on an iOS
+// home screen (never refreshed — remove and add again); an installed Android
+// app follows the manifest by itself after some days.
 
 const ART_KEY = 'bt.art';
 const MAX_PICTURE_BYTES = 256 * 1024; // what localStorage can take without crowding out the snapshot
@@ -42,7 +47,11 @@ export function artStep(keptVersion, serverVersion) {
   return keptVersion === serverVersion ? 'keep' : 'fetch';
 }
 
-/** The kept copy {v, icon?, touch?} or null — malformed or foreign values read as none. */
+const KEY_RE = /^[0-9a-f]{32}$/;
+const keyUrl = (k, name) => `api/art/k/${k}/${name}`;
+
+/** The kept copy {v, icon?, touch?, k?, m?} or null — malformed or foreign values read as none.
+ *  k = the capability key, m = the keyed manifest exists (the folder holds install icons). */
 export function readKept(storage) {
   try {
     const kept = JSON.parse(storage.getItem(ART_KEY) || 'null');
@@ -50,6 +59,10 @@ export function readKept(storage) {
     const out = { v: kept.v };
     for (const [key] of LINKS) {
       if (typeof kept[key] === 'string' && kept[key].startsWith('data:image/png;base64,')) out[key] = kept[key];
+    }
+    if (typeof kept.k === 'string' && KEY_RE.test(kept.k)) {
+      out.k = kept.k;
+      if (kept.m === true) out.m = true;
     }
     return out;
   } catch {
@@ -65,14 +78,29 @@ function storageOrNull() {
   }
 }
 
-/** Point the icon links at the kept pictures, or back at the public files (kept = null). */
+/** What each link points at for a kept copy (pure): the data: URLs, and with
+ *  a key the touch icon and the manifest as real URLs — null = the public file. */
+export function linkTargets(kept) {
+  const k = kept && kept.k ? kept.k : null;
+  return {
+    icon: (kept && kept.icon) || null,
+    touch: kept && kept.touch ? (k ? keyUrl(k, 'apple-touch-icon.png') : kept.touch) : null,
+    manifest: k && kept.m ? keyUrl(k, 'manifest.webmanifest') : null,
+  };
+}
+
+const SELECTORS = { icon: LINKS[0][1], touch: LINKS[1][1], manifest: 'link[rel="manifest"]' };
+
+/** Point the links at the kept pictures, or back at the public files (kept = null). */
 function applyLinks(kept) {
   if (typeof document === 'undefined') return;
-  for (const [key, selector] of LINKS) {
+  const targets = linkTargets(kept);
+  for (const [name, selector] of Object.entries(SELECTORS)) {
     const link = document.querySelector(selector);
     if (!link) continue;
     if (link.dataset.publicHref === undefined) link.dataset.publicHref = link.getAttribute('href') || '';
-    link.setAttribute('href', kept && kept[key] ? kept[key] : link.dataset.publicHref);
+    const href = targets[name] || link.dataset.publicHref;
+    if (link.getAttribute('href') !== href) link.setAttribute('href', href);
   }
 }
 
@@ -116,13 +144,16 @@ async function fetchPicture(url) {
  * Bring the kept copy in line with the server's version (store.artVersion).
  * Cheap and idempotent — the shell calls it on every store event.
  */
-export function syncArt(serverVersion) {
+export function syncArt(serverVersion, serverKey = null) {
   const storage = storageOrNull();
   if (!storage) return;
   const kept = readKept(storage);
-  const step = artStep(kept ? kept.v : null, serverVersion);
+  let step = artStep(kept ? kept.v : null, serverVersion);
+  // The same pictures under another key (or a first key): fetch again.
+  if (step === 'keep' && (kept.k || null) !== (serverKey || null)) step = 'fetch';
   if (step === 'drop') clearArt();
-  if (step !== 'fetch' || inFlight || failedVersion === serverVersion) return;
+  const attempt = `${serverVersion}|${serverKey || ''}`;
+  if (step !== 'fetch' || inFlight || failedVersion === attempt) return;
   inFlight = (async () => {
     try {
       const next = { v: serverVersion };
@@ -131,10 +162,17 @@ export function syncArt(serverVersion) {
         if (dataUrl) next[key] = dataUrl;
       }
       if (!next.icon && !next.touch) throw new Error('no picture');
+      if (serverKey && KEY_RE.test(serverKey)) {
+        next.k = serverKey;
+        // Only a manifest that answers replaces the public one — a folder
+        // without install icons has none, and the app must stay installable.
+        const res = await fetch(keyUrl(serverKey, 'manifest.webmanifest'), { cache: 'no-store' });
+        if (res.ok) next.m = true;
+      }
       storage.setItem(ART_KEY, JSON.stringify(next));
       applyLinks(next);
     } catch {
-      failedVersion = serverVersion; // offline, quota, an empty folder: the public icons stay
+      failedVersion = attempt; // offline, quota, an empty folder: the public icons stay
     } finally {
       inFlight = null;
     }

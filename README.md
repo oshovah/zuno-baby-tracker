@@ -133,8 +133,19 @@ else — logged out or in another family — sees the public icons and gets a 40
 on the route. So the code that runs is still exactly the code in this repo;
 only a few pictures differ.
 
-Limits: an icon that already sits on a home screen stays what it is, and the
-Android install icon always comes from the public web manifest.
+The install icon is the one thing a session cannot serve: a browser reads the
+web manifest and its icons without the page's cookie, and Android has the icon
+downloaded by URL from an install service. For that the family's phones get a
+capability link, `GET /api/art/k/<key>/…` — `<key>` is 32 random hex digits
+of the installation, handed to that family's sessions only; the link serves the
+same files plus a manifest that points at them (same app id). Whoever holds
+the link sees the pictures, nobody can guess it, and a wrong key is the same
+404. Know what that means before you use it: the install icon leaves your
+server, to that service.
+
+Limits: an icon that already sits on an iOS home screen stays what it is
+(remove the app and add it again); an installed Android app follows the
+manifest by itself after a few days.
 
 ## Licence
 
@@ -384,6 +395,7 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `PATCH /api/entries/:eid` | ✓ | `{blob, ifSeq}` → Datensatz (409, wenn ein anderes Gerät dazwischenkam) |
 | `DELETE /api/entries/:eid` | ✓ | Soft-Delete; optionaler JSON-Body `{ifSeq}` macht ihn bedingt (409, wenn ein anderes Gerät dazwischenkam) |
 | `POST /api/entries/:eid/restore` | ✓ | Soft-Delete rückgängig |
+| `GET /api/art/k/<key>/<name>` | – | Dieselben Bilder und `manifest.webmanifest` über den zufälligen Schlüssel der Installation (nur die Mitglieder jener Familie erhalten ihn, als `artKey` im Sync) — für das, was der Browser ohne Sitzung lädt: das Installations-Symbol. Falscher Schlüssel, unbekannter Name, Funktion aus: dasselbe 404 |
 | `GET /api/art/<name>` | (✓) | Privates Bildmaterial (`image/png`) für die Mitglieder der in `PRIVATE_ART_FAMILY` genannten Familie — für alle anderen, auch ohne Anmeldung, dasselbe 404 (siehe «Private artwork») |
 
 Fremde `eid`s → 404. Eintragstypen im Klartext des Blobs: `breastfeed {side,
