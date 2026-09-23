@@ -3,10 +3,11 @@
 // translation — one key per code, the key IS the code. The German text must
 // stay identical to the server's message (src/tests/api-codes.test.mjs
 // checks it): an older shell toasts that message verbatim, so both must
-// read the same. The first three are src/api.js's own: no answer at all.
+// read the same. The first four are src/api.js's own: no answer at all.
 export default {
   'network.offline': 'Du bist offline – bitte Internetverbindung prüfen',
   'network.unreachable': 'Keine Verbindung zum Server',
+  'network.unexpected': 'Unerwartete Antwort vom Server ({status}) – bitte gleich nochmals versuchen',
   'request.failed': 'Anfrage fehlgeschlagen ({status})',
 
   // the request itself (lib/http.php, index.php)

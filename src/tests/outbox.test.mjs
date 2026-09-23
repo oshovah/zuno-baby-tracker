@@ -218,21 +218,24 @@ test('overlay: ops fold in order — a follower sees its predecessor', () => {
   assert.equal(eff.get(EID).seq, PENDING_SEQ_BASE + 1);
 });
 
-test('classify: what an answer means for the op', () => {
+test('classify: what an answer means for the op — only the API\'s own (a status WITH a code) is a verdict', () => {
   const e = (status, code) => Object.assign(new Error('x'), status === null ? {} : { status, code });
   assert.equal(classify(e(null), 'create'), 'transient', 'no answer at all');
   assert.equal(classify(new Error('x'), 'update'), 'transient');
-  assert.equal(classify(e(500), 'create'), 'transient', 'may or may not have applied');
-  assert.equal(classify(e(502), 'create'), 'transient');
+  // A status without the API's code: a challenge page, a proxy's error page
+  // — something in between answered, not the API. Whatever it says: try later.
+  for (const s of [403, 404, 409, 400, 401, 429, 503, 507]) assert.equal(classify(e(s), 'create'), 'transient', `${s} without a code`);
+  assert.equal(classify(e(500, 'server.internal'), 'create'), 'transient', 'may or may not have applied');
+  assert.equal(classify(e(502, 'x.y'), 'create'), 'transient');
   assert.equal(classify(e(503, 'server.busy'), 'create'), 'notApplied');
   assert.equal(classify(e(429, 'request.writeBudget'), 'create'), 'notApplied');
   assert.equal(classify(e(401, 'auth.notLoggedIn'), 'create'), 'auth');
   assert.equal(classify(e(409, 'entries.exists'), 'create'), 'exists');
   assert.equal(classify(e(409, 'entries.conflict'), 'update'), 'conflict');
-  assert.equal(classify(e(409), 'remove'), 'conflict');
-  assert.equal(classify(e(404), 'update'), 'gone');
-  assert.equal(classify(e(404), 'restore'), 'gone');
-  for (const s of [400, 413, 415, 405, 507]) assert.equal(classify(e(s), 'create'), 'permanent', String(s));
+  assert.equal(classify(e(409, 'entries.conflict'), 'remove'), 'conflict');
+  assert.equal(classify(e(404, 'entries.notFound'), 'update'), 'gone');
+  assert.equal(classify(e(404, 'entries.notFound'), 'restore'), 'gone');
+  for (const s of [400, 413, 415, 405, 507]) assert.equal(classify(e(s, 'request.x'), 'create'), 'permanent', String(s));
 });
 
 test('reconcile: a create sends unless the eid is already confirmed; a dead op drops', () => {

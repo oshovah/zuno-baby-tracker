@@ -15,6 +15,17 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-23-d',
+    de: [
+      'Antwortet der Server mit einer Prüfseite («Anfrage wird geprüft»), wartet der Eintrag jetzt und wird später gesendet – er galt bisher fälschlich als abgelehnt.',
+      'Lehnt der Server einen Eintrag wirklich ab, schliesst sich das Formular: Der Eintrag bleibt auf dem Handy (siehe «Jetzt»), ein weiteres Speichern hätte ihn doppelt gemacht.',
+    ],
+    en: [
+      'When the server answers with a verification page ("checking your request"), the entry now waits and is sent later – it used to count as refused.',
+      'When the server really refuses an entry, the form closes: the entry stays on the phone (see "Now"), saving again would have made a duplicate.',
+    ],
+  },
+  {
     id: '2026-09-23-c',
     de: ['Der Durchschnitt im Kopf der Grafiken lässt den heutigen Tag weg – er ist noch nicht zu Ende und würde ihn drücken.'],
     en: ['The average in the head of the charts leaves today out – it is not over yet and would drag it down.'],

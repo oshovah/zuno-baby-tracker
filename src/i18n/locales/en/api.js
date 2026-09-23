@@ -3,6 +3,7 @@
 export default {
   'network.offline': "You're offline – please check your internet connection",
   'network.unreachable': 'No connection to the server',
+  'network.unexpected': 'Unexpected answer from the server ({status}) – please try again in a moment',
   'request.failed': 'Request failed ({status})',
 
   // the request itself (lib/http.php, index.php)

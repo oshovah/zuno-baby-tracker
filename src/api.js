@@ -8,6 +8,14 @@
 // to the login screen no matter which view was active (the shell ignores it
 // while the login screen itself is showing, so a wrong password just shows
 // its error inline).
+//
+// Only JSON counts as an answer. The API always sends
+// `application/json`; anything else — the hoster's «Anfrage wird geprüft»
+// challenge page, a proxy's error page, a deploy half done — is something
+// standing between the phone and the API, whatever its status says. Such an
+// answer is an Error WITHOUT `.status` (like no answer at all): the outbox
+// keeps the write and tries again later, and a 401 on such a page never
+// logs anybody out.
 
 import { t, hasKey } from './i18n/index.js';
 
@@ -32,11 +40,15 @@ async function request(path, { timeoutMs = TIMEOUT_MS, ...options } = {}) {
   } finally {
     clearTimeout(timer);
   }
+  if (!/^application\/json/i.test(res.headers.get('content-type') || '')) {
+    throw new Error(t('api.network.unexpected', { status: res.status }));
+  }
   let data = null;
   try {
     data = await res.json();
   } catch {
-    // Non-JSON body (proxy error page etc.) — fall through to status handling.
+    // A JSON content type without a JSON body: as good as no answer.
+    throw new Error(t('api.network.unexpected', { status: res.status }));
   }
   if (!res.ok) {
     if (res.status === 401 && typeof authEvents.onUnauthorized === 'function') {

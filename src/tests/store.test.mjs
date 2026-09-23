@@ -15,11 +15,25 @@ const minus = (mins) => new Date(NOW_MS - mins * 60000).toISOString().replace(/\
 
 // --- fakes ------------------------------------------------------------------------
 
-function httpError(status, message) {
+/** An error as src/api.js makes it from the server's envelope: status, message and the code the server named. */
+function httpError(status, message, code = CODE_OF[message] || 'test.error') {
   const e = new Error(message);
   e.status = status;
+  e.code = code;
   return e;
 }
+const CODE_OF = {
+  'Eintrag nicht gefunden': 'entries.notFound',
+  'Nicht gefunden': 'request.notFound',
+  'Eintrag existiert bereits': 'entries.exists',
+  'Der Eintrag wurde inzwischen auf einem anderen Gerät geändert': 'entries.conflict',
+  '"ifSeq" fehlt': 'request.missingField',
+  '"ifSeq" muss eine ganze Zahl sein': 'request.invalidField',
+  'Nicht angemeldet': 'auth.notLoggedIn',
+  'Zu viele Änderungen in kurzer Zeit': 'request.writeBudget',
+  'Ungültiger Datensatz': 'request.badBlob',
+  'Speicherlimit erreicht': 'entries.familyFull',
+};
 
 /** A settings.feed_id: the random 32-hex token that names one server database. */
 const newFeed = () => randomEid();
@@ -2014,4 +2028,42 @@ test('outbox: a slow server – the call resolves pending after the wait, the la
   assert.equal(p.store.entries.get(e.eid).pending, undefined);
   assert.equal(server.calls.filter((c) => c[0] === 'POST').length, 1);
   assert.ok(p.toasts.includes('1 gesendet'), 'a deferred op that drained is announced');
+});
+
+test('outbox: an answer that is not the API\'s — a challenge page, a proxy error — keeps the op and retries; a parked write tells a waiting form so', async () => {
+  const server = fakeServer();
+  const p = await online(phone(server, { settleWaitMs: 0 }), FDK_RAW);
+  // The hoster's «Anfrage wird geprüft» page: a status, no envelope, no code
+  // (src/api.js hands it on without a status; a stray status without a code
+  // reads the same).
+  let answer = Object.assign(new Error('Unerwartete Antwort vom Server (403) – bitte gleich nochmals versuchen'), { status: 403 });
+  server.hook = async (m) => {
+    if (m === 'POST' && answer) throw answer;
+  };
+  const e = await p.store.entries.create({ type: 'bottle', details: { colostrum_ml: 30 } });
+  assert.equal(e.pending, 'waiting');
+  await until(() => server.calls.some((c) => c[0] === 'POST'));
+  await new Promise((r) => setTimeout(r, 30)); // the attempt's tail: persist, notify, back off
+  assert.equal(p.store.outbox.parked, 0, 'not parked: the server did not judge it');
+  assert.equal(p.store.outbox.count, 1);
+  assert.ok(!p.toasts.some((m) => m.startsWith('Nicht gesendet')), 'no refusal announced');
+  answer = null;
+  await p.store.refresh();
+  await p.store.outbox.idle();
+  assert.equal(server.rows.has(e.eid), true, 'sent once the page is gone');
+  assert.equal(server.rows.size, 1);
+
+  // A refusal the API itself pronounced while the form waits: the promise
+  // rejects with `parked` (the form closes on it — a second tap would make a
+  // second entry), the op stays parked, once.
+  const q = await online(phone(server, { username: 'papa' }), FDK_RAW);
+  server.hook = async (m) => {
+    if (m === 'POST') throw httpError(400, 'Ungültiger Datensatz');
+  };
+  const err = await rejects(q.store.entries.create({ type: 'bottle', details: { colostrum_ml: 30 } }), 'Nicht gesendet: der Server hat Schoppen abgelehnt – siehe «Jetzt», nicht gesendete Einträge', 400);
+  assert.equal(err.parked, true);
+  assert.equal(err.code, 'request.badBlob');
+  assert.equal(q.store.outbox.parked, 1);
+  assert.equal(q.db.ops().length, 1);
+  server.hook = null;
 });

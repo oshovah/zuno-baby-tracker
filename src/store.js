@@ -1399,8 +1399,18 @@ export function createStore(deps) {
         op.parked = { status: err.status, code: err.code || null, message: err.message || '' };
         await persistOps([op]);
         notify(recompute({ persist: true }));
-        if (op.waiter) settleWaiter(op, null, err);
-        else toast(t('errors.store.outboxParked', { type: label(op.plain ? op.plain.type : (fresh || {}).type) }));
+        const type = label(op.plain ? op.plain.type : (fresh || {}).type);
+        if (op.waiter) {
+          // The entry is KEPT (parked): the caller must not offer another
+          // try that would make a second one — the forms close on `parked`.
+          const kept = fail(t('errors.store.outboxParked', { type }), err.status);
+          kept.code = err.code;
+          kept.parked = true;
+          kept.cause = err;
+          settleWaiter(op, null, kept);
+        } else {
+          toast(t('errors.store.outboxParked', { type }));
+        }
         return 'next';
       }
       // No answer, or one that says nothing was written: keep the op.

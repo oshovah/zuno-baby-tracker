@@ -216,8 +216,10 @@ export function overlay(confirmed, ops, today) {
 
 /**
  * What a failed request means for the op:
- *   transient   no answer, or one that may or may not have applied (5xx) —
- *               keep the op as it is, try later
+ *   transient   no answer, an answer without the API's error code (a proxy
+ *               or challenge page in between — src/api.js already treats a
+ *               non-JSON body so), or one that may or may not have applied
+ *               (5xx) — keep the op as it is, try later
  *   notApplied  a coded answer that says nothing was written (429, 503):
  *               keep, unfreeze
  *   auth        401: keep, wait for a login
@@ -228,7 +230,7 @@ export function overlay(confirmed, ops, today) {
  */
 export function classify(err, kind) {
   const status = err && Number.isInteger(err.status) ? err.status : null;
-  if (status === null) return 'transient';
+  if (status === null || typeof err.code !== 'string' || err.code === '') return 'transient';
   if (status === 401) return 'auth';
   if (status === 429 || status === 503) return 'notApplied';
   if (status === 507) return 'permanent'; // the row cap: nothing will change until rows are freed

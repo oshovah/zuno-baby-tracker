@@ -242,6 +242,14 @@ export function openReminderForm({ entry = null, onSaved = () => {} }) {
         close();
         onSaved();
       } catch (err) {
+        if (err && err.parked) {
+          // Kept on the phone, refused by the server: another tap would make
+          // a second one — the sheet goes, the outbox list has it.
+          toast(err.message);
+          close();
+          onSaved();
+          return;
+        }
         errEl.textContent = err.message;
         if (closeWhenMoved(err, () => (submit.disabled = false))) return;
         submit.disabled = false;
@@ -283,6 +291,12 @@ export function openReminderForm({ entry = null, onSaved = () => {} }) {
           close();
           onSaved();
         } catch (err) {
+          if (err && err.parked) {
+            toast(err.message);
+            close();
+            onSaved();
+            return;
+          }
           errEl.textContent = err.message;
           if (closeWhenMoved(err, () => (delBtn.disabled = false))) return;
           delBtn.disabled = false;
