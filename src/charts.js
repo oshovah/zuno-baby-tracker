@@ -14,8 +14,10 @@ const PAD = { l: 36, r: 10, t: 12, b: 20 };
 const GLYPH_W = 5.6;
 /** … and of a 9 px one: the value labels above the bars (.chart-bar-value). */
 const VALUE_GLYPH_W = 5;
+const VALUE_LINE_H = 9;
+const labelW = (label) => String(label).length * VALUE_GLYPH_W + 2;
 /** A value label is drawn only where it fits its bar (or its day's slot). */
-const fits = (label, width) => String(label).length * VALUE_GLYPH_W + 2 <= width;
+const fits = (label, width) => labelW(label) <= width;
 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
 
@@ -89,12 +91,14 @@ function guideHtml(p, scaleY, guide) {
  * by side (`'grouped'`). `guide` = { v, label } draws a dashed line;
  * `yFormat` labels the axis, `valueFormat` the per-bar tooltip, `labelFormat`
  * the number written above a bar — a phone has no hover, so the bars carry
- * their values: the day's total above a stack, each bar's own number above
- * grouped bars — wherever the number fits (a stack's total fits a 7-day and a
- * 14-day slot, a grouped bar only takes one or two digits; a 28-day range
- * shows one-digit counts). A number above a bar is always THAT bar's value:
- * no total above a grouped pair, it would read as the taller bar's.
- * `values: false` leaves them out.
+ * their values: the day's total above a stack (wherever it fits the day's
+ * slot: three digits on a 7- and a 14-day range, one on 28 days), each
+ * bar's own number above grouped bars — a label may be wider than its bar
+ * but never than its day, and where two labels would sit on top of each
+ * other (neighbouring bars of about the same height) the later one is left
+ * out. A number above a bar is always THAT bar's value: no total above a
+ * grouped pair, it would read as the taller bar's. `values: false` leaves
+ * them out.
  */
 export function barChart({ days, series, mode = 'stacked', guide = null, yFormat = fmt, valueFormat = fmt, labelFormat = fmt, xLabel = (d) => d, title = '', values = true }) {
   const n = days.length;
@@ -107,12 +111,10 @@ export function barChart({ days, series, mode = 'stacked', guide = null, yFormat
   const slot = p.w / Math.max(n, 1);
   const bars = [];
   const valueLabels = [];
+  const candidates = []; // grouped: every bar's label, placed after the collision check
   const bw = mode === 'stacked' ? slot * 0.62 : (slot * 0.72) / Math.max(series.length, 1);
   const valueText = (x, y, label) =>
     `<text class="chart-bar-value" x="${fmt(x)}" y="${fmt(y - 3)}" text-anchor="middle">${escapeHtml(label)}</text>`;
-  // Grouped: one rule for the whole chart — the widest number decides for all.
-  const widest = Math.max(0, ...series.flatMap((sr) => sr.values.filter((v) => v > 0).map((v) => String(labelFormat(v)).length)));
-  const perBar = mode === 'grouped' && widest * VALUE_GLYPH_W + 2 <= bw;
   days.forEach((day, i) => {
     let stackTop = 0;
     series.forEach((sr, si) => {
@@ -125,13 +127,25 @@ export function barChart({ days, series, mode = 'stacked', guide = null, yFormat
       bars.push(
         `<rect class="chart-bar ${escapeHtml(sr.cls || '')}" x="${fmt(x)}" y="${fmt(y1)}" width="${fmt(bw)}" height="${fmt(Math.max(1, y0 - y1))}"><title>${escapeHtml(`${xLabel(day)} · ${sr.label}: ${valueFormat(v)}`)}</title></rect>`
       );
-      if (values && perBar) valueLabels.push(valueText(x + bw / 2, y1, labelFormat(v)));
+      if (values && mode === 'grouped') {
+        const label = labelFormat(v);
+        candidates.push({ cx: x + bw / 2, y: y1, w: labelW(label), label });
+      }
     });
     if (values && mode === 'stacked' && stackTop > 0) {
       const label = labelFormat(stackTop);
       if (fits(label, slot)) valueLabels.push(valueText(p.x + i * slot + slot / 2, scaleY(stackTop), label));
     }
   });
+  // Grouped labels, left to right: never wider than the day's slot, and not
+  // over a label already placed (side by side AND at about the same height).
+  const placed = [];
+  for (const c of candidates) {
+    if (c.w > slot) continue;
+    if (placed.some((k) => Math.abs(k.cx - c.cx) < (k.w + c.w) / 2 && Math.abs(k.y - c.y) < VALUE_LINE_H)) continue;
+    placed.push(c);
+    valueLabels.push(valueText(c.cx, c.y, c.label));
+  }
   const every = Math.ceil(n / 7);
   const labels = days
     .map((day, i) => (i % every === 0 || i === n - 1 ? `<text class="chart-axis" x="${fmt(p.x + i * slot + slot / 2)}" y="${CHART_H - 6}" text-anchor="middle">${escapeHtml(xLabel(day))}</text>` : ''))

@@ -59,18 +59,21 @@ test('barChart: a value label only where it fits — one-digit counts on 28 days
   assert.deepEqual(labelsOf(ml(7, 'stacked')).slice(0, 2), ['160', '160']);
   assert.equal(labelsOf(ml(14, 'stacked')).length, 14, '«160» fits a 14-day slot');
   assert.equal(labelsOf(ml(28, 'stacked')).length, 0, 'not a 28-day one');
-  // Grouped: each bar its own number when the widest of them fits a bar —
-  // one rule per chart, never a total above a pair (it would read as the
-  // taller bar's value).
-  const counts2 = (n) => barChart({ days: days(n), series: [{ label: 'w', values: days(n).map(() => 5), cls: 'diaper' }, { label: 's', values: days(n).map(() => 2), cls: 'measure' }], mode: 'grouped' });
-  assert.deepEqual(labelsOf(counts2(7)).slice(0, 2), ['5', '2']);
-  assert.deepEqual(labelsOf(counts2(14)).slice(0, 2), ['5', '2'], 'a digit fits a 14-day grouped bar');
-  assert.equal(labelsOf(counts2(28)).length, 0, 'not a 28-day one');
-  const two = (n) => barChart({ days: days(n), series: [{ label: 'b', values: days(n).map(() => 90), cls: 'milk' }, { label: 'f', values: days(n).map(() => 70), cls: 'formula' }], mode: 'grouped' });
-  assert.deepEqual(labelsOf(two(7)).slice(0, 2), ['90', '70'], 'two digits fit a 7-day grouped bar');
-  assert.equal(labelsOf(two(14)).length, 0);
-  assert.equal(labelsOf(ml(7, 'grouped')).length, 0, 'three digits never fit a grouped bar');
-  assert.equal(labelsOf(ml(14, 'grouped')).length, 0);
+  // Grouped: each bar its own number — wider than the bar is fine, wider
+  // than the day is not, and a label that would sit on one already placed
+  // (side by side, about the same height) is left out. Never a total above
+  // a pair: it would read as the taller bar's value.
+  const grouped = (n, a, b) => barChart({ days: days(n), series: [{ label: 'w', values: days(n).map(() => a), cls: 'diaper' }, { label: 's', values: days(n).map(() => b), cls: 'measure' }], mode: 'grouped' });
+  assert.deepEqual(labelsOf(grouped(7, 5, 2)).slice(0, 2), ['5', '2']);
+  assert.deepEqual(labelsOf(grouped(14, 5, 2)).slice(0, 2), ['5', '2']);
+  assert.deepEqual(labelsOf(grouped(14, 10, 2)).slice(0, 2), ['10', '2'], 'a two-digit count on 14 days: heights differ, both stay');
+  assert.deepEqual(labelsOf(grouped(14, 10, 10)), days(14).map(() => '10'), 'the same height: the later one is left out');
+  assert.deepEqual(labelsOf(grouped(28, 5, 2)).slice(0, 2), ['5', '2'], 'one digit on 28 days, at different heights');
+  assert.equal(labelsOf(grouped(28, 6, 6)).length, 28, 'the same height on 28 days: one per day');
+  assert.deepEqual([...new Set(labelsOf(grouped(28, 12, 3)))], ['3'], 'two digits are wider than a 28-day slot, the one-digit neighbour still shows');
+  assert.deepEqual(labelsOf(ml(7, 'grouped')).slice(0, 2), ['120', '40'], 'three digits on 7 days: wider than the bar, narrower than the day');
+  assert.deepEqual(labelsOf(ml(14, 'grouped')).slice(0, 2), ['120', '40'], '… and on 14 days, the heights differ');
+  assert.equal(labelsOf(ml(28, 'grouped')).length, 0);
 });
 
 test('barChart: grouped bars sit side by side, nothing for zero, labels escaped', () => {

@@ -300,13 +300,14 @@ export function renderHistory(el) {
           title('bottleMl'),
           barChart({
             days,
-            // Side by side in two colours: how much came from the breast and
-            // how much was formula is the question, not the day's total.
+            // Stacked in two colours: the split shows in the bar, the number
+            // above it is the day's total — three digits fit a 14-day slot,
+            // never a grouped half bar (the exact split per day is on the
+            // «Mahlzeiten» view).
             series: [
               { label: t('common.milk.breast'), values: stats.map((r) => r.bottleMl.breast), cls: 'milk' },
               { label: formula, values: stats.map((r) => r.bottleMl.formula), cls: 'formula' },
             ],
-            mode: 'grouped',
             xLabel: dayNum,
             yFormat: unit,
             valueFormat: unit,
