@@ -559,10 +559,11 @@ export function openEntryForm({ type, entry = null, onSaved = () => {} }) {
       }
     });
 
-    /** Has the entry this form was opened from moved on (edited or deleted elsewhere)? */
+    /** Has the entry this form was opened from moved on (edited or deleted
+     *  on the OTHER phone)? Our own write landing meanwhile does not count. */
     function rowMoved() {
       const cur = store.entries.get(entry.eid);
-      return !cur || cur.deletedAt != null || cur.seq !== entry.seq;
+      return !cur || cur.deletedAt != null || store.entries.changedSince(entry.eid, entry.seq);
     }
 
     /**

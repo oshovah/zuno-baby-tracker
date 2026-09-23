@@ -507,6 +507,7 @@ export function renderMore(el) {
 
       <h2 class="section-title">${t('more.logout.action')}</h2>
       <p class="hint">${t('more.logout.hint')}</p>
+      <p class="hint danger-text" data-logout-hint hidden></p>
       <button type="button" class="btn wide" data-logout>${t('more.logout.action')}</button>
 
       <p class="group-label" data-family-group>${t('more.family.group', { name: escapeHtml((user && user.familyName) || '') })}</p>
@@ -1129,9 +1130,33 @@ export function renderMore(el) {
     // session.logout wipes this device (key, IndexedDB, snapshot, prefs) no
     // matter what the server says: handing the phone away must be safe. A
     // failed revoke only means the cookie expires on its own.
+    // Writes still in the outbox would go with the wipe: try to send them
+    // first, then ask — the second tap within a few seconds logs out anyway.
     const logoutBtn = el.querySelector('[data-logout]');
+    const logoutHint = el.querySelector('[data-logout-hint]');
+    let logoutArmedUntil = 0;
     logoutBtn.addEventListener('click', async () => {
       logoutBtn.disabled = true;
+      if (store.outbox.count + store.outbox.parked > 0 && Date.now() > logoutArmedUntil) {
+        logoutBtn.textContent = t('more.logout.sending');
+        await store.refresh().catch(() => {});
+        await store.outbox.flush().catch(() => {});
+        if (disposed) return;
+        const left = store.outbox.count + store.outbox.parked;
+        if (left > 0) {
+          logoutArmedUntil = Date.now() + 8000;
+          logoutHint.hidden = false;
+          logoutHint.textContent = tn('more.logout.pending', left);
+          logoutBtn.textContent = t('more.logout.anyway');
+          logoutBtn.disabled = false;
+          setTimeout(() => {
+            if (disposed || Date.now() < logoutArmedUntil) return;
+            logoutHint.hidden = true;
+            logoutBtn.textContent = t('more.logout.action');
+          }, 8100);
+          return;
+        }
+      }
       logoutBtn.textContent = t('more.logout.progress');
       let serverFailed = false;
       try {

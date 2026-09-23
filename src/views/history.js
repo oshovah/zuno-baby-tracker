@@ -176,7 +176,9 @@ export function renderHistory(el) {
         return;
       }
       fromDate = from; // only advance the range once the read succeeded
-      const j = JSON.stringify(list);
+      // The seq is not rendered (a write landing must not rebuild the list
+      // under a finger); the outbox state only as far as the row shows it.
+      const j = JSON.stringify(list, (k, v) => (k === 'seq' ? undefined : k === 'pending' ? (v === 'parked' ? v : v ? 'pending' : v) : v));
       // Unchanged data: skip the rebuild — the 60 s poll must not replace the
       // row under the user's finger for nothing.
       if (entries === null || j !== lastJson || opts.forceRender) {
@@ -410,9 +412,19 @@ export function renderHistory(el) {
       groups.get(day).push(it);
     }
 
-    // The row's second line: what was in a Schoppen (ui.entryDetail), then who logged it.
+    // The row's second line: what was in a Schoppen (ui.entryDetail), then
+    // who logged it — and, for a write still in the outbox, that it waits for
+    // the network (or that the server refused it).
+    const pendingMark = (e) =>
+      e.pending === 'waiting' || e.pending === 'sending'
+        ? `<span class="pending">${t('history.pending.waiting')}</span>`
+        : e.pending === 'parked'
+          ? `<span class="pending parked">${t('history.pending.parked')}</span>`
+          : '';
     const subLine = (e) => {
       const parts = [entryDetail(e), e.loggedBy || ''].filter(Boolean).map(escapeHtml);
+      const mark = pendingMark(e);
+      if (mark) parts.push(mark);
       return parts.length ? `<span class="e-by">${parts.join(' · ')}</span>` : '';
     };
     const rowHtml = (e, cls = '') => `

@@ -21,7 +21,7 @@ applyTheme(prefs.theme);
 applyScheme(prefs.scheme);
 setLocale(detectLocale(prefs.lang, navigator.languages || [navigator.language]));
 import { decryptProfile } from './crypto.js';
-import { toast, isFeedingNow } from './ui.js';
+import { toast, setToastHint, isFeedingNow } from './ui.js';
 import { closeActiveSheet } from './sheet.js';
 import { renderLogin } from './views/login.js';
 import { renderHome } from './views/home.js';
@@ -146,6 +146,11 @@ function startApp() {
   mode = 'app';
   tabbar.hidden = false;
   store.start();
+  // Writes made without network wait in IndexedDB (the outbox): ask the
+  // browser not to evict the site's storage under pressure. Best effort, once.
+  if (navigator.storage && typeof navigator.storage.persist === 'function') {
+    navigator.storage.persist().catch(() => {});
+  }
   // The store can lock SYNCHRONOUSLY inside start() (the "logged in" flag is
   // set but there is no account data on this device); the subscriber below
   // then already swapped to the login screen. Painting the home view over it
@@ -300,6 +305,10 @@ async function resumeFromCookie(user) {
 // (ignored while the login screen itself is up, so a wrong password just
 // shows its inline error). prefs.user is kept on purpose: the login form
 // prefills the username from it.
+// «… · wartet auf Netz» on every success toast while the outbox holds
+// something: a save made without network is a save on this phone.
+setToastHint(() => (store.outbox.count > 0 ? t('common.outbox.toastHint') : ''));
+
 authEvents.onUnauthorized = () => {
   if (mode !== 'auth') {
     prefs.authed = false;

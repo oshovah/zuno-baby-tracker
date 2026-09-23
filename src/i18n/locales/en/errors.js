@@ -85,4 +85,9 @@ export default {
   'store.invalidUser': 'Invalid user',
   'store.duplicateTimers': 'Two {type} timers open – please stop one in History',
   'store.duplicateRemoved': 'Duplicate {type} timer removed',
+  // The outbox (src/outbox.js): what happened to a write made without network
+  'store.outboxSent': '{n} sent',
+  'store.outboxDropped': 'Not applied: {type} was ended or changed on the other phone meanwhile',
+  'store.outboxGone': 'Not applied: {type} was deleted on the other phone meanwhile',
+  'store.outboxParked': 'Not sent: the server refused {type} – see "Now", entries not sent',
 };

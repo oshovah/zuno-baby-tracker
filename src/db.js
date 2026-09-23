@@ -4,7 +4,11 @@
 //           updatedAt, deletedAt}), keyPath eid, index seq.
 //   meta  — {k, v} records: cursor (last synced seq), identity (the
 //           username the rows belong to), feed (the server database the
-//           rows came from) and the daily key under 'fdk' (see keys.js).
+//           rows came from), the daily key under 'fdk' (see keys.js) and
+//           the outbox — one 'op:<n>:<rand>' record per write still to send
+//           (src/outbox.js; ciphertext only). Kept in meta on purpose: no
+//           version bump, so a shell rolled back to an older release still
+//           opens the database (an older shell just never reads the keys).
 //
 // Every function returns a promise and REJECTS when IndexedDB is missing,
 // blocked, hung (openDb gives up after 3 s) or broken — callers decide what
@@ -226,6 +230,44 @@ export function setMeta(k, v) {
 export function deleteMeta(k) {
   return withTxn([META], 'readwrite', (tx) => {
     tx.objectStore(META).delete(k);
+  });
+}
+
+const OP_PREFIX = 'op:';
+
+/** Every outbox op ({k, v} → v with `key` = k), oldest first (the key sorts by n). */
+export function getAllOps() {
+  return withTxn([META], 'readonly', (tx) => {
+    const box = { ops: [] };
+    const range = IDBKeyRange.bound(OP_PREFIX, OP_PREFIX + '\uffff', false, true);
+    whenDone(tx.objectStore(META).getAll(range), (recs) => {
+      box.ops = (recs || []).map((r) => ({ ...r.v, key: r.k }));
+    });
+    return box;
+  }).then((box) => box.ops);
+}
+
+/** Persist ops (each carries its `key`) and delete others — one transaction. */
+export function putOps(ops, deleteKeys = []) {
+  return withTxn([META], 'readwrite', (tx) => {
+    const meta = tx.objectStore(META);
+    for (const k of deleteKeys) meta.delete(k);
+    for (const op of ops) {
+      const { key, ...v } = op;
+      meta.put({ k: key, v });
+    }
+  });
+}
+
+export function deleteOps(keys) {
+  return putOps([], keys);
+}
+
+/** A write confirmed: the returned row into the mirror and the op out of it, in ONE transaction. */
+export function confirmOp(row, key) {
+  return withTxn([ROWS, META], 'readwrite', (tx) => {
+    if (row) putIfNewer(tx.objectStore(ROWS), row);
+    if (key) tx.objectStore(META).delete(key);
   });
 }
 

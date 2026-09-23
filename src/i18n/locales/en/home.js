@@ -28,6 +28,13 @@ export default {
   'stale.title': 'Last update',
   'stale.today': 'As of {time}',
   'stale.yesterday': 'As of yesterday {time}',
+  // The outbox chip in the stale chip's slot (src/outbox.js): writes made without network
+  // Short: the chip shares the hero's top edge with its label
+  'outbox.waiting.one': '1 unsent',
+  'outbox.waiting.other': '{n} unsent',
+  'outbox.parked.one': '1 refused',
+  'outbox.parked.other': '{n} refused',
+  'outbox.chipAria': 'Show entries not sent yet',
   'stale.onDate': 'As of {day}/{month} {time}',
   // The mini cards (diaper, sleep); {span} = "12 min" / "1½ h" / "a moment" (ui.fmtAgoBareShort)
   'card.lastDiaperAgo': 'Last diaper',

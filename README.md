@@ -48,9 +48,11 @@ entry = base64url(0x01 ‖ iv ‖ AES-GCM(key, iv, AAD "bt1|<familyId>|<eid>", p
 ```
 
 On the phone the family data key lives in IndexedDB as a **non-extractable**
-WebCrypto key. The family password is a one-time invite: the phone that joins
-replaces it with random credentials in the same transaction, so a guessed or
-passed-on family password opens nothing afterwards.
+WebCrypto key, next to the ciphertext mirror of the family's rows and the
+outbox — writes made without network, kept as ciphertext until they are sent.
+The family password is a one-time invite: the phone that joins replaces it
+with random credentials in the same transaction, so a guessed or passed-on
+family password opens nothing afterwards.
 
 **Where to check it**
 
@@ -189,6 +191,11 @@ SQLite auf Shared Hosting (cyon). Produktentscheide stehen in
   «Jetzt»-Ansicht selbst. Die App synchronisiert im Vordergrund (~60 s) und
   beim Fokuswechsel; laufende Timer liegen in den Datensätzen und lassen sich
   vom anderen Handy stoppen (ein veralteter Stopp wird abgewiesen).
+- **Ohne Netz:** Erfassen geht trotzdem — der Eintrag wird verschlüsselt auf
+  dem Handy gespeichert («wartet auf Netz»), sofort angezeigt und gesendet,
+  sobald Zuno offen ist und wieder Netz hat. Hat das andere Handy denselben
+  Eintrag inzwischen beendet, geändert oder gelöscht, gilt dessen Stand, und
+  das Handy sagt es. Gesendet wird nur, solange die App offen ist.
 
 ## Setup (lokal)
 

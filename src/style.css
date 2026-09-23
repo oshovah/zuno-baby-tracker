@@ -627,6 +627,46 @@ button.mini:active {
   white-space: nowrap;
 }
 
+.hint.danger-text {
+  color: var(--danger);
+}
+
+/* --- the outbox sheet («Noch nicht gesendet») --- */
+
+.outbox-row {
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.outbox-row.parked .e-by {
+  color: var(--danger);
+}
+
+.outbox-actions {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.outbox-actions .chip {
+  padding: 8px 14px;
+}
+
+.chip.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* A Verlauf row still waiting for the network / refused by the server. */
+.e-by .pending {
+  color: var(--muted);
+}
+
+.e-by .pending.parked {
+  color: var(--danger);
+}
+
 /* A tick awaiting its second tap («Nochmals tippen: Haken weg»). */
 .todo-row.armed {
   border-color: var(--danger);
@@ -651,6 +691,31 @@ button.mini:active {
   position: absolute;
   top: 10px;
   right: 12px;
+}
+
+/* The outbox chip takes the stale chip's slot while something waits for the
+   network: the same pill, but a button that opens the list. */
+.hero-wrap .outbox-chip {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.outbox-chip.parked {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Invisible hit-area extension, like the timer chip's. */
+.outbox-chip::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
 }
 
 /* The local stopwatch chip — mirrors the stale chip on the hero's left. */

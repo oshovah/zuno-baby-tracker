@@ -24,3 +24,4 @@ baby-tracker-export-*.json
 # Artwork an installation shows to ONE family only (README › Private
 # artwork): packaged and served behind the session, never published.
 private-art/
+/.e2e/

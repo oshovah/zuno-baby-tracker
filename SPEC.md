@@ -68,8 +68,8 @@ all three with no logged-in device and the data is gone — by design.
 ## Sync model
 
 The server is the single source of truth for the encrypted rows; each phone
-keeps a decrypted copy in memory and a ciphertext mirror in IndexedDB. No
-offline-first complexity:
+keeps a decrypted copy in memory and a ciphertext mirror in IndexedDB — plus
+an **outbox** of what it still owes the server:
 
 - Incremental sync (`GET /sync?since=<seq>`) when the app gains focus and
   every ~60 s while open, so a timer started on one phone shows up on the
@@ -77,8 +77,34 @@ offline-first complexity:
 - Running timers are open entries (`endedAt: null`) inside the blobs; they
   survive reloads and appear on both phones.
 - Writes are compare-and-swap on `seq`: a stale stop/edit gets a 409, the
-  phone re-syncs and retries once when its precondition (e.g. "still open")
-  still holds.
+  phone re-syncs and judges the write again on the fresh row.
+- Every entry write is an *op* first (`src/outbox.js`, `src/store.js`):
+  encrypted, persisted in IndexedDB (ciphertext only, in the `meta` store —
+  no schema version bump, so an older shell still opens the database) and
+  laid over the confirmed rows at once, so the entry shows before the server
+  has it and a tap works without network. The caller waits up to 3 s for the
+  op's first answer (online that is the normal case and the returned entry
+  carries the real `seq`); after that, or without network, the call resolves
+  with the pending entry and the *flusher* sends the ops in order whenever
+  there is network — after every sync, on `online`, on focus, on the poll.
+  Ops on one entry fold together (start + stop offline = one closed row); an
+  op whose request already left is frozen, later changes follow it. Before
+  an op is sent it is judged against the fresh confirmed row: a create whose
+  eid is already there landed (a lost answer — the blob proves it); a
+  guarded op (the timer must still be open / duration-less / paused) whose
+  guard no longer holds is dropped with a notice; an edit of a row the
+  partner changed meanwhile is re-laid over the fresh row with only the
+  fields this device changed; an edit of a row the partner deleted is
+  dropped with a notice; a delete wins over an edit; a pending open timer
+  loses to the partner's confirmed one within 15 min without a request. A
+  request the server refuses for good (400, 507) parks the op — it stays
+  visible until the user retries or discards it. Family settings and the
+  duplicate-timer resolver go straight to the server (no outbox).
+- The outbox survives reloads and a re-login of the same user; logout (after
+  a warning when something still waits) and a login as another account wipe
+  it with the rest of the device's data. It is flushed in the foreground
+  only — iOS has no Background Sync and the key is only usable while the
+  app is open — and the service worker never touches `/api/`.
 - Day windows: "today" counts use the Europe/Zurich day, history groups by
   device-local day.
 
@@ -95,7 +121,9 @@ need the network:
   ciphertext + in-memory plaintext) and painted immediately with a freshness
   stamp ("Stand: 14:32") — the last completed sync — then refreshed in the
   background (stale-while-revalidate). Stale data is clearly marked as stale.
-- Writes require network. On failure: clear visible error, no offline queue.
+- Writes work without network: kept in the outbox, shown at once, sent by
+  themselves when the network is back («Jetzt» counts what still waits, a
+  tap on the count lists it; a Verlauf row says «wartet auf Netz»).
 
 ## What gets tracked
 
@@ -337,8 +365,8 @@ One baby only — no `babies` table until reality demands it.
 
 ## Non-goals (don't build)
 
-- Offline *writes* (queueing/sync of entries logged without network) — shell
-  caching and stale-state display are in scope, see Performance & caching
+- Background sending (a queued write leaves the phone only while Zuno is
+  open — no Background Sync, no push)
 - Push notifications (the reminders are in-app only: the home screen shows
   what is due, nothing rings)
 - Multiple babies, roles/permissions (every family member is equal), admin
@@ -352,6 +380,11 @@ One baby only — no `babies` table until reality demands it.
 - On a phone: log Stillen in one tap, a Windel in one tap (Pipi / Gaggi /
   Beides), and see "seit letzter Mahlzeit" update on the home view.
 - A timer started on phone A can be stopped from phone B.
+- Without network: a Windel, a Schlaf start, a Stillen stop and an edit are
+  kept, shown, and sent by themselves once the network is back; a stop the
+  other phone already did and an edit of a row it deleted are dropped with
+  a notice, the other phone sees every entry exactly once (`npm run
+  e2e:offline`).
 - Editing and deleting an entry works from the history view.
 - API tests cover sync paging, compare-and-set writes (PATCH and
   conditional DELETE), soft delete/restore, the schema migration and auth; node model tests cover crypto, the local model (day

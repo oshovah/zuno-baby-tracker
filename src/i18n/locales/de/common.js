@@ -2,6 +2,8 @@
 // sheet has. Views reach for these before adding a key of their own.
 export default {
   'type.breastfeed': 'Stillen',
+  // Appended to success toasts while writes wait in the outbox («… · wartet auf Netz»)
+  'outbox.toastHint': 'wartet auf Netz',
   'type.bottle': 'Schoppen',
   'type.diaper': 'Windel',
   'type.sleep': 'Schlaf',

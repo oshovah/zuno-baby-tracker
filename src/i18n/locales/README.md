@@ -87,6 +87,7 @@ list first so the same thing reads the same on every screen.
 | Mama · Papa                   | Mom · Dad                |
 | Min. · Std. · Tagen           | min · h · days           |
 | Heute · Gestern · gerade eben | Today · Yesterday · just now |
+| wartet auf Netz · ungesendet · abgelehnt | waiting for network · unsent · refused |
 | Speichern · Abbrechen · Löschen · Rückgängig · Schliessen | Save · Cancel · Delete · Undo · Close |
 
 ## How the code reads a string

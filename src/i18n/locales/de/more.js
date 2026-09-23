@@ -150,6 +150,10 @@ export default {
   'logout.action': 'Abmelden',
   'logout.hint': 'Entfernt Schlüssel und Einträge von diesem Gerät – auf dem Server bleiben sie verschlüsselt erhalten.',
   'logout.progress': 'Wird abgemeldet …',
+  'logout.sending': 'Sendet noch offene Einträge …',
+  'logout.pending.one': '1 Eintrag ist noch nicht gesendet und geht beim Abmelden verloren.',
+  'logout.pending.other': '{n} Einträge sind noch nicht gesendet und gehen beim Abmelden verloren.',
+  'logout.anyway': 'Trotzdem abmelden',
   'logout.serverFailed': 'Lokal abgemeldet – die Server-Sitzung läuft von selbst ab',
   // --- Konto: the family half ---
   'family.group': 'Familie {name}',

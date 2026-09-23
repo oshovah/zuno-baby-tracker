@@ -13,7 +13,8 @@
     "package": "node scripts/package.mjs",
     "deploy": "node scripts/deploy.mjs",
     "preview": "php -S 127.0.0.1:8081 scripts/preview-router.php",
-    "screenshots": "node scripts/make-screenshots.mjs"
+    "screenshots": "node scripts/make-screenshots.mjs",
+    "e2e:offline": "node scripts/e2e-offline.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

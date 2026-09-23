@@ -53,6 +53,7 @@ function fakeServer() {
     rows,
     calls,
     offline: false,
+    lose: false, // the next write lands on the server, but its answer is lost on the way back
     hook: null,
     feed: newFeed(),
     get maxSeq() {
@@ -110,7 +111,12 @@ function fakeServer() {
         if (server.offline) throw new Error('Keine Verbindung zum Server');
         if (path === 'api/entries') {
           if (rows.has(body.eid)) throw httpError(409, 'Eintrag existiert bereits');
-          return json(server.put({ eid: body.eid, blob: body.blob }));
+          const res = json(server.put({ eid: body.eid, blob: body.blob }));
+          if (server.lose) {
+            server.lose = false;
+            throw new Error('Keine Verbindung zum Server');
+          }
+          return res;
         }
         const m = /^api\/entries\/([0-9a-f]{32})\/restore$/.exec(path);
         if (m) {
@@ -137,6 +143,10 @@ function fakeServer() {
         r.smuggled = null;
         r.seq = next();
         r.updatedAt = TODAY;
+        if (server.lose) {
+          server.lose = false;
+          throw new Error('Keine Verbindung zum Server');
+        }
         return json(r);
       },
       /** DELETE with an optional JSON body {ifSeq}: compare-and-set like PATCH. */
@@ -220,6 +230,31 @@ function fakeDb() {
       rows.clear();
       meta.clear();
     },
+    // The outbox lives in meta under 'op:…' keys (db.js).
+    async getAllOps() {
+      db.check();
+      return [...meta.entries()]
+        .filter(([k]) => typeof k === 'string' && k.startsWith('op:'))
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([k, v]) => ({ ...v, key: k }));
+    },
+    async putOps(list, deleteKeys = []) {
+      db.check();
+      for (const k of deleteKeys) meta.delete(k);
+      for (const { key, ...v } of list) meta.set(key, JSON.parse(JSON.stringify(v)));
+    },
+    async deleteOps(keys) {
+      return db.putOps([], keys);
+    },
+    async confirmOp(row, key) {
+      db.check();
+      if (row) db.putIfNewer(row);
+      if (key) meta.delete(key);
+    },
+    /** The outbox records as stored (tests: no plaintext in there). */
+    ops() {
+      return [...meta.entries()].filter(([k]) => k.startsWith('op:')).map(([k, v]) => ({ key: k, ...v }));
+    },
   };
   return db;
 }
@@ -285,6 +320,9 @@ function phone(server, opts = {}) {
     setClockSkew: (ms) => skews.push(ms),
     nowMs: () => NOW_MS,
     yieldToLoop: () => Promise.resolve(),
+    isOnline: () => !server.offline, // the phone's own radio, as navigator.onLine would say
+    settleWaitMs: opts.settleWaitMs,
+    locks: null,
   });
   store.subscribe((snap, changed) => events.push(changed));
   return { store, prefs, db, keys, storage, toasts, skews, events };
@@ -1619,4 +1657,361 @@ test('a reminder created on one phone is a to-do on both; a tick on the other cl
   assert.deepEqual(a.store.snapshot.data.reminders[0].times, ['09:00']);
   // Bad schedules never reach the server.
   await assert.rejects(a.store.entries.create({ type: 'reminder', details: { title: 'X', times: [] } }), /Uhrzeiten/);
+});
+
+// --- the outbox: writes without network -------------------------------------------------
+
+/** The stored outbox records must never carry plaintext: only these keys, and a blob or null. */
+function assertOpaque(records) {
+  for (const r of records) {
+    const keys = Object.keys(r).sort();
+    for (const k of keys) {
+      assert.ok(
+        ['key', 'n', 'eid', 'kind', 'blob', 'baseSeq', 'fields', 'guard', 'sent', 'dead', 'queuedAt', 'tries', 'parked'].includes(k),
+        `unexpected key in a stored op: ${k}`
+      );
+    }
+    assert.ok(r.blob === null || /^[A-Za-z0-9_-]+$/.test(r.blob), 'blob is ciphertext (base64url) or null');
+  }
+}
+
+test('outbox: a create without network is kept (ciphertext only), shown at once and sent after the next sync', async () => {
+  const server = fakeServer();
+  const p = await online(phone(server), FDK_RAW);
+  server.offline = true;
+  const e = await p.store.entries.create({ type: 'diaper', details: { kind: 'pee' } });
+  assert.equal(e.pending, 'waiting');
+  assert.ok(e.seq >= 2 ** 52, 'a placeholder seq');
+  assert.equal(p.store.outbox.count, 1);
+  assert.equal(p.store.snapshot.data.today.diapers, 1, 'the home state has it');
+  assert.equal(p.store.entries.range(TODAY, TODAY)[0].eid, e.eid, 'Verlauf has it');
+  assert.equal(server.rows.size, 0, 'nothing reached the server');
+  assert.equal(server.calls.filter((c) => c[0] === 'POST').length, 0, 'no request was even tried');
+  const records = p.db.ops();
+  assert.equal(records.length, 1);
+  assertOpaque(records);
+  assert.equal(records[0].kind, 'create');
+  assert.ok(!JSON.stringify(records).includes('pee'), 'no plaintext in the mirror');
+
+  server.offline = false;
+  await p.store.refresh(); // the poll / the online event: the sync succeeds, the flusher runs
+  await p.store.outbox.idle();
+  assert.equal(p.store.outbox.count, 0);
+  assert.equal(server.rows.size, 1);
+  const sent = p.store.entries.get(e.eid);
+  assert.equal(sent.seq, 1, 'the real seq');
+  assert.equal(sent.pending, undefined);
+  assert.equal(p.db.ops().length, 0, 'the record is gone');
+  assert.equal(server.calls.filter((c) => c[0] === 'POST').length, 1);
+  assert.ok(p.toasts.includes('1 gesendet'), p.toasts.join(' | '));
+});
+
+test('outbox: a phone restarted over the same mirror shows the pending entry and sends it', async () => {
+  const server = fakeServer();
+  const a = await online(phone(server), FDK_RAW);
+  server.offline = true;
+  const e = await a.store.entries.create({ type: 'bottle', details: { amount_ml: 60 } });
+  // The app is killed and reopened, still offline: the same IndexedDB, a fresh store.
+  const b = phone(server, { db: a.db, storage: a.storage, key: await importFdk(new Uint8Array(FDK_RAW), false) });
+  await b.store.boot();
+  assert.equal(b.store.keyState, 'ready');
+  assert.equal(b.store.entries.get(e.eid).details.amount_ml, 60, 'decrypted from the outbox record');
+  assert.equal(b.store.entries.get(e.eid).pending, 'waiting');
+  assert.equal(b.store.snapshot.data.lastFeed.eid, e.eid);
+  server.offline = false;
+  await b.store.refresh();
+  await b.store.outbox.idle();
+  assert.equal(server.rows.size, 1);
+  assert.equal(b.store.entries.get(e.eid).seq, 1);
+});
+
+test('outbox: an answer lost on the way back – the create landed (409 exists) and is confirmed, one row', async () => {
+  const server = fakeServer();
+  const p = await online(phone(server), FDK_RAW);
+  server.lose = true;
+  const e = await p.store.entries.create({ type: 'diaper', details: { kind: 'poop' } });
+  assert.equal(e.pending, 'waiting', 'no answer: kept, frozen, judged on the next sync');
+  assert.equal(p.db.ops()[0].sent, true, 'frozen: a change would become a follower');
+  assert.equal(server.rows.size, 1, 'but it landed');
+  await p.store.refresh();
+  await p.store.outbox.idle();
+  assert.equal(p.store.outbox.count, 0);
+  assert.equal(server.rows.size, 1, 'no second row');
+  assert.equal(p.store.entries.get(e.eid).seq, 1);
+  assert.equal(server.calls.filter((c) => c[0] === 'POST').length, 1, 'the sync brought the row: nothing to retry');
+
+  // The same with the sync page NOT bringing it first (the flush runs before
+  // the poll): the retry gets the 409 and the sync after it confirms the row.
+  server.lose = true;
+  const f = await p.store.entries.create({ type: 'diaper', details: { kind: 'pee' }, startedAt: minus(1) });
+  await p.store.outbox.flush();
+  await p.store.outbox.idle();
+  assert.equal(server.rows.size, 2);
+  assert.equal(p.store.entries.get(f.eid).seq, 2);
+  assert.equal(server.calls.filter((c) => c[0] === 'POST').length, 3, 'one retry, answered 409');
+});
+
+test('outbox: an answer lost on an update – the blob the sync brings proves it landed', async () => {
+  const server = fakeServer();
+  const p = await online(phone(server), FDK_RAW);
+  const e = await p.store.entries.create({ type: 'weight', details: { grams: 3500 } });
+  server.lose = true;
+  const u = await p.store.entries.update(e.eid, { details: { grams: 3600 } });
+  assert.equal(u.pending, 'waiting');
+  assert.equal(server.rows.get(e.eid).seq, 2, 'landed');
+  await p.store.refresh();
+  await p.store.outbox.idle();
+  assert.equal(p.store.entries.get(e.eid).seq, 2);
+  assert.equal(p.store.entries.get(e.eid).details.grams, 3600);
+  assert.equal(server.calls.filter((c) => c[0] === 'PATCH').length, 1, 'never sent again');
+});
+
+test('outbox: start and stop offline become ONE closed row; a stop the partner already did is dropped with a notice', async () => {
+  const server = fakeServer();
+  const a = await online(phone(server), FDK_RAW);
+  const b = await online(phone(server, { username: 'papa' }), FDK_RAW);
+  server.offline = true;
+  const s = await a.store.entries.create({ type: 'sleep', startedAt: minus(30) });
+  assert.equal(a.store.snapshot.data.openTimers[0].eid, s.eid);
+  await a.store.entries.update(s.eid, { endedAt: minus(5), ifOpen: true }, { guard: 'open' });
+  assert.equal(a.store.entries.get(s.eid).endedAt, minus(5));
+  assert.equal(a.db.ops().length, 1, 'folded into the create');
+  server.offline = false;
+  await a.store.refresh();
+  await a.store.outbox.idle();
+  assert.equal(server.calls.filter((c) => c[0] === 'POST').length, 1, 'one POST, no PATCH');
+  assert.equal(server.calls.filter((c) => c[0] === 'PATCH').length, 0);
+  assert.equal(a.store.entries.get(s.eid).endedAt, minus(5));
+
+  // The partner stops a timer that A also stops offline: B's end stands, A hears why.
+  const t2 = await a.store.entries.create({ type: 'sleep', startedAt: minus(20) });
+  await b.store.refresh();
+  await b.store.entries.update(t2.eid, { endedAt: minus(2) });
+  server.offline = true;
+  await a.store.entries.update(t2.eid, { endedAt: NOW, ifOpen: true }, { guard: 'open' });
+  assert.equal(a.store.entries.get(t2.eid).endedAt, NOW, 'shown as A did it, for now');
+  server.offline = false;
+  await a.store.refresh();
+  await a.store.outbox.idle();
+  assert.equal(a.store.entries.get(t2.eid).endedAt, minus(2), "B's end");
+  assert.equal(server.rows.get(t2.eid).seq, a.store.entries.get(t2.eid).seq);
+  assert.ok(a.toasts.some((m) => m.startsWith('Nicht übernommen: Schlaf')), a.toasts.join(' | '));
+  assert.equal(server.calls.filter((c) => c[0] === 'PATCH').length, 1, "only B's");
+});
+
+test('outbox: an offline stop survives the partner moving the start (their start, our end); an edit of a deleted row is dropped', async () => {
+  const server = fakeServer();
+  const a = await online(phone(server), FDK_RAW);
+  const b = await online(phone(server, { username: 'papa' }), FDK_RAW);
+  const s = await a.store.entries.create({ type: 'breastfeed', details: { side: 'L' }, startedAt: minus(15) });
+  const w = await a.store.entries.create({ type: 'weight', details: { grams: 3500 } });
+  await b.store.refresh();
+  await b.store.entries.update(s.eid, { startedAt: minus(20) });
+  await b.store.entries.remove(w.eid);
+  server.offline = true;
+  await a.store.entries.update(s.eid, { endedAt: NOW, ifOpen: true }, { guard: 'open' });
+  await a.store.entries.update(w.eid, { details: { grams: 3550 } });
+  server.offline = false;
+  await a.store.refresh();
+  await a.store.outbox.idle();
+  const closed = a.store.entries.get(s.eid);
+  assert.equal(closed.startedAt, minus(20));
+  assert.equal(closed.endedAt, NOW);
+  assert.equal(closed.rev, 3);
+  assert.equal(closed.loggedBy, 'Mama');
+  assert.equal(a.store.entries.get(w.eid).deletedAt, TODAY, 'the tombstone stands');
+  assert.ok(a.toasts.some((m) => m === 'Nicht übernommen: Gewicht wurde auf dem anderen Handy inzwischen gelöscht'), a.toasts.join(' | '));
+  assert.equal(a.store.outbox.count, 0);
+});
+
+test('outbox: delete wins over the partner\'s edit; create + undo never reaches the server; undo of a delete brings a never-sent entry back', async () => {
+  const server = fakeServer();
+  const a = await online(phone(server), FDK_RAW);
+  const b = await online(phone(server, { username: 'papa' }), FDK_RAW);
+  const w = await a.store.entries.create({ type: 'weight', details: { grams: 3500 } });
+  await b.store.refresh();
+  await b.store.entries.update(w.eid, { details: { grams: 3600 } });
+  server.offline = true;
+  await a.store.entries.remove(w.eid);
+  assert.equal(a.store.entries.get(w.eid).deletedAt, TODAY);
+
+  const d = await a.store.entries.create({ type: 'diaper', details: { kind: 'pee' } });
+  await a.store.entries.remove(d.eid); // «Rückgängig» on the toast
+  assert.equal(a.store.entries.get(d.eid).deletedAt, TODAY, 'a local tombstone');
+  assert.equal(a.store.entries.range(TODAY, TODAY).some((e) => e.eid === d.eid), false);
+  const back = await a.store.entries.restore(d.eid); // … and the delete undone
+  assert.equal(back.deletedAt, null);
+  assert.equal(a.db.ops().filter((o) => o.eid === d.eid).length, 1, 'still one create');
+  const d2 = await a.store.entries.create({ type: 'diaper', details: { kind: 'both' } });
+  await a.store.entries.remove(d2.eid);
+
+  server.offline = false;
+  await a.store.refresh();
+  await a.store.outbox.idle();
+  assert.equal(server.rows.get(w.eid).deletedAt, TODAY, 'the delete won');
+  assert.equal(server.rows.has(d.eid), true);
+  assert.equal(server.rows.has(d2.eid), false, 'undone before it was sent: never sent');
+  assert.equal(server.calls.filter((c) => c[0] === 'POST').length, 2);
+  assert.equal(a.store.outbox.count, 0);
+  assert.equal(a.db.ops().length, 0, 'the dead create is gone too');
+});
+
+test('outbox: a pending open timer loses to the partner\'s within 15 min without a request; further apart it is sent and the notice shows', async () => {
+  const server = fakeServer();
+  const a = await online(phone(server), FDK_RAW);
+  const b = await online(phone(server, { username: 'papa' }), FDK_RAW);
+  await b.store.entries.create({ type: 'sleep', startedAt: minus(5) }); // B's phone got through …
+  server.offline = true; // … A's did not, and has not synced B's yet
+  const mine = await a.store.entries.create({ type: 'sleep', startedAt: minus(3) });
+  server.offline = false;
+  await a.store.refresh();
+  await a.store.outbox.idle();
+  assert.equal(server.rows.has(mine.eid), false, 'never sent');
+  assert.equal(a.store.entries.get(mine.eid), null);
+  assert.ok(a.toasts.includes('Doppelter Schlaf-Timer entfernt'));
+  assert.equal(a.store.snapshot.data.openTimers.length, 1);
+
+  await b.store.entries.update(a.store.snapshot.data.openTimers[0].eid, { endedAt: minus(1) });
+  await a.store.refresh();
+  await b.store.entries.create({ type: 'sleep', startedAt: minus(40) });
+  server.offline = true;
+  const far = await a.store.entries.create({ type: 'sleep', startedAt: minus(0) });
+  server.offline = false;
+  await a.store.refresh();
+  await a.store.outbox.idle();
+  assert.equal(server.rows.has(far.eid), true, 'sent: a human decides');
+  assert.equal(a.store.notice, 'Zwei Schlaf-Timer offen – bitte einen im Verlauf beenden');
+});
+
+test('outbox: 429 keeps the op for later; 401 blocks until a sync succeeds; a 400 parks it – retry and discard', async () => {
+  const server = fakeServer();
+  const p = await online(phone(server, { settleWaitMs: 0 }), FDK_RAW);
+  let answer = null;
+  server.hook = async (m) => {
+    if (m === 'POST' && answer) throw answer;
+  };
+  answer = httpError(429, 'Zu viele Änderungen in kurzer Zeit');
+  const e = await p.store.entries.create({ type: 'diaper', details: { kind: 'pee' } });
+  assert.equal(e.pending, 'waiting');
+  await until(() => !p.store.outbox.count || p.db.ops()[0].sent === false);
+  assert.equal(p.store.outbox.count, 1, 'kept');
+  assert.equal(p.db.ops()[0].sent, false, 'a 429 never applied');
+  answer = null;
+  await p.store.refresh();
+  await p.store.outbox.idle();
+  assert.equal(server.rows.has(e.eid), true);
+
+  answer = httpError(401, 'Nicht angemeldet');
+  const f = await p.store.entries.create({ type: 'diaper', details: { kind: 'poop' } });
+  await until(() => p.db.ops().some((o) => o.eid === f.eid && o.sent === false));
+  const posts = server.calls.filter((c) => c[0] === 'POST').length;
+  await p.store.outbox.flush();
+  assert.equal(server.calls.filter((c) => c[0] === 'POST').length, posts, 'blocked: nothing is tried');
+  answer = null;
+  await p.store.refresh(); // logged in again: the sync page comes back
+  await p.store.outbox.idle();
+  assert.equal(server.rows.has(f.eid), true);
+
+  answer = httpError(400, 'Ungültiger Datensatz');
+  const g = await p.store.entries.create({ type: 'diaper', details: { kind: 'both' } });
+  await until(() => p.store.outbox.parked === 1);
+  assert.equal(p.store.outbox.count, 0);
+  assert.equal(p.store.entries.get(g.eid).pending, 'parked');
+  assert.ok(p.toasts.some((m) => m.startsWith('Nicht gesendet')));
+  const listed = p.store.outbox.list();
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].status, 'parked');
+  assert.equal(listed[0].parked.status, 400);
+  answer = null;
+  await p.store.outbox.retry(listed[0].key);
+  await p.store.outbox.idle();
+  assert.equal(server.rows.has(g.eid), true, 'retried');
+  assert.equal(p.store.outbox.parked, 0);
+
+  answer = httpError(507, 'Speicherlimit erreicht');
+  const h = await p.store.entries.create({ type: 'diaper', details: { kind: 'pee' }, startedAt: minus(1) });
+  await until(() => p.store.outbox.parked === 1);
+  await p.store.outbox.discard(p.store.outbox.list()[0].key);
+  assert.equal(p.store.entries.get(h.eid), null, 'discarded');
+  assert.equal(p.db.ops().length, 0);
+  server.hook = null;
+});
+
+test('outbox: clear() forgets the ops, a sync reset keeps them; a broken mirror queues nothing (the write fails as before)', async () => {
+  const server = fakeServer();
+  const a = await online(phone(server), FDK_RAW);
+  server.offline = true;
+  await a.store.entries.create({ type: 'diaper', details: { kind: 'pee' } });
+  assert.equal(a.store.outbox.count, 1);
+  server.offline = false;
+  server.reset({ newFeed: true }); // a restored backup: rows and cursor are wiped, the outbox is not
+  await a.store.refresh();
+  await a.store.outbox.idle();
+  assert.equal(server.rows.size, 1, 'sent into the new database');
+
+  server.offline = true;
+  await a.store.entries.create({ type: 'diaper', details: { kind: 'poop' } });
+  a.store.clear();
+  assert.equal(a.store.outbox.count, 0);
+  server.offline = false;
+
+  const b = await online(phone(server), FDK_RAW);
+  b.db.broken = true;
+  server.offline = true;
+  await rejects(b.store.entries.create({ type: 'diaper', details: { kind: 'pee' } }), 'Keine Verbindung zum Server');
+  assert.equal(b.store.outbox.count, 0);
+  assert.equal(b.store.outbox.durable, false);
+  server.offline = false;
+  const ok = await b.store.entries.create({ type: 'diaper', details: { kind: 'pee' } });
+  assert.equal(ok.seq, server.rows.get(ok.eid).seq, 'straight to the server');
+});
+
+test('outbox: an own write landing is not "changed meanwhile" for an open form, the partner\'s edit is; settings never queue', async () => {
+  const server = fakeServer();
+  const a = await online(phone(server), FDK_RAW);
+  const b = await online(phone(server, { username: 'papa' }), FDK_RAW);
+  server.offline = true;
+  const e = await a.store.entries.create({ type: 'weight', details: { grams: 3500 } });
+  const opened = a.store.entries.get(e.eid); // the edit form opens on the pending entry
+  server.offline = false;
+  await a.store.refresh();
+  await a.store.outbox.idle();
+  assert.equal(a.store.entries.changedSince(e.eid, opened.seq), false, 'landed, but nobody else touched it');
+  const saved = await a.store.entries.update(e.eid, { details: { grams: 3550 } }, { ifSeq: opened.seq });
+  assert.equal(saved.details.grams, 3550);
+  await b.store.refresh();
+  await b.store.entries.update(e.eid, { details: { grams: 3700 } });
+  await a.store.refresh();
+  assert.equal(a.store.entries.changedSince(e.eid, saved.seq), true);
+  await rejects(
+    a.store.entries.update(e.eid, { details: { grams: 3560 } }, { ifSeq: saved.seq }),
+    'Der Eintrag wurde inzwischen auf einem anderen Gerät geändert',
+    409
+  );
+  assert.equal(a.store.entries.get(e.eid).details.grams, 3700, 'nothing overwritten');
+
+  server.offline = true;
+  await rejects(a.store.settings.save({ mealsPerDay: 7 }), 'Keine Verbindung zum Server');
+  assert.equal(a.store.outbox.count, 0, 'settings go straight to the server');
+  const plain = a.store.exportPlain();
+  server.offline = false;
+  assert.ok(plain.some((x) => x.eid === e.eid));
+});
+
+test('outbox: a slow server – the call resolves pending after the wait, the late answer confirms', async () => {
+  const server = fakeServer();
+  const p = await online(phone(server, { settleWaitMs: 20 }), FDK_RAW);
+  let release;
+  server.hook = async (m) => {
+    if (m === 'POST') await new Promise((r) => (release = r));
+  };
+  const e = await p.store.entries.create({ type: 'diaper', details: { kind: 'pee' } });
+  assert.equal(e.pending, 'sending');
+  server.hook = null;
+  release();
+  await p.store.outbox.idle();
+  assert.equal(p.store.entries.get(e.eid).seq, 1);
+  assert.equal(p.store.entries.get(e.eid).pending, undefined);
+  assert.equal(server.calls.filter((c) => c[0] === 'POST').length, 1);
+  assert.ok(p.toasts.includes('1 gesendet'), 'a deferred op that drained is announced');
 });

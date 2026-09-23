@@ -32,14 +32,27 @@
 // on focus.
 //
 // Writes: validated locally (validate.js), the one-open-timer rule via
-// model.openTimer, encrypted, sent, and the
-// returned row applied locally with its seq. A PATCH carries ifSeq; on 409
-// the store syncs, re-reads and retries ONCE when the caller's precondition
-// still holds on the fresh row (e.g. "the timer is still open"), otherwise
-// the 409 surfaces. A precondition is checked on the LOCAL row first, so a
-// partner's end that a sync already applied is never overwritten. A server
-// 404 on update/remove/restore syncs once (best effort) before it surfaces,
-// so the model reflects why (the other phone deleted it).
+// model.openTimer, encrypted — and then queued in the OUTBOX (src/outbox.js:
+// one op per write, ciphertext only, persisted in IndexedDB meta) and laid
+// over the confirmed model at once, so the entry shows before the server has
+// it and a tap works without network. The flusher sends the ops in order
+// whenever there is network (after every sync, on `online`, on focus, on the
+// poll); a 409 means "sync and judge again" — a guarded op (the timer must
+// still be open / duration-less / paused) is laid over the partner's fresh
+// row and sent again, or dropped with a notice when the guard no longer
+// holds; an unguarded op is laid over the fresh row too (only the fields
+// this device changed) — unless the caller is still waiting for the answer,
+// then it gets the plain 409 exactly as before, so a form can close on a
+// row that moved. A caller waits at most SETTLE_WAIT_MS for its op's first
+// attempt: online the answer normally comes in time and the returned entry
+// carries the real seq; offline or on a slow network the call resolves with
+// the pending entry (`pending: 'waiting' | 'sending'`) and the flusher takes
+// over. A precondition is checked on the LOCAL row first, so a partner's
+// end that a sync already applied is never overwritten. A 404 (the other
+// phone deleted the row) surfaces to a waiting caller after one sync;
+// a deferred op is dropped with a notice. The family settings document and
+// the duplicate-timer resolver's compare-and-set delete never queue: they
+// go straight to the server and fail as before without network.
 //
 // `createStore(deps)` builds an instance from injectable dependencies so the
 // sync/write logic runs under `node --test` with a fake api/db; the default
@@ -51,6 +64,19 @@ import * as realKeys from './keys.js';
 import { toast as realToast, setClockSkew as realSetClockSkew, nowMs as realNowMs } from './ui.js';
 import { randomEid, importFdk, encryptEntry, decryptEntry } from './crypto.js';
 import { t } from './i18n/index.js';
+import {
+  PENDING_SEQ_BASE,
+  isPendingSeq,
+  GUARDS,
+  changedFields,
+  fieldPatch,
+  coalesce,
+  overlay,
+  classify,
+  reconcile,
+  nextOp,
+  summary,
+} from './outbox.js';
 import {
   validateCreate,
   validateUpdate,
@@ -86,6 +112,11 @@ const SYNC_LIMIT = 1000;
 const SYNC_TIMEOUT_MS = 60000;
 const DECRYPT_CHUNK = 256;
 const DUP_WINDOW_MS = 15 * 60000;
+/** How long a write waits for its op's first answer before it resolves with the pending entry. */
+export const SETTLE_WAIT_MS = 3000;
+/** Pauses between flush attempts after a failed request (then the poll cadence). */
+const BACKOFF_MS = [5000, 15000, 60000];
+const OP_KINDS = ['create', 'update', 'remove', 'restore'];
 
 // Error messages are read from the translations (errors.store.*) at the
 // moment they are thrown, never kept in a constant.
@@ -408,10 +439,16 @@ function dataKey(data) {
  *   setClockSkew ui.setClockSkew
  *   nowMs        ui.nowMs (skew-corrected clock)
  *   yieldToLoop  optional: awaited between decrypt chunks
+ *   settleWaitMs optional: SETTLE_WAIT_MS (0 = never wait for the server)
+ *   isOnline     optional: () => boolean (navigator.onLine !== false)
+ *   locks        optional: navigator.locks (one flusher across tabs)
  */
 export function createStore(deps) {
   const { api, db, keys, prefs, storage, toast, setClockSkew, nowMs } = deps;
   const yieldToLoop = deps.yieldToLoop || (() => new Promise((r) => setTimeout(r, 0)));
+  const settleWaitMs = Number.isFinite(deps.settleWaitMs) ? deps.settleWaitMs : SETTLE_WAIT_MS;
+  const isOnline = deps.isOnline || (() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  const locks = deps.locks !== undefined ? deps.locks : typeof navigator !== 'undefined' && navigator.locks ? navigator.locks : null;
   const hasDom = typeof document !== 'undefined' && typeof window !== 'undefined';
 
   const listeners = new Set();
@@ -431,6 +468,27 @@ export function createStore(deps) {
   let noticeType = null; // the entry type with two open timers too far apart (store.notice)
   let artVersion; // private artwork (src/art.js): undefined = no sync heard yet, null = none for us
   let artKey = null; // … and the installation's capability key for the install icon (members only)
+
+  // The outbox (src/outbox.js): ops still to send, oldest first, `plain`
+  // decrypted in memory. Bookkeeping for judging them against the confirmed
+  // rows: seqs this device's own writes produced, the blob a sync page last
+  // brought for an eid with an op (a lost answer: the blob proves it landed),
+  // the highest seq a sync brought that was NOT ours (a form's "changed
+  // meanwhile"), and where a pending create's placeholder seq landed.
+  let ops = [];
+  let opsDurable = true;
+  let nextN = 1;
+  let flushing = null; // the running flush
+  let backoffUntil = 0;
+  let backoffStep = 0;
+  let backoffTimer = null;
+  let authBlocked = false; // a 401: nothing is sent until a sync succeeds again
+  const ownSeqs = new Set();
+  const seenBlob = new Map();
+  const foreignSeq = new Map();
+  const landed = new Map();
+  const idleWaiters = [];
+  let drained = 0; // ops confirmed in the running flush that nobody was waiting for (the «n gesendet» toast)
 
   let pollTimer = null;
   let inFlight = null; // the running sync
@@ -495,10 +553,18 @@ export function createStore(deps) {
    * while the key is ready and there is something to show (local rows or a
    * completed sync) — before that the cached snapshot keeps painting.
    */
+  /** The confirmed rows with the pending ops laid over them — what every
+   *  reader sees (the model itself while nothing is pending). */
+  function effective() {
+    if (ops.length === 0) return model;
+    return overlay(model, ops, isoFromMs(nowMs()).slice(0, 10));
+  }
+
   function recompute(opts = {}) {
     if (keyState !== 'ready') return false;
-    if (model.size === 0 && !lastSyncTs) return false;
-    const data = deriveState(model, isoFromMs(nowMs()));
+    const eff = effective();
+    if (eff.size === 0 && !lastSyncTs) return false;
+    const data = deriveState(eff, isoFromMs(nowMs()));
     const key = dataKey(data);
     const changed = key !== lastDataKey;
     lastDataKey = key;
@@ -513,7 +579,7 @@ export function createStore(deps) {
     // Two open timers of one type further apart than the auto-resolver
     // handles (see resolveDuplicates): a persistent notice for the home view.
     noticeType = null;
-    for (const { type, keep, others } of duplicateOpenTimers(model)) {
+    for (const { type, keep, others } of duplicateOpenTimers(eff)) {
       if (others.some((o) => !withinDupWindow(o, keep))) {
         noticeType = type;
       }
@@ -566,6 +632,9 @@ export function createStore(deps) {
       if (!row || typeof row.eid !== 'string' || !EID_RE.test(row.eid)) continue;
       const existing = model.get(row.eid);
       if (existing && Number(existing.seq) >= Number(row.seq)) continue;
+      const seq = Number(row.seq);
+      if (!ownSeqs.has(seq) && seq > (foreignSeq.get(row.eid) || 0)) foreignSeq.set(row.eid, seq);
+      if (ops.some((o) => o.eid === row.eid)) seenBlob.set(row.eid, row.blob == null ? null : row.blob);
       const { src } = await decryptRow(row, existing);
       if (row.blob != null) {
         withBlob += 1;
@@ -590,6 +659,14 @@ export function createStore(deps) {
     generation += 1;
     model.clear();
     dupHandled.clear();
+    for (const op of ops) settleWaiter(op, null, fail(t('errors.store.aborted')));
+    ops = [];
+    ownSeqs.clear();
+    seenBlob.clear();
+    foreignSeq.clear();
+    landed.clear();
+    clearBackoff();
+    authBlocked = false;
     cursor = 0;
     feed = null;
     decryptErrors = 0;
@@ -631,6 +708,8 @@ export function createStore(deps) {
   async function wipeRows() {
     model.clear();
     dupHandled.clear();
+    seenBlob.clear();
+    foreignSeq.clear();
     cursor = 0;
     try {
       await db.clearRows();
@@ -728,6 +807,48 @@ export function createStore(deps) {
     return !(res.withBlob > 0 && res.errors === res.withBlob);
   }
 
+  /** The persisted outbox into memory: blobs decrypted, junk and dead
+   *  creates (undone before they were sent) dropped. */
+  async function loadOutbox() {
+    ops = [];
+    let records = [];
+    try {
+      records = await db.getAllOps();
+      opsDurable = true;
+    } catch {
+      opsDurable = false;
+      return; // no mirror, no outbox: writes go straight to the server
+    }
+    const keep = [];
+    const del = [];
+    for (const o of records) {
+      const shape =
+        o && typeof o.key === 'string' && typeof o.eid === 'string' && EID_RE.test(o.eid) && OP_KINDS.includes(o.kind) && Number.isInteger(o.n);
+      if (!shape) {
+        if (o && typeof o.key === 'string') del.push(o.key);
+        continue;
+      }
+      if (o.dead) {
+        del.push(o.key);
+        continue;
+      }
+      let plain = null;
+      if (o.blob != null) {
+        try {
+          plain = await decryptEntry(fdk, familyId, o.eid, o.blob);
+          validatePlain(plain);
+        } catch {
+          del.push(o.key);
+          continue;
+        }
+      }
+      keep.push({ ...o, plain, waiter: null, check: null });
+    }
+    ops = keep.sort((a, b) => a.n - b.n);
+    for (const o of ops) nextN = Math.max(nextN, o.n + 1);
+    if (del.length) db.deleteOps(del).catch(() => {});
+  }
+
   /** Take `key` into use: load local rows, mark ready, sync. */
   async function activate(key, { fromPassword = false } = {}) {
     if (inFlight) await inFlight.catch(() => {});
@@ -736,6 +857,8 @@ export function createStore(deps) {
     keyState = 'ready';
     const ok = await loadLocal();
     if (gen !== generation) return; // wiped (logout) while the rows were loading
+    if (ok) await loadOutbox();
+    if (gen !== generation) return;
     if (!ok && !fromPassword) {
       // Nothing decrypts with the stored key: treat it as wrong, drop it
       // and ask for the password (a fresh unlock never locks again on the
@@ -890,8 +1013,11 @@ export function createStore(deps) {
       }
       lastSyncTs = Date.now();
       lastError = null;
+      authBlocked = false; // a page came back: logged in
+      clearBackoff(); // … and the network is there
       const c = recompute({ persist: true });
       notify(c || changed);
+      kickFlush();
       resolveDuplicates();
       return snapshot;
     } catch (err) {
@@ -913,9 +1039,11 @@ export function createStore(deps) {
    * the eid, and the next sync judges the fresh row again.
    */
   function resolveDuplicates() {
-    for (const { type, keep, others } of duplicateOpenTimers(model)) {
+    for (const { type, keep, others } of duplicateOpenTimers(effective())) {
+      if (isPendingSeq(keep.seq)) continue;
       for (const o of others) {
-        if (!withinDupWindow(o, keep) || dupHandled.has(o.eid)) continue;
+        // A pending timer of ours is judged by the flusher before it is sent.
+        if (isPendingSeq(o.seq) || !withinDupWindow(o, keep) || dupHandled.has(o.eid)) continue;
         dupHandled.add(o.eid);
         store.entries
           .remove(o.eid, { ifSeq: o.seq })
@@ -936,15 +1064,30 @@ export function createStore(deps) {
   }
 
   function liveLocal(eid) {
-    const e = model.get(eid);
+    const e = effective().get(eid);
     if (!e || e.deletedAt != null || e.error) throw fail(t('errors.store.notFound'), 404);
     return e;
   }
 
   const entryCopy = (eid) => {
-    const e = model.get(eid);
+    const e = effective().get(eid);
     return e ? { ...e, details: { ...(e.details || {}) } } : null;
   };
+
+  /** Has `eid` been changed by SOMEONE ELSE since `seq` (the seq a form was
+   *  opened with)? This device's own confirmed writes do not count, nor does
+   *  a pending create landing — a form open over one is not stale. */
+  function changedSince(eid, seq) {
+    const cur = effective().get(eid);
+    if (!cur) return true;
+    let base = Number(seq);
+    if (isPendingSeq(base)) {
+      const real = landed.get(base);
+      if (real === undefined) return false; // still ours alone
+      base = real;
+    }
+    return (foreignSeq.get(eid) || 0) > base;
+  }
 
   /**
    * Mark an error as the server's answer (only those may trigger the 409
@@ -987,7 +1130,7 @@ export function createStore(deps) {
   async function patchAttempt(local, patch, ifSeq, opts = {}) {
     const merged = validateUpdate(local, patch, isoFromMs(nowMs()));
     const reopens = isTimerType(merged.type) && merged.endedAt === null && local.endedAt !== null;
-    if (reopens && openTimer(model, merged.type, local.eid)) {
+    if (reopens && openTimer(effective(), merged.type, local.eid)) {
       throw fail(timerRunningMessage(merged.type), 409);
     }
     const plain = {
@@ -1005,27 +1148,413 @@ export function createStore(deps) {
     return entryCopy(local.eid);
   }
 
+  // --- the outbox ---------------------------------------------------------------------
+
+  const opKey = (n) => `op:${String(n).padStart(14, '0')}:${randomEid().slice(0, 8)}`;
+  const stored = ({ plain, waiter, check, inflight, done, ...rest }) => rest; // what goes into IndexedDB: no plaintext, no closures, no in-memory state
+  const activeOp = (o) => !o.dead && !o.parked;
+  const copyOf = (eid) => entryCopy(eid);
+
+  async function persistOps(put, del = []) {
+    try {
+      await db.putOps(put.map(stored), del);
+      opsDurable = true;
+      return true;
+    } catch {
+      opsDurable = false;
+      return false;
+    }
+  }
+
+  function settleWaiter(op, value, err) {
+    const w = op.waiter;
+    op.waiter = null;
+    if (!w) return;
+    if (err) w.reject(err);
+    else w.resolve(value);
+  }
+
+  function settleIdle() {
+    if (flushing || ops.some(activeOp)) return;
+    while (idleWaiters.length) idleWaiters.shift()();
+  }
+
+  function clearBackoff() {
+    backoffUntil = 0;
+    backoffStep = 0;
+    if (backoffTimer) {
+      clearTimeout(backoffTimer);
+      backoffTimer = null;
+    }
+  }
+
+  function backoff(ms) {
+    const wait = ms || BACKOFF_MS[Math.min(backoffStep, BACKOFF_MS.length - 1)];
+    backoffStep += 1;
+    backoffUntil = Date.now() + wait;
+    if (backoffTimer) clearTimeout(backoffTimer);
+    backoffTimer = setTimeout(() => {
+      backoffTimer = null;
+      kickFlush();
+    }, wait);
+    if (backoffTimer && typeof backoffTimer.unref === 'function') backoffTimer.unref();
+  }
+
+  /** The error a dropped op answers with (the caller's promise, or a toast). */
+  function dropError(reason, err) {
+    if (err) return err;
+    if (reason === 'guard' || reason === 'invalid') return fail(t('errors.validate.timerAlreadyEnded'), 409);
+    if (reason === 'gone') return fail(t('errors.store.notFound'), 404);
+    if (reason === 'conflict') return fail(t('api.entries.conflict'), 409);
+    return fail(t('errors.store.aborted'));
+  }
+
+  /** Take `op` (and the ops that followed it on the same eid) out of the
+   *  outbox: never sent. A waiting caller gets the error; a deferred op
+   *  tells the parent why in a toast. */
+  async function dropOp(op, reason, err) {
+    const gone = ops.filter((o) => o.eid === op.eid && o.n >= op.n);
+    ops = ops.filter((o) => !gone.includes(o));
+    await persistOps([], gone.map((o) => o.key));
+    notify(recompute({ persist: true }));
+    const error = dropError(reason, err);
+    let told = false;
+    for (const o of gone) {
+      if (o.waiter) told = true;
+      settleWaiter(o, null, error);
+    }
+    if (!told && reason !== 'dead' && reason !== 'exists' && reason !== 'duplicate') {
+      const type = label(op.plain ? op.plain.type : (model.get(op.eid) || {}).type);
+      toast(t(reason === 'gone' ? 'errors.store.outboxGone' : 'errors.store.outboxDropped', { type }));
+    }
+    settleIdle();
+  }
+
+  /** The op landed (`row` = the server's answer) or was already in effect
+   *  (row = null): confirm it — mirror + outbox in one transaction. */
+  async function finishOp(op, row) {
+    if (row && typeof row.eid === 'string') {
+      const fresh = model.get(op.eid);
+      const src =
+        op.kind === 'create' || op.kind === 'update'
+          ? op.plain
+          : fresh && fresh.error
+            ? { error: fresh.error }
+            : fresh
+              ? plainOf(fresh)
+              : op.plain;
+      applyRow(model, row, src);
+      ownSeqs.add(Number(row.seq));
+      if (op.kind === 'create') landed.set(PENDING_SEQ_BASE + op.n, Number(row.seq));
+    }
+    ops = ops.filter((o) => o !== op);
+    op.done = true;
+    if (!op.waiter) drained += 1;
+    try {
+      await db.confirmOp(row && typeof row.eid === 'string' ? row : null, op.key);
+    } catch {
+      /* the mirror catches up on the next sync page; the op is gone from memory */
+    }
+    notify(recompute({ persist: true }));
+    settleWaiter(op, copyOf(op.eid), null);
+    settleIdle();
+  }
+
+  /** The request for one op. */
+  function sendOp(op) {
+    switch (op.kind) {
+      case 'create':
+        return api.post('api/entries', { eid: op.eid, blob: op.blob });
+      case 'update':
+        return api.patch(`api/entries/${op.eid}`, { blob: op.blob, ifSeq: op.baseSeq });
+      case 'remove':
+        return api.del(`api/entries/${op.eid}`);
+      case 'restore':
+        return api.post(`api/entries/${op.eid}/restore`);
+      default:
+        return Promise.reject(fail(t('errors.store.aborted')));
+    }
+  }
+
+  /** Lay the op's own fields over the fresh confirmed row and seal it again. */
+  async function rebaseOp(op, fresh) {
+    const merged = validateUpdate(fresh, fieldPatch(op), isoFromMs(nowMs()));
+    const reopens = isTimerType(merged.type) && merged.endedAt === null && fresh.endedAt !== null;
+    if (reopens && openTimer(model, merged.type, fresh.eid)) throw fail(timerRunningMessage(merged.type), 409);
+    op.plain = {
+      eid: fresh.eid,
+      rev: (Number.isInteger(fresh.rev) ? fresh.rev : 0) + 1,
+      type: merged.type,
+      startedAt: merged.startedAt,
+      endedAt: merged.endedAt,
+      details: merged.details,
+      loggedBy: fresh.loggedBy === undefined ? null : fresh.loggedBy,
+    };
+    op.blob = await encryptEntry(fdk, familyId, op.plain);
+    op.baseSeq = fresh.seq;
+  }
+
+  /**
+   * One attempt at the oldest op: judge it against the confirmed row, send
+   * it, act on the answer. Returns 'next' (go on with the next op), 'again'
+   * (judge the same op again after a sync) or 'stop' (no network, wait).
+   */
+  async function attemptOp(op) {
+    const gen = generation;
+    op.sent = true; // frozen from here on: a change arriving meanwhile becomes a follower
+    const fresh = model.get(op.eid);
+    let verdict = reconcile(op, fresh, seenBlob.get(op.eid));
+    // A precondition handed in as a function (not persisted) counts like a named guard.
+    if (verdict.action !== 'drop' && verdict.action !== 'done' && op.kind === 'update' && op.check && !op.check({ ...fresh })) {
+      verdict = { action: 'drop', reason: 'guard' };
+    }
+    if (verdict.action === 'drop') {
+      await dropOp(op, verdict.reason);
+      return 'next';
+    }
+    if (verdict.action === 'done') {
+      await finishOp(op, null);
+      return 'next';
+    }
+    if (op.kind === 'create' && op.plain && isTimerType(op.plain.type) && op.plain.endedAt === null) {
+      // The two-phone race, judged before a request is spent: a confirmed
+      // timer of the type started within the window wins, ours is a duplicate.
+      const keep = openTimer(model, op.plain.type);
+      if (keep && withinDupWindow(keep, op.plain)) {
+        await dropOp(op, 'duplicate');
+        toast(t('errors.store.duplicateRemoved', { type: label(op.plain.type) }), 'success');
+        return 'next';
+      }
+    }
+    if (verdict.action === 'rebase') {
+      const guarded = !!(op.guard || op.check);
+      const ownBase = isPendingSeq(op.baseSeq) || ownSeqs.has(fresh.seq);
+      if (op.waiter && !guarded && !ownBase) {
+        // The caller is still waiting: the row moved under a plain edit — the
+        // 409 it would have got, so the form can close on the fresh row.
+        await dropOp(op, 'conflict');
+        return 'next';
+      }
+      try {
+        await rebaseOp(op, fresh);
+      } catch (e) {
+        await dropOp(op, 'invalid', op.waiter ? e : null);
+        return 'next';
+      }
+      if (gen !== generation) return 'stop';
+    }
+    op.sent = true;
+    await persistOps([op]);
+    if (gen !== generation) return 'stop';
+    let row;
+    op.inflight = true;
+    notify(recompute({ persist: true }));
+    try {
+      row = await sendOp(op);
+    } catch (err) {
+      op.inflight = false;
+      if (gen !== generation) return 'stop';
+      const cls = classify(err, op.kind);
+      if (cls === 'exists') {
+        // Our eid on the server: the create landed and the answer got lost.
+        try {
+          await syncFresh();
+        } catch {
+          /* judged on what we have */
+        }
+        if (gen !== generation) return 'stop';
+        if (model.has(op.eid)) await finishOp(op, null);
+        else await dropOp(op, 'exists'); // a tombstone a since=0 page omits: nothing to show
+        return 'next';
+      }
+      if (cls === 'conflict' || cls === 'gone') {
+        op.sent = false;
+        op.tries += 1;
+        let synced = true;
+        try {
+          await syncFresh();
+        } catch {
+          synced = false;
+        }
+        if (gen !== generation) return 'stop';
+        if (cls === 'gone' && op.waiter) {
+          await dropOp(op, 'gone', err);
+          return 'next';
+        }
+        if (!synced) {
+          await persistOps([op]);
+          settleWaiter(op, copyOf(op.eid), null);
+          backoff();
+          return 'stop';
+        }
+        if (op.tries > 3) {
+          await persistOps([op]);
+          settleWaiter(op, null, err);
+          return 'stop';
+        }
+        return 'again';
+      }
+      if (cls === 'permanent') {
+        op.sent = false;
+        op.parked = { status: err.status, code: err.code || null, message: err.message || '' };
+        await persistOps([op]);
+        notify(recompute({ persist: true }));
+        if (op.waiter) settleWaiter(op, null, err);
+        else toast(t('errors.store.outboxParked', { type: label(op.plain ? op.plain.type : (fresh || {}).type) }));
+        return 'next';
+      }
+      // No answer, or one that says nothing was written: keep the op.
+      if (cls !== 'transient') op.sent = false; // 429/503/401 never applied — a change may fold in again
+      await persistOps([op]);
+      if (cls === 'auth') authBlocked = true;
+      else backoff(err.status === 429 ? BACKOFF_MS[BACKOFF_MS.length - 1] : null);
+      notify(recompute({ persist: true }));
+      settleWaiter(op, copyOf(op.eid), null);
+      return 'stop';
+    }
+    op.inflight = false;
+    if (gen !== generation) return 'stop';
+    clearBackoff();
+    await finishOp(op, row);
+    return 'next';
+  }
+
+  async function runFlush() {
+    const gen = generation;
+    let rounds = 0;
+    drained = 0;
+    for (;;) {
+      if (gen !== generation || !isOnline() || authBlocked) break;
+      const dead = ops.find((o) => o.dead);
+      if (dead) {
+        // Undone before it was sent, its undo toast long gone: nothing to send.
+        await dropOp(dead, 'dead');
+        continue;
+      }
+      const op = nextOp(ops);
+      if (!op) break;
+      const outcome = await attemptOp(op);
+      if (outcome === 'stop') break;
+      if (outcome === 'again' && ++rounds > 8) break;
+    }
+    if (drained > 0 && gen === generation) toast(t('errors.store.outboxSent', { n: drained }), 'success');
+  }
+
+  /** Send what is waiting, one op at a time, one flusher per browser (Web Locks). */
+  function kickFlush() {
+    if (flushing || keyState !== 'ready' || !ops.some(activeOp)) return flushing || Promise.resolve();
+    if (authBlocked || !isOnline()) return Promise.resolve();
+    if (Date.now() < backoffUntil) {
+      if (!backoffTimer) backoff(backoffUntil - Date.now());
+      return Promise.resolve();
+    }
+    const run = locks
+      ? new Promise((resolve) => {
+          let taken = false;
+          Promise.resolve(
+            locks.request('bt-outbox', { ifAvailable: true }, async (lock) => {
+              if (!lock) return;
+              taken = true;
+              await runFlush();
+            })
+          )
+            .catch(() => (taken ? null : runFlush()))
+            .then(resolve, resolve);
+        })
+      : runFlush();
+    flushing = run.finally(() => {
+      flushing = null;
+      settleIdle();
+      // Something was queued while this run was busy, or a follower is due.
+      if (ops.some(activeOp) && isOnline() && !authBlocked && Date.now() >= backoffUntil) kickFlush();
+    });
+    return flushing;
+  }
+
+  /**
+   * Put a write into the outbox (folded into an earlier op on the same
+   * entry when possible), show it, kick the flusher and wait — at most
+   * settleWaitMs, only with network — for the op's first answer. Resolves
+   * with the entry as the app now holds it: confirmed (a real seq) when the
+   * answer came in time, else pending. Rejects with what the server or the
+   * rules said when the op could not apply. When the outbox cannot be
+   * persisted (no IndexedDB) the write goes straight to the server instead:
+   * nothing is ever left waiting in memory alone.
+   */
+  async function enqueue(incoming) {
+    const gen = generation;
+    const n = Math.max(nextN, Date.now());
+    const res = coalesce(ops, { ...incoming, queuedAt: isoFromMs(nowMs()) }, n, opKey);
+    nextN = n + 1;
+    const durable = await persistOps(res.put, res.del);
+    if (gen !== generation) throw fail(t('errors.store.aborted'));
+    if (!durable) return sendDirect(incoming);
+    ops = res.ops;
+    notify(recompute({ persist: true }));
+    const op = res.put.find((o) => o.eid === incoming.eid && activeOp(o)) || null;
+    if (!op || op.dead) {
+      settleIdle();
+      return copyOf(incoming.eid);
+    }
+    if (incoming.check) op.check = incoming.check;
+    const canWait = settleWaitMs > 0 && isOnline() && !authBlocked && Date.now() >= backoffUntil;
+    if (!canWait) {
+      kickFlush();
+      return copyOf(incoming.eid);
+    }
+    const answer = new Promise((resolve, reject) => {
+      op.waiter = { resolve, reject };
+    });
+    let timer = null;
+    const patience = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(null), settleWaitMs);
+    });
+    kickFlush();
+    const result = await Promise.race([answer.then((v) => ({ v }), (e) => ({ e })), patience]);
+    if (timer) clearTimeout(timer);
+    if (result === null) {
+      op.waiter = null; // the flusher goes on without us
+      return copyOf(incoming.eid);
+    }
+    if (result.e) throw result.e;
+    return result.v;
+  }
+
+  /** The direct path: no outbox (settings, the resolver's compare-and-set
+   *  delete, a phone without IndexedDB) — the answer or the error, as they come. */
+  async function sendDirect(incoming) {
+    const local = model.get(incoming.eid);
+    const op = { ...incoming, tries: 0 };
+    const row = await serverCall(() => sendOp(op), incoming.kind === 'create' ? {} : ON_404);
+    applyLocal(row, op.plain || (local && local.error ? { error: local.error } : local ? plainOf(local) : null));
+    return entryCopy(incoming.eid);
+  }
+
   const entries = {
-    /** The entry as the model holds it (live, deleted or {error}), or null. */
+    /** The entry as the app holds it (live, deleted, pending or {error}), or null. */
     get(eid) {
       return entryCopy(eid);
     },
 
     /** Live entries whose start falls in [fromLocal, toLocal] (Zurich days), newest first. */
     range(fromLocal, toLocal) {
-      return listRange(model, fromLocal, toLocal).map((e) => ({ ...e }));
+      return listRange(effective(), fromLocal, toLocal).map((e) => ({ ...e }));
     },
+
+    /** Has the entry been changed by the OTHER phone since `seq` (a form's
+     *  ifSeq)? This device's own writes landing do not count. */
+    changedSince,
 
     /**
      * Create from {type, startedAt?, endedAt?, details?}: validated
      * (validate.validateCreate), loggedBy from the account's display name,
-     * one open timer per type, rev 1. Returns the entry as the model holds
-     * it.
+     * one open timer per type, rev 1. Returns the entry as the app holds
+     * it (see enqueue). opts.defer === false sends straight away (settings).
      */
-    async create(input) {
+    async create(input, opts = {}) {
       requireKey();
       const v = validateCreate(input, isoFromMs(nowMs()));
-      if (isTimerType(v.type) && v.endedAt === null && openTimer(model, v.type)) {
+      if (isTimerType(v.type) && v.endedAt === null && openTimer(effective(), v.type)) {
         throw fail(timerRunningMessage(v.type), 409);
       }
       const plain = {
@@ -1038,74 +1567,82 @@ export function createStore(deps) {
         loggedBy: authorName(),
       };
       const blob = await encryptEntry(fdk, familyId, plain);
-      const row = await serverCall(() => api.post('api/entries', { eid: plain.eid, blob }));
-      applyLocal(row, plain);
-      return entryCopy(plain.eid);
+      const incoming = { eid: plain.eid, kind: 'create', blob, baseSeq: null, fields: [], guard: null, plain };
+      if (opts.defer === false) return sendDirect(incoming);
+      return enqueue(incoming);
     },
 
     /**
      * Field-level update {startedAt?, endedAt?, details?} merged onto the
-     * CURRENT local row, sent with ifSeq (opts.ifSeq — the seq an edit form
-     * rendered from — or the local seq). opts.precondition(row) is checked
-     * on the local row FIRST — a partner's end that a sync already applied
-     * is never overwritten ("Der Timer wurde bereits beendet"). On 409:
-     * sync, re-read, and when the precondition holds on the fresh row retry
-     * ONCE; otherwise "Der Timer wurde bereits beendet" (with a
-     * precondition) or the server's 409 text (without one — the edit form
-     * reloads).
+     * entry as the app holds it. opts.guard ('open' | 'durationless' |
+     * 'paused') names the state the row must still be in — checked on the
+     * local row FIRST (a partner's end that a sync already applied is never
+     * overwritten: "Der Timer wurde bereits beendet") and again on the fresh
+     * row when the server says the row moved; opts.precondition(row) is the
+     * same as a function (not persisted). opts.ifSeq — the seq an edit form
+     * rendered from — refuses the write when the OTHER phone changed the row
+     * since (409, the form reloads); the store's own writes landing meanwhile
+     * do not count.
      */
     async update(eid, patch, opts = {}) {
       requireKey();
       const local = liveLocal(eid);
-      const guarded = typeof opts.precondition === 'function';
-      if (guarded && !opts.precondition({ ...local })) throw fail(t('errors.validate.timerAlreadyEnded'), 409);
-      const ifSeq = Number.isInteger(opts.ifSeq) ? opts.ifSeq : local.seq;
-      try {
-        return await patchAttempt(local, patch, ifSeq);
-      } catch (err) {
-        if (!err || !err.server || err.status !== 409) throw err;
-        try {
-          await syncFresh();
-        } catch {
-          throw err;
-        }
-        const fresh = model.get(eid);
-        if (!fresh || fresh.deletedAt != null || fresh.error) throw fail(t('errors.store.notFound'), 404);
-        if (!guarded) throw err;
-        if (!opts.precondition({ ...fresh })) throw fail(t('errors.validate.timerAlreadyEnded'), 409);
-        return await patchAttempt(fresh, patch, fresh.seq);
-      }
+      const guard = typeof opts.guard === 'string' && GUARDS[opts.guard] ? opts.guard : null;
+      const check = typeof opts.precondition === 'function' ? opts.precondition : guard ? GUARDS[guard] : null;
+      if (check && !check({ ...local })) throw fail(t('errors.validate.timerAlreadyEnded'), 409);
+      if (Number.isInteger(opts.ifSeq) && changedSince(eid, opts.ifSeq)) throw fail(t('api.entries.conflict'), 409);
+      const merged = validateUpdate(local, patch, isoFromMs(nowMs()));
+      const reopens = isTimerType(merged.type) && merged.endedAt === null && local.endedAt !== null;
+      if (reopens && openTimer(effective(), merged.type, eid)) throw fail(timerRunningMessage(merged.type), 409);
+      const plain = {
+        eid,
+        rev: (Number.isInteger(local.rev) ? local.rev : 0) + 1,
+        type: merged.type,
+        startedAt: merged.startedAt,
+        endedAt: merged.endedAt,
+        details: merged.details,
+        loggedBy: local.loggedBy === undefined ? null : local.loggedBy,
+      };
+      const blob = await encryptEntry(fdk, familyId, plain);
+      return enqueue({
+        eid,
+        kind: 'update',
+        blob,
+        baseSeq: local.seq,
+        fields: changedFields(local, merged),
+        guard,
+        plain,
+        check: guard ? null : check,
+      });
     },
 
     /**
      * Soft delete; the tombstone keeps its plaintext locally so restore can
      * check the timer rule. opts.ifSeq (the duplicate-timer resolver) is a
-     * compare-and-set: the server 409s when the row moved meanwhile.
+     * compare-and-set that goes straight to the server: the server 409s
+     * when the row moved meanwhile.
      */
     async remove(eid, opts = {}) {
       requireKey();
-      const local = model.get(eid);
+      const local = effective().get(eid);
       if (!local || local.deletedAt != null) throw fail(t('errors.store.notFound'), 404);
-      const ifSeq = Number.isInteger(opts.ifSeq) ? opts.ifSeq : null;
-      const row = await serverCall(
-        () => api.del(`api/entries/${eid}`, ifSeq === null ? undefined : { ifSeq }),
-        ON_404
-      );
-      applyLocal(row, local.error ? { error: local.error } : plainOf(local));
-      return entryCopy(eid);
+      if (Number.isInteger(opts.ifSeq)) {
+        const row = await serverCall(() => api.del(`api/entries/${eid}`, { ifSeq: opts.ifSeq }), ON_404);
+        applyLocal(row, local.error ? { error: local.error } : plainOf(local));
+        return entryCopy(eid);
+      }
+      return enqueue({ eid, kind: 'remove', blob: null, baseSeq: local.seq, fields: [], guard: null, plain: null });
     },
 
     /** Undo a soft delete; an open timer may only come back when no other of its type runs. */
     async restore(eid) {
       requireKey();
-      const local = model.get(eid);
+      const local = effective().get(eid);
       if (!local || local.deletedAt == null) throw fail(t('errors.store.notFound'), 404);
-      if (!local.error && isTimerType(local.type) && local.endedAt === null && openTimer(model, local.type, eid)) {
+      if (!local.error && isTimerType(local.type) && local.endedAt === null && openTimer(effective(), local.type, eid)) {
         throw fail(timerRunningMessage(local.type), 409);
       }
-      const row = await serverCall(() => api.post(`api/entries/${eid}/restore`), ON_404);
-      applyLocal(row, local.error ? { error: local.error } : plainOf(local));
-      return entryCopy(eid);
+      return enqueue({ eid, kind: 'restore', blob: null, baseSeq: local.seq, fields: [], guard: null, plain: null });
     },
   };
 
@@ -1168,7 +1705,7 @@ export function createStore(deps) {
     let base = familySettingsRow(model);
     for (let attempt = 0; ; attempt++) {
       if (!base) {
-        await entries.create({ type: 'settings', details: change });
+        await entries.create({ type: 'settings', details: change }, { defer: false });
         return settings.current;
       }
       try {
@@ -1198,6 +1735,13 @@ export function createStore(deps) {
       tickRecompute();
       store.refresh().catch(() => {});
     }
+  }
+
+  /** The network is back: forget the pause, send what is waiting. */
+  function onOnline() {
+    clearBackoff();
+    store.refresh().catch(() => {});
+    kickFlush();
   }
 
   /** "Today" rolls over even without the network: re-derive and notify on change. */
@@ -1302,6 +1846,7 @@ export function createStore(deps) {
       if (hasDom) {
         document.addEventListener('visibilitychange', onVisible);
         window.addEventListener('focus', onVisible);
+        window.addEventListener('online', onOnline);
       }
       pollTimer = setInterval(() => {
         if (!hasDom || document.visibilityState === 'visible') {
@@ -1316,11 +1861,74 @@ export function createStore(deps) {
       if (hasDom) {
         document.removeEventListener('visibilitychange', onVisible);
         window.removeEventListener('focus', onVisible);
+        window.removeEventListener('online', onOnline);
       }
       if (pollTimer) {
         clearInterval(pollTimer);
         pollTimer = null;
       }
+      clearBackoff();
+    },
+
+    /** The outbox as the views see it: counts, the list, and the controls of the sheet. */
+    outbox: {
+      /** Entries still to send (pending creates, edits, deletes). */
+      get count() {
+        return summary(ops).waiting;
+      },
+      /** Entries the server refused for good — waiting for a retry or a discard. */
+      get parked() {
+        return summary(ops).parked;
+      },
+      /** Whether the outbox is persisted (false = no IndexedDB: writes go straight to the server). */
+      get durable() {
+        return opsDurable;
+      },
+      /** The ops, oldest first: {key, eid, kind, status, queuedAt, type, parked}. */
+      list() {
+        return ops
+          .filter((o) => !o.dead)
+          .map((o) => {
+            const e = effective().get(o.eid) || model.get(o.eid) || null;
+            return {
+              key: o.key,
+              eid: o.eid,
+              kind: o.kind,
+              status: o.parked ? 'parked' : o.inflight ? 'sending' : 'waiting',
+              queuedAt: o.queuedAt,
+              type: o.plain ? o.plain.type : e ? e.type : null,
+              parked: o.parked ? { ...o.parked } : null,
+            };
+          });
+      },
+      /** Send now (a tap on «Jetzt senden»): resolves when the run is over. */
+      flush() {
+        clearBackoff();
+        return kickFlush();
+      },
+      /** Resolves once nothing is left to send (tests, the screenshot script). */
+      idle() {
+        return new Promise((resolve) => {
+          idleWaiters.push(resolve);
+          settleIdle();
+        });
+      },
+      /** Try a parked op again. */
+      async retry(key) {
+        const op = ops.find((o) => o.key === key);
+        if (!op || !op.parked) return;
+        op.parked = null;
+        await persistOps([op]);
+        notify(recompute({ persist: true }));
+        clearBackoff();
+        await kickFlush();
+      },
+      /** Give a parked op up: what it would have written is gone. */
+      async discard(key) {
+        const op = ops.find((o) => o.key === key);
+        if (!op) return;
+        await dropOp(op, 'dead');
+      },
     },
 
     /**
@@ -1349,7 +1957,7 @@ export function createStore(deps) {
 
     /** Every decrypted entry (deleted ones flagged), newest first — the export. */
     exportPlain() {
-      return [...model.values()]
+      return [...effective().values()]
         .filter((e) => !e.error)
         .sort(sortNewest)
         .map((e) => ({

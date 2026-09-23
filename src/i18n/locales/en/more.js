@@ -149,6 +149,10 @@ export default {
   'password.saved': 'Password changed – other devices have to sign in again',
   'logout.action': 'Sign out',
   'logout.hint': 'Removes the key and the entries from this device – on the server they stay, encrypted.',
+  'logout.sending': 'Sending entries still waiting …',
+  'logout.pending.one': '1 entry has not been sent yet and will be lost on logout.',
+  'logout.pending.other': '{n} entries have not been sent yet and will be lost on logout.',
+  'logout.anyway': 'Log out anyway',
   'logout.progress': 'Signing out …',
   'logout.serverFailed': 'Signed out locally – the server session expires on its own',
   // --- Account: the family half ---

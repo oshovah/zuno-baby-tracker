@@ -85,4 +85,9 @@ export default {
   'store.invalidUser': 'Ungültiger Benutzer',
   'store.duplicateTimers': 'Zwei {type}-Timer offen – bitte einen im Verlauf beenden',
   'store.duplicateRemoved': 'Doppelter {type}-Timer entfernt',
+  // The outbox (src/outbox.js): what happened to a write made without network
+  'store.outboxSent': '{n} gesendet',
+  'store.outboxDropped': 'Nicht übernommen: {type} wurde auf dem anderen Handy inzwischen beendet oder geändert',
+  'store.outboxGone': 'Nicht übernommen: {type} wurde auf dem anderen Handy inzwischen gelöscht',
+  'store.outboxParked': 'Nicht gesendet: der Server hat {type} abgelehnt – siehe «Jetzt», nicht gesendete Einträge',
 };

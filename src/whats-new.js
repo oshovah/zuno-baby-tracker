@@ -15,6 +15,17 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-23',
+    de: [
+      'Erfassen geht jetzt auch ohne Netz: Windel, Stillen, Schoppen, Schlaf, Nachtragen, Ändern, Löschen und Erinnerungen werden auf dem Handy gespeichert («wartet auf Netz») und gesendet, sobald Zuno offen ist und wieder Netz hat. Oben rechts auf «Jetzt» steht, wie viele noch warten – ein Tipp darauf zeigt sie.',
+      'Hat das andere Handy denselben Eintrag inzwischen beendet, geändert oder gelöscht, gilt dessen Stand – dieses Handy sagt es dann.',
+    ],
+    en: [
+      'Logging now works without a network: diapers, nursing, bottles, sleep, backfills, edits, deletes and reminders are saved on the phone ("waiting for network") and sent as soon as Zuno is open and online again. The top right of "Now" says how many are still waiting – a tap shows them.',
+      'If the other phone has ended, changed or deleted the same entry meanwhile, its version stands – this phone tells you.',
+    ],
+  },
+  {
     id: '2026-09-20',
     de: [
       'Die Trinkmenge rechnet jetzt auch nach dem 10. Lebenstag: ein Sechstel des Körpergewichts am Tag, nach eurem letzten Gewichtseintrag (Nachtragen › Gewicht) – höchstens 1000 ml am Tag und 230 ml pro Mahlzeit. Ohne Gewicht aus den letzten drei Wochen gilt ein Richtwert nach Alter. Eine empfohlene Menge von der Hebamme geht weiterhin vor.',

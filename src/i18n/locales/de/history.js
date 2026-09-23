@@ -28,6 +28,9 @@ export default {
   'filter.title': 'Grafiken',
   'filter.hint': 'Gilt nur auf diesem Handy. Eine Grafik ohne Einträge bleibt ohnehin weg.',
   'chart.dayLabel': '{n}.',
+  // A row's second line while its write waits in the outbox
+  'pending.waiting': 'wartet auf Netz',
+  'pending.parked': 'vom Server abgelehnt',
   'chart.weight': 'Gewicht',
   'chart.since': 'seit {date}',
   'chart.meals': 'Mahlzeiten pro Tag',

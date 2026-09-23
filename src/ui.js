@@ -377,6 +377,14 @@ export function fromLocalInput(value) {
 
 const TOAST_MS = { error: 5000, success: 2600 };
 
+// Appended to every success toast while writes wait in the outbox (main.js
+// sets it from the store): «Windel gespeichert · wartet auf Netz» — a save
+// made without network is a save on this phone, and the toast says so.
+let toastHint = () => '';
+export function setToastHint(fn) {
+  toastHint = typeof fn === 'function' ? fn : () => '';
+}
+
 /**
  * toast('Windel gespeichert', 'success', { action: { label: 'Rückgängig',
  * onClick } }) — the action button keeps the toast up a little longer.
@@ -389,7 +397,8 @@ export function toast(message, type = 'error', opts = {}) {
   el.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
   const text = document.createElement('span');
-  text.textContent = message;
+  const hint = type === 'success' ? toastHint() : '';
+  text.textContent = hint ? `${message} · ${hint}` : message;
   el.appendChild(text);
 
   let ms = opts.ms || TOAST_MS[type] || 4000;

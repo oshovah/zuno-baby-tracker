@@ -29,17 +29,13 @@
  * Testfamilie, a baby born eight days ago.
  */
 
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createServer } from 'vite';
+import { root, sleep, startApi, startVite, startChrome, connect, openPhone } from './lib/headless.mjs';
 import { zurichDateOf, zurichTimeUtc, shiftZurichDate } from '../src/tz.js';
 import { SHOTS, SHOT_LANGS, SHOT_SIZE } from '../src/shots.js';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const outArg = argv.indexOf('--out');
 const outDir = outArg >= 0 && argv[outArg + 1] ? path.resolve(argv[outArg + 1]) : path.join(root, 'src', 'shots');
@@ -73,7 +69,6 @@ const RECIPES = {
 };
 
 const log = (msg) => console.log(`[screenshots] ${msg}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function fail(msg) {
   console.error(`[screenshots] ${msg}`);
@@ -174,115 +169,6 @@ function inventWeek(today, nowIso) {
   return out.sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1));
 }
 
-// --- processes -------------------------------------------------------------------
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.on('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address();
-      srv.close(() => resolve(port));
-    });
-  });
-}
-
-async function startApi(dbPath) {
-  const port = await freePort();
-  const proc = spawn('php', ['-S', `127.0.0.1:${port}`, path.join('scripts', 'dev-router.php')], {
-    cwd: root,
-    env: { ...process.env, BABY_DB_PATH: dbPath, BABY_BCRYPT_COST: '4' },
-    stdio: 'ignore',
-  });
-  proc.on('error', () => fail('could not start php — is it on the PATH?'));
-  for (let i = 0; i < 50; i++) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/me`);
-      if (res.status < 500) return { port, stop: () => proc.kill() };
-    } catch {
-      /* not up yet */
-    }
-    await sleep(100);
-  }
-  proc.kill();
-  return fail('the PHP API did not come up');
-}
-
-async function startVite(apiPort) {
-  const server = await createServer({
-    root,
-    configFile: false, // vite.config.js proxies to the dev API on :8788 — this one goes to the scratch API
-    base: './',
-    logLevel: 'error',
-    // no watcher, no HMR: the pictures this run writes are part of the page's module graph (login.js globs src/shots/)
-    server: { host: '127.0.0.1', port: await freePort(), strictPort: true, hmr: false, watch: null, proxy: { '/api': `http://127.0.0.1:${apiPort}` } },
-  });
-  await server.listen();
-  return { url: `http://127.0.0.1:${server.config.server.port}/`, stop: () => server.close() };
-}
-
-function chromePath() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-  ].filter(Boolean);
-  return candidates.find((p) => fs.existsSync(p)) || fail('no Chrome found — set CHROME_PATH');
-}
-
-function startChrome(profileDir) {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(
-      chromePath(),
-      ['--headless=new', `--user-data-dir=${profileDir}`, '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check',
-        '--disable-extensions', '--hide-scrollbars', '--mute-audio', 'about:blank'],
-      { stdio: ['ignore', 'ignore', 'pipe'] }
-    );
-    let err = '';
-    const timer = setTimeout(() => reject(new Error('Chrome did not announce its DevTools port')), 15000);
-    proc.stderr.on('data', (chunk) => {
-      err += chunk;
-      const m = err.match(/DevTools listening on (ws:\/\/\S+)/);
-      if (m) {
-        clearTimeout(timer);
-        resolve({ wsUrl: m[1], stop: () => proc.kill() });
-      }
-    });
-    proc.on('error', reject);
-  });
-}
-
-/** The DevTools protocol, as much of it as this script needs. */
-function connect(wsUrl) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl);
-    const pending = new Map();
-    let nextId = 0;
-    ws.addEventListener('error', () => reject(new Error('DevTools socket failed')));
-    ws.addEventListener('message', (ev) => {
-      const msg = JSON.parse(ev.data);
-      const p = pending.get(msg.id);
-      if (!p) return;
-      pending.delete(msg.id);
-      if (msg.error) p.reject(new Error(`${p.method}: ${msg.error.message}`));
-      else p.resolve(msg.result);
-    });
-    ws.addEventListener('open', () =>
-      resolve({
-        send(method, params = {}, sessionId) {
-          const id = ++nextId;
-          ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
-          return new Promise((res, rej) => pending.set(id, { resolve: res, reject: rej, method }));
-        },
-        close: () => ws.close(),
-      })
-    );
-  });
-}
-
 // --- in the page -------------------------------------------------------------------
 
 /** Before any script of the app: the shifted clock and the device's prefs. */
@@ -335,6 +221,7 @@ async function seedInPage({ words, entries, birthDate, today, ticks }) {
   });
   await store.settings.save({ birthDate, mealsPerDay: 8, nursingMl: 40 });
   await write(entries.filter((e) => e.by === 'papa'));
+  await store.outbox.idle(); // every row confirmed before the logout wipes the device
   await session.logout();
 
   await session.registerJoin({
@@ -352,6 +239,7 @@ async function seedInPage({ words, entries, birthDate, today, ticks }) {
     });
   }
   await write(entries.filter((e) => e.by === 'mama'));
+  await store.outbox.idle();
   await store.refresh();
   return { today, rows: entries.length + ticks.length + 3 };
 }
@@ -374,40 +262,10 @@ async function shootLanguage(cdp, lang, tmp) {
     const nowIso = zurichTimeUtc(today, NOW_WALL);
     const offsetMs = Date.parse(nowIso) - realNow;
 
-    const { browserContextId } = await cdp.send('Target.createBrowserContext');
-    const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank', browserContextId });
-    const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
-    const send = (method, params) => cdp.send(method, params, sessionId);
-    await send('Page.enable');
-    await send('Runtime.enable');
-    await send('Emulation.setDeviceMetricsOverride', { ...VIEWPORT, mobile: true });
-    await send('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Zurich' });
-    await send('Emulation.setEmulatedMedia', {
-      features: [{ name: 'prefers-color-scheme', value: 'dark' }, { name: 'prefers-reduced-motion', value: 'reduce' }],
-    });
-    await send('Page.addScriptToEvaluateOnNewDocument', { source: bootScript(lang, offsetMs) });
-
-    const evaluate = async (expression) => {
-      const res = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
-      if (res.exceptionDetails) {
-        const ex = res.exceptionDetails.exception;
-        throw new Error(`in the page: ${(ex && (ex.description || ex.value)) || res.exceptionDetails.text}`);
-      }
-      return res.result.value;
-    };
-    const call = (fn, arg) => evaluate(`(${fn.toString()})(${JSON.stringify(arg)})`);
-    const waitFor = async (selector, what) => {
-      for (let i = 0; i < 100; i++) {
-        if (await evaluate(`!!document.querySelector(${JSON.stringify(selector)})`)) return;
-        await sleep(100);
-      }
-      throw new Error(`${lang}/${what}: «${selector}» never showed up`);
-    };
-    const open = async (hash, ready, what) => {
-      await send('Page.navigate', { url: 'about:blank' });
-      await send('Page.navigate', { url: vite.url + hash });
-      await waitFor(ready, what);
-    };
+    const page = await openPhone(cdp, { bootScript: bootScript(lang, offsetMs), viewport: VIEWPORT });
+    const { send, evaluate, call } = page;
+    const waitFor = (selector, what) => page.waitFor(selector, `${lang}/${what}`);
+    const open = (hash, ready, what) => page.open(vite.url + hash, ready, `${lang}/${what}`);
 
     // 1. the login page, then both accounts and the week
     await open('', '.auth-form', 'login');
@@ -442,7 +300,7 @@ async function shootLanguage(cdp, lang, tmp) {
       fs.writeFileSync(file, Buffer.from(data, 'base64'));
       log(`${path.relative(root, file)}  ${(fs.statSync(file).size / 1024).toFixed(0)} KB`);
     }
-    await cdp.send('Target.disposeBrowserContext', { browserContextId });
+    await page.close();
   } finally {
     await vite.stop();
     api.stop();

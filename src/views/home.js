@@ -6,6 +6,7 @@ import { store, prefs } from '../store.js';
 import { openEntryForm } from '../entry-form.js';
 import { openTimerSheet } from '../timer.js';
 import { openTodoSheet, tickTodo, todoDetail } from '../todo-sheet.js';
+import { openOutboxSheet } from '../outbox-sheet.js';
 import { nextTodo, todoFlipAt, overdueCount } from '../reminders.js';
 import {
   mealPartsLabel,
@@ -60,11 +61,14 @@ const RETRO_MAX_AGE_MIN = 180;
 // while the condition still holds — otherwise "Der Timer wurde bereits
 // beendet". Stopping a RUNNING timer needs it open; the retro chips and
 // "Stillen beenden" on a quick feed need it still duration-less.
-const IF_OPEN = { precondition: (r) => r.endedAt === null };
-const IF_DURATIONLESS = { precondition: (r) => r.endedAt === r.startedAt };
+// Named (outbox.GUARDS), not functions: a write made without network waits
+// in the outbox and is judged against the partner's fresh row when it is
+// sent — the name survives a reload, a closure would not.
+const IF_OPEN = { guard: 'open' };
+const IF_DURATIONLESS = { guard: 'durationless' };
 // The paused hero's «Stillen beenden» and the undo of a pause need the side
 // still paused — the partner may have ended or resumed it meanwhile.
-const IF_PAUSED = { precondition: (r) => r.endedAt !== null && !!r.details && r.details.paused === true };
+const IF_PAUSED = { guard: 'paused' };
 
 /** The stop patch: `ifOpen` also rejects locally when the model already holds
  *  the partner's end (a sync applied mid-tap) — never overwrite it. */
@@ -403,7 +407,10 @@ export function renderHome(el) {
     const notice = store.notice;
 
     // Skip the rebuild when nothing it renders has changed — a re-render mid-
-    // tap destroys the pressed button and silently swallows the tap.
+    // tap destroys the pressed button and silently swallows the tap. An
+    // entry's seq and outbox state are not rendered here: a write landing
+    // in the background (placeholder seq → real seq) must not rebuild.
+    const skipMeta = (k, v) => (k === 'seq' || k === 'pending' ? undefined : v);
     const key = JSON.stringify([
       state.openTimers,
       state.lastFeed,
@@ -422,7 +429,7 @@ export function renderHome(el) {
       mealsPerDay,
       showTodos ? [todos, hasReminders, next && next.status, overdue] : null,
       fromStart,
-    ]);
+    ], skipMeta);
     if (!force && key === lastKey) return;
     lastKey = key;
     if (!feeding && !stoppable) startRowOpen = false;
@@ -651,6 +658,7 @@ export function renderHome(el) {
           </svg><span data-timer-chip-time hidden></span>
         </button>
         <span class="stale-chip" data-stale-chip hidden title="${t('home.stale.title')}"></span>
+        <button type="button" class="stale-chip outbox-chip" data-outbox-chip hidden aria-label="${t('home.outbox.chipAria')}"></button>
       </div>
       ${notice
         ? `<p class="notice" role="status" data-notice>${escapeHtml(notice)} ·
@@ -909,6 +917,7 @@ export function renderHome(el) {
       })
     );
     el.querySelector('[data-timer-chip]').addEventListener('click', () => openTimerSheet(tick));
+    el.querySelector('[data-outbox-chip]').addEventListener('click', () => openOutboxSheet());
   }
 
   // Live tick: update elapsed texts in place (no re-render, so taps never
@@ -942,10 +951,22 @@ export function renderHome(el) {
       if (start) setText(timerTime, fmtTimer((Date.now() - start) / 1000));
     }
 
-    // Staleness is time-driven, so the chip lives here, not in render().
+    // Staleness is time-driven, so the chip lives here, not in render(); the
+    // outbox chip takes its slot while something waits for the network.
     const chip = el.querySelector('[data-stale-chip]');
+    const outboxChip = el.querySelector('[data-outbox-chip]');
+    const waiting = store.outbox.count;
+    const parked = store.outbox.parked;
+    if (outboxChip) {
+      const show = waiting + parked > 0;
+      outboxChip.hidden = !show;
+      if (show) {
+        setText(outboxChip, waiting > 0 ? tn('home.outbox.waiting', waiting) : tn('home.outbox.parked', parked));
+        outboxChip.classList.toggle('parked', waiting === 0 && parked > 0);
+      }
+    }
     if (chip) {
-      const stale = !!(store.snapshot && store.isStale());
+      const stale = !!(store.snapshot && store.isStale()) && waiting + parked === 0;
       chip.hidden = !stale;
       if (stale) {
         const ts = new Date(store.snapshot.ts).toISOString();

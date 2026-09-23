@@ -1,6 +1,8 @@
 // Shared vocabulary: the entry types, sides, who, units, the buttons every
 // sheet has. Views reach for these before adding a key of their own.
 export default {
+  // Appended to success toasts while writes wait in the outbox ("… · waiting for network")
+  'outbox.toastHint': 'waiting for network',
   'type.breastfeed': 'Nursing',
   'type.bottle': 'Bottle',
   'type.diaper': 'Diaper',

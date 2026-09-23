@@ -27,6 +27,9 @@ export default {
   'filter.label': 'Show or hide charts',
   'filter.title': 'Charts',
   'filter.hint': 'Applies to this phone only. A chart without entries stays away anyway.',
+  // A row's second line while its write waits in the outbox
+  'pending.waiting': 'waiting for network',
+  'pending.parked': 'refused by the server',
   'chart.dayLabel': '{n}',
   'chart.weight': 'Weight',
   'chart.since': 'since {date}',
