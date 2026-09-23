@@ -33,6 +33,7 @@ export default {
   'pending.parked': 'vom Server abgelehnt',
   'chart.weight': 'Gewicht',
   'chart.since': 'seit {date}',
+  'chart.avg': 'Ø {value} pro Tag',
   'chart.meals': 'Mahlzeiten pro Tag',
   'chart.target': 'Ziel {n}',
   'chart.nursing': 'Stillen · Minuten pro Tag',
@@ -44,6 +45,15 @@ export default {
   'chart.sleep': 'Schlaf · Stunden pro Tag',
   'chart.temperature': 'Temperatur',
   // A day whose rows none of the chips count (a weight, say): «1 Eintrag» / «3 Einträge»
+  // The milk line under a «Mahlzeiten» day head (meals.dayMilkParts)
+  'milk.bottleBoth': 'Schoppen {ml} ml ({breast} Muttermilch · {formula} Formula)',
+  'milk.bottleBreast': 'Schoppen {ml} ml Muttermilch',
+  'milk.bottleFormula': 'Schoppen {ml} ml Formula',
+  'milk.nursed.one': '1 × gestillt',
+  'milk.nursed.other': '{n} × gestillt',
+  'milk.estimate': '≈ {ml} ml',
+  'milk.total': 'Zusammen ≈ {ml} ml',
+  'milk.hint': 'Die Stillmenge ist geschätzt: pro Stillmahlzeit die Menge unter Mehr › Einstellungen › Stillen.',
   'entryCount.one': '{n} Eintrag',
   'entryCount.other': '{n} Einträge',
   // The placeholder before the first sync and the paging button while it works

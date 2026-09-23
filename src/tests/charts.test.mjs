@@ -44,6 +44,33 @@ test('barChart: one rect per positive value, stacked heights add up, guide and l
   assert.ok(Math.abs(heights[0] + heights[1] - plotH * 0.75) < 0.6, `stacked ${heights[0] + heights[1]} vs ${plotH * 0.75}`);
   // Tooltips carry day, series and value.
   assert.ok(svg.includes('<title>1. · Links: 10</title>'));
+  // The day's total above each stack (a phone has no hover): 15, 8, 5.
+  const values = [...svg.matchAll(/<text class="chart-bar-value"[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+  assert.deepEqual(values, ['15', '8', '5']);
+  assert.ok(!barChart({ days, series: [{ label: 'x', values: [1, 2, 3], cls: 'milk' }], values: false }).includes('chart-bar-value'));
+});
+
+test('barChart: a value label only where it fits — one-digit counts on 28 days, three digits on 7 and 14 days, not on 28', () => {
+  const days = (n) => Array.from({ length: n }, (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`);
+  const labelsOf = (svg) => [...svg.matchAll(/<text class="chart-bar-value"[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+  const counts = (n) => barChart({ days: days(n), series: [{ label: 'm', values: days(n).map(() => 6), cls: 'milk' }] });
+  assert.equal(labelsOf(counts(28)).length, 28, 'a «6» fits a 28-day slot');
+  const ml = (n, mode) => barChart({ days: days(n), series: [{ label: 'b', values: days(n).map(() => 120), cls: 'milk' }, { label: 'f', values: days(n).map(() => 40), cls: 'formula' }], mode });
+  assert.deepEqual(labelsOf(ml(7, 'stacked')).slice(0, 2), ['160', '160']);
+  assert.equal(labelsOf(ml(14, 'stacked')).length, 14, '«160» fits a 14-day slot');
+  assert.equal(labelsOf(ml(28, 'stacked')).length, 0, 'not a 28-day one');
+  // Grouped: each bar its own number when the widest of them fits a bar —
+  // one rule per chart, never a total above a pair (it would read as the
+  // taller bar's value).
+  const counts2 = (n) => barChart({ days: days(n), series: [{ label: 'w', values: days(n).map(() => 5), cls: 'diaper' }, { label: 's', values: days(n).map(() => 2), cls: 'measure' }], mode: 'grouped' });
+  assert.deepEqual(labelsOf(counts2(7)).slice(0, 2), ['5', '2']);
+  assert.deepEqual(labelsOf(counts2(14)).slice(0, 2), ['5', '2'], 'a digit fits a 14-day grouped bar');
+  assert.equal(labelsOf(counts2(28)).length, 0, 'not a 28-day one');
+  const two = (n) => barChart({ days: days(n), series: [{ label: 'b', values: days(n).map(() => 90), cls: 'milk' }, { label: 'f', values: days(n).map(() => 70), cls: 'formula' }], mode: 'grouped' });
+  assert.deepEqual(labelsOf(two(7)).slice(0, 2), ['90', '70'], 'two digits fit a 7-day grouped bar');
+  assert.equal(labelsOf(two(14)).length, 0);
+  assert.equal(labelsOf(ml(7, 'grouped')).length, 0, 'three digits never fit a grouped bar');
+  assert.equal(labelsOf(ml(14, 'grouped')).length, 0);
 });
 
 test('barChart: grouped bars sit side by side, nothing for zero, labels escaped', () => {

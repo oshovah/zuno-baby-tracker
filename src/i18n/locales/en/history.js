@@ -32,6 +32,7 @@ export default {
   'pending.parked': 'refused by the server',
   'chart.dayLabel': '{n}',
   'chart.weight': 'Weight',
+  'chart.avg': 'Ø {value} per day',
   'chart.since': 'since {date}',
   'chart.meals': 'Meals per day',
   'chart.target': 'Target {n}',
@@ -44,6 +45,15 @@ export default {
   'chart.sleep': 'Sleep · hours per day',
   'chart.temperature': 'Temperature',
   // A day whose rows none of the chips count (a weight, say): "1 entry" / "3 entries"
+  // The milk line under a "Meals" day head (meals.dayMilkParts)
+  'milk.bottleBoth': 'Bottle {ml} ml ({breast} breast milk · {formula} formula)',
+  'milk.bottleBreast': 'Bottle {ml} ml breast milk',
+  'milk.bottleFormula': 'Bottle {ml} ml formula',
+  'milk.nursed.one': 'nursed 1 ×',
+  'milk.nursed.other': 'nursed {n} ×',
+  'milk.estimate': '≈ {ml} ml',
+  'milk.total': 'Total ≈ {ml} ml',
+  'milk.hint': 'The nursing amount is an estimate: per nursing meal the amount under More › Settings › Nursing.',
   'entryCount.one': '{n} entry',
   'entryCount.other': '{n} entries',
   // The placeholder before the first sync and the paging button while it works

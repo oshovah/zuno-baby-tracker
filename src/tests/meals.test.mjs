@@ -21,6 +21,8 @@ import {
   nextSideFor,
   historyItems,
   dayCounts,
+  dayMilk,
+  dayMilkParts,
   WET_PER_DAY_GUIDE,
   wetCountLabel,
   nursingBeforeBottle,
@@ -364,4 +366,55 @@ test('nursingBeforeBottle: the nursing a bottle joins, by the meal rule', () => 
   assert.equal(nursingBeforeBottle(new Map(list.map((e) => [e.eid, e])), '2026-09-01T09:30:00Z', null, NOW).minutes, 21);
   // Nothing at all.
   assert.equal(nursingBeforeBottle([], '2026-09-01T09:30:00Z', null, NOW), null);
+});
+
+test('dayMilk: the bottles by kind, the nursed meals with their minutes, the estimate per nursed meal, a total only when it is whole', () => {
+  const day = (entries) => {
+    const { items } = historyItems(entries, localDateOf(NOW), NOW);
+    return items;
+  };
+  const a = (mins) => new Date(NOW_MS - mins * 60000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  // Two nursed meals (12 + 8 min; the second with a top-up bottle), a lone
+  // bottle with both milks, a quick-logged side (a meal without minutes).
+  const items = day([
+    bf('L', a(300), a(288)),
+    bf('R', a(240), a(232)),
+    bottle(a(228), 30),
+    bottle(a(120), 70, 90),
+    bf('L', a(30), a(30)),
+  ]);
+  const milk = dayMilk(items, { nursingMl: 50 });
+  assert.deepEqual(milk, {
+    breastMl: 90,
+    formulaMl: 100,
+    bottleMl: 190,
+    nursedMeals: 3,
+    nursingMinutes: 20,
+    perMealMl: 50,
+    estimateMl: 150,
+    totalMl: 340,
+  });
+  assert.deepEqual(dayMilkParts(milk), ['Schoppen 190 ml (90 Muttermilch · 100 Formula)', '3 × gestillt · 20 Min. · ≈ 150 ml', 'Zusammen ≈ 340 ml']);
+
+  // No estimate: the nursed meals count, no ml for them and no total.
+  const none = dayMilk(items, { nursingMl: null });
+  assert.equal(none.estimateMl, null);
+  assert.equal(none.totalMl, null, 'an unknown part makes no total');
+  assert.deepEqual(dayMilkParts(none), ['Schoppen 190 ml (90 Muttermilch · 100 Formula)', '3 × gestillt · 20 Min.']);
+  assert.equal(dayMilk(items, {}).totalMl, null);
+  assert.equal(dayMilk(items, null).totalMl, null);
+  assert.equal(dayMilk(items, { nursingMl: '50' }).estimateMl, null, 'garbage estimates count as none');
+
+  // Bottles only: the bottle line is the total; one kind names itself.
+  const bottles = day([bottle(a(60), 0, 80), bottle(a(200), 0, 60)]);
+  assert.deepEqual(dayMilkParts(dayMilk(bottles, { nursingMl: 50 })), ['Schoppen 140 ml Muttermilch']);
+  assert.deepEqual(dayMilkParts(dayMilk(day([bottle(a(60), 40)]), null)), ['Schoppen 40 ml Formula']);
+  assert.equal(dayMilk(bottles, null).totalMl, 140);
+  // Nursing only, with an estimate: the nursing line is the total.
+  const nursed = day([bf('L', a(90), a(80)), bf('R', a(80), a(70))]);
+  assert.deepEqual(dayMilkParts(dayMilk(nursed, { nursingMl: 60 })), ['1 × gestillt · 20 Min. · ≈ 60 ml']);
+  assert.equal(dayMilk(nursed, { nursingMl: 60 }).totalMl, 60);
+  // A day of diapers only: nothing.
+  assert.deepEqual(dayMilkParts(dayMilk(day([entry('diaper', a(10), null, { kind: 'pee' })]), { nursingMl: 50 })), []);
+  assert.deepEqual(dayMilkParts(dayMilk([], null)), []);
 });

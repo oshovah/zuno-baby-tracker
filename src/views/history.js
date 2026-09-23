@@ -31,7 +31,7 @@
 import { store, prefs } from '../store.js';
 import { t, tn } from '../i18n/index.js';
 import { openSheet } from '../sheet.js';
-import { historyItems, mealSummary, mealPartsLabel, mealClockRange, dayCounts, wetCountLabel, WET_PER_DAY_GUIDE } from '../meals.js';
+import { historyItems, mealSummary, mealPartsLabel, mealClockRange, dayCounts, dayMilk, dayMilkParts, wetCountLabel, WET_PER_DAY_GUIDE } from '../meals.js';
 import { lastDays, dailyStats, measurementSeries } from '../stats.js';
 import { barChart, lineChart } from '../charts.js';
 import { openEntryForm } from '../entry-form.js';
@@ -217,6 +217,19 @@ export function renderHistory(el) {
     const fam = store.settings.current;
     const dayNum = (d) => t('history.chart.dayLabel', { n: Number(d.slice(8)) });
     const has = (pick) => stats.some((r) => pick(r) > 0);
+    // «Ø 5,3 pro Tag» over the days that have the figure (the days before the
+    // app was in use would drag a 28-day average down to nothing).
+    const avg = (pick, digits = 1) => {
+      const vals = stats.map(pick).filter((v) => v > 0);
+      if (!vals.length) return null;
+      const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+      const rounded = Math.round(mean * 10 ** digits) / 10 ** digits;
+      return String(rounded).replace('.', localeMeta().decimalSeparator);
+    };
+    const avgSub = (pick, unit = '', digits = 1) => {
+      const a = avg(pick, digits);
+      return a === null ? '' : t('history.chart.avg', { value: unit ? `${a} ${unit}` : a });
+    };
     const legendHtml = (legend) =>
       `<div class="chart-legend">${legend.map(([cls, label]) => `<span><i class="${cls}"></i>${escapeHtml(label)}</span>`).join('')}</div>`;
     const card = (title, svg, { sub = '', legend = null } = {}) => `
@@ -255,7 +268,7 @@ export function renderHistory(el) {
     const title = (key) => t(`history.chart.${key}`);
     if (has((r) => r.meals)) {
       const guide = fam.mealsPerDay ? { v: fam.mealsPerDay, label: t('history.chart.target', { n: fam.mealsPerDay }) } : null;
-      cards.push(['meals', card(title('meals'), barChart({ days, series: [{ label: title('meals'), values: stats.map((r) => r.meals), cls: 'milk' }], guide, xLabel: dayNum, title: title('meals') }))]);
+      cards.push(['meals', card(title('meals'), barChart({ days, series: [{ label: title('meals'), values: stats.map((r) => r.meals), cls: 'milk' }], guide, xLabel: dayNum, title: title('meals') }), { sub: avgSub((r) => r.meals) })]);
     }
     if (has((r) => r.nursingMin.L + r.nursingMin.R)) {
       const unit = (v) => `${v} ${t('common.unit.min')}`;
@@ -274,7 +287,7 @@ export function renderHistory(el) {
             valueFormat: unit,
             title: title('nursing'),
           }),
-          { legend: [['milk', t('history.chart.left')], ['milk second', t('history.chart.right')]] }
+          { legend: [['milk', t('history.chart.left')], ['milk second', t('history.chart.right')]], sub: avgSub((r) => r.nursingMin.L + r.nursingMin.R, t('common.unit.min'), 0) }
         ),
       ]);
     }
@@ -299,7 +312,7 @@ export function renderHistory(el) {
             valueFormat: unit,
             title: title('bottleMl'),
           }),
-          { legend: [['milk', t('common.milk.breast')], ['formula', formula]] }
+          { legend: [['milk', t('common.milk.breast')], ['formula', formula]], sub: avgSub((r) => r.bottleMl.breast + r.bottleMl.formula, 'ml', 0) }
         ),
       ]);
     }
@@ -319,7 +332,7 @@ export function renderHistory(el) {
             xLabel: dayNum,
             title: title('diapers'),
           }),
-          { legend: [['diaper', t('common.diaper.wet')], ['measure', t('common.diaper.soiled')]] }
+          { legend: [['diaper', t('common.diaper.wet')], ['measure', t('common.diaper.soiled')]], sub: avgSub((r) => r.wet + r.soiled) }
         ),
       ]);
     }
@@ -336,7 +349,8 @@ export function renderHistory(el) {
             yFormat: hours,
             valueFormat: (v) => fmtDurationMin(Math.round(v * 60)),
             title: title('sleep'),
-          })
+          }),
+          { sub: avgSub((r) => r.sleepMin / 60, t('common.unit.hour')) }
         ),
       ]);
     }
@@ -500,6 +514,13 @@ export function renderHistory(el) {
             <div class="meal-rows" id="meal-${key}"${open ? '' : ' hidden'}>${m.entries.map((e) => rowHtml(e, ' sub')).join('')}</div>
           </section>`;
     };
+    // Under the head: the day's milk — the bottles by kind, the nursed meals
+    // with their minutes and the estimated amount, the total (meals.dayMilk).
+    const fam = store.settings.current;
+    const milkLine = (dayItems) => {
+      const parts = dayMilkParts(dayMilk(dayItems, fam));
+      return parts.length ? `<p class="day-milk">${parts.map((p) => `<span>${p}</span>`).join('<span class="sep"> · </span>')}</p>` : '';
+    };
     const mealsOnly = ([day, dayItems]) => {
       const meals = dayItems.filter((it) => it.meal);
       if (!meals.length) return '';
@@ -509,13 +530,18 @@ export function renderHistory(el) {
               <h2>${fmtDayHeading(day)}</h2>
               <span class="day-summary">${daySummaryHtml(dayItems, day, entries)}</span>
             </header>
+            ${milkLine(dayItems)}
             ${meals.map((it) => foldedMeal(it.meal)).join('')}
           </section>`;
     };
 
     const sectionOf = { entries: unfolded, days: folded, meals: mealsOnly }[view];
     const charts = view === 'charts';
-    const sections = charts ? chartsHtml() : [...groups.entries()].map(sectionOf).join('');
+    let sections = charts ? chartsHtml() : [...groups.entries()].map(sectionOf).join('');
+    // «Mahlzeiten» with an estimate in play: say once that it is one.
+    if (view === 'meals' && sections && fam.breastfeeding !== false && Number.isInteger(fam.nursingMl) && fam.nursingMl >= 1) {
+      sections += `<p class="hint milk-hint">${t('history.milk.hint')}</p>`;
+    }
 
     el.innerHTML = `
       <header class="view-head has-seg">

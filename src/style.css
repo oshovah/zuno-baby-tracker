@@ -1329,6 +1329,22 @@ input[type='datetime-local'] {
   font-weight: 700;
 }
 
+/* The milk line under a «Mahlzeiten» day head. */
+.day-milk {
+  margin: -2px 2px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.day-milk .sep {
+  color: var(--faint);
+}
+
+.milk-hint {
+  margin: 4px 2px 14px;
+}
+
 .day-summary {
   font-size: 13px;
   color: var(--muted);
@@ -1856,6 +1872,13 @@ input[type='datetime-local'] {
 .chart .chart-value {
   fill: var(--ink);
   font-weight: 700;
+}
+
+/* The number above a bar (charts.js writes one wherever it fits). */
+.chart .chart-bar-value {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--ink);
 }
 
 .chart .chart-grid {

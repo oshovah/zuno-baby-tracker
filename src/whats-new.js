@@ -15,6 +15,17 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-23-b',
+    de: [
+      'Verlauf › Mahlzeiten zeigt pro Tag, wie viel Milch es war: Schoppen nach Muttermilch und Formula, wie oft gestillt wurde und wie lange – und, wenn unter Einstellungen › Stillen eine Menge pro Stillmahlzeit steht, die geschätzte Stillmenge und die Summe.',
+      'Die Grafiken tragen ihre Zahlen: über jedem Balken steht der Wert des Tages (wo er Platz hat), im Kopf der Durchschnitt pro Tag.',
+    ],
+    en: [
+      'History › Meals shows per day how much milk it was: bottles by breast milk and formula, how often and how long the baby nursed – and, with an amount per nursing meal under Settings › Nursing, the estimated nursing amount and the total.',
+      'The charts carry their numbers: above each bar the day\'s value (where it fits), in the head the average per day.',
+    ],
+  },
+  {
     id: '2026-09-23',
     de: [
       'Erfassen geht jetzt auch ohne Netz: Windel, Stillen, Schoppen, Schlaf, Nachtragen, Ändern, Löschen und Erinnerungen werden auf dem Handy gespeichert («wartet auf Netz») und gesendet, sobald Zuno offen ist und wieder Netz hat. Oben rechts auf «Jetzt» steht, wie viele noch warten – ein Tipp darauf zeigt sie.',

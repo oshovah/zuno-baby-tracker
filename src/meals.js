@@ -5,7 +5,7 @@
 // model.groupMeals output (no DOM), node-tested in tests/meals.test.mjs —
 // kept out of the views' closures, where nothing could assert it.
 
-import { t } from './i18n/index.js';
+import { t, tn } from './i18n/index.js';
 import { groupMeals, liveEntries, sortNewest, MEAL_GAP_MIN } from './model.js';
 import { FEED_TYPES, isoFromMs } from './validate.js';
 import { SIDE_LABELS, bottleTotalMl, fmtClock, fmtDurationMin, localDateOf, nowMs } from './ui.js';
@@ -265,6 +265,61 @@ export function dayCounts(dayItems, localDate, allEntries, now = nowMs()) {
     if (to > from) sleepMinutes += Math.round((to - from) / 60000);
   }
   return { meals, wet, soiled, sleepMinutes, tasks };
+}
+
+/**
+ * A day's milk, from its meals (the day's historyItems): what the bottles
+ * held by kind, the meals with a Stillen side and their minutes, and — when
+ * the family estimates what one nursing meal gives (settings.nursingMl, the
+ * number the Schoppen form takes off the target) — about how much the
+ * breast gave. `totalMl` = bottles + estimate; null while there are nursed
+ * meals but no estimate (an unknown part makes no total).
+ */
+export function dayMilk(dayItems, settings) {
+  let breastMl = 0;
+  let formulaMl = 0;
+  let nursedMeals = 0;
+  let nursingMinutes = 0;
+  for (const it of dayItems) {
+    const m = it.meal;
+    if (!m) continue;
+    breastMl += m.bottleColostrumMl || 0;
+    formulaMl += m.bottleMl || 0;
+    if (m.firstSide !== null) {
+      nursedMeals++;
+      nursingMinutes += m.minutes || 0;
+    }
+  }
+  const perMealMl = settings && Number.isInteger(settings.nursingMl) && settings.nursingMl >= 1 ? settings.nursingMl : null;
+  const estimateMl = nursedMeals > 0 && perMealMl ? nursedMeals * perMealMl : null;
+  const bottleMl = breastMl + formulaMl;
+  const totalMl = nursedMeals > 0 && !perMealMl ? null : bottleMl + (estimateMl || 0);
+  return { breastMl, formulaMl, bottleMl, nursedMeals, nursingMinutes, perMealMl, estimateMl, totalMl };
+}
+
+/**
+ * The line under a «Mahlzeiten» day head, as parts to join with « · »:
+ * «Schoppen 250 ml (180 Muttermilch · 70 Formula)», «4 × gestillt · 48 Min.
+ * · ≈ 200 ml», «Zusammen ≈ 450 ml» (the total only when both a bottle and
+ * an estimate are in it — otherwise one of the two lines already says it).
+ * Empty for a day without milk.
+ */
+export function dayMilkParts(milk) {
+  const parts = [];
+  if (milk.bottleMl > 0) {
+    const p = { ml: milk.bottleMl, breast: milk.breastMl, formula: milk.formulaMl };
+    if (milk.breastMl > 0 && milk.formulaMl > 0) parts.push(t('history.milk.bottleBoth', p));
+    else if (milk.breastMl > 0) parts.push(t('history.milk.bottleBreast', p));
+    else parts.push(t('history.milk.bottleFormula', p));
+  }
+  if (milk.nursedMeals > 0) {
+    const bits = [tn('history.milk.nursed', milk.nursedMeals)];
+    if (milk.nursingMinutes > 0) bits.push(fmtDurationMin(milk.nursingMinutes));
+    if (milk.estimateMl) bits.push(t('history.milk.estimate', { ml: milk.estimateMl }));
+    parts.push(bits.join(' · '));
+  }
+  if (milk.bottleMl > 0 && milk.estimateMl) parts.push(t('history.milk.total', { ml: milk.totalMl }));
+  return parts;
 }
 
 /**
