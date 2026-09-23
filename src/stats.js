@@ -71,6 +71,19 @@ export function dailyStats(entries, days, nowIso = isoFromMs(nowMs())) {
   return days.map((d) => byDay.get(d));
 }
 
+/**
+ * The average of a figure per day over `rows` (dailyStats): only the days
+ * that have it (the days before the app was in use would drag a 28-day
+ * average down to nothing) and never `skipDay` — today, which is not over
+ * yet. Rounded to `digits`; null when no day counts.
+ */
+export function avgPerDay(rows, pick, skipDay = null, digits = 1) {
+  const vals = rows.filter((r) => r.day !== skipDay).map(pick).filter((v) => v > 0);
+  if (!vals.length) return null;
+  const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+  return Math.round(mean * 10 ** digits) / 10 ** digits;
+}
+
 const MEASURE_KEY = { weight: 'grams', temperature: 'celsius' };
 
 /** The points of a measurement type, oldest first: [{ t: startedAt, ms, v }]

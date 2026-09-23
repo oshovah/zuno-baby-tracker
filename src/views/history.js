@@ -32,7 +32,7 @@ import { store, prefs } from '../store.js';
 import { t, tn } from '../i18n/index.js';
 import { openSheet } from '../sheet.js';
 import { historyItems, mealSummary, mealPartsLabel, mealClockRange, dayCounts, dayMilk, dayMilkParts, wetCountLabel, WET_PER_DAY_GUIDE } from '../meals.js';
-import { lastDays, dailyStats, measurementSeries } from '../stats.js';
+import { lastDays, dailyStats, measurementSeries, avgPerDay } from '../stats.js';
 import { barChart, lineChart } from '../charts.js';
 import { openEntryForm } from '../entry-form.js';
 import {
@@ -217,18 +217,13 @@ export function renderHistory(el) {
     const fam = store.settings.current;
     const dayNum = (d) => t('history.chart.dayLabel', { n: Number(d.slice(8)) });
     const has = (pick) => stats.some((r) => pick(r) > 0);
-    // «Ø 5,3 pro Tag» over the days that have the figure (the days before the
-    // app was in use would drag a 28-day average down to nothing).
-    const avg = (pick, digits = 1) => {
-      const vals = stats.map(pick).filter((v) => v > 0);
-      if (!vals.length) return null;
-      const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
-      const rounded = Math.round(mean * 10 ** digits) / 10 ** digits;
-      return String(rounded).replace('.', localeMeta().decimalSeparator);
-    };
+    // «Ø 5,3 pro Tag» over the days that have the figure — without today,
+    // which is not over yet (stats.avgPerDay).
     const avgSub = (pick, unit = '', digits = 1) => {
-      const a = avg(pick, digits);
-      return a === null ? '' : t('history.chart.avg', { value: unit ? `${a} ${unit}` : a });
+      const a = avgPerDay(stats, pick, today, digits);
+      if (a === null) return '';
+      const value = String(a).replace('.', localeMeta().decimalSeparator);
+      return t('history.chart.avg', { value: unit ? `${value} ${unit}` : value });
     };
     const legendHtml = (legend) =>
       `<div class="chart-legend">${legend.map(([cls, label]) => `<span><i class="${cls}"></i>${escapeHtml(label)}</span>`).join('')}</div>`;

@@ -15,6 +15,11 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-23-c',
+    de: ['Der Durchschnitt im Kopf der Grafiken lässt den heutigen Tag weg – er ist noch nicht zu Ende und würde ihn drücken.'],
+    en: ['The average in the head of the charts leaves today out – it is not over yet and would drag it down.'],
+  },
+  {
     id: '2026-09-23-b',
     de: [
       'Verlauf › Mahlzeiten zeigt pro Tag, wie viel Milch es war: Schoppen nach Muttermilch und Formula, wie oft gestillt wurde und wie lange – und, wenn unter Einstellungen › Stillen eine Menge pro Stillmahlzeit steht, die geschätzte Stillmenge und die Summe.',

@@ -2,7 +2,7 @@
 // (src/stats.js), over entries built like the meals tests build them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lastDays, dailyStats, measurementSeries } from '../stats.js';
+import { lastDays, dailyStats, measurementSeries, avgPerDay } from '../stats.js';
 import { localDateOf, shiftDate } from '../ui.js';
 
 const NOW = '2026-09-02T10:00:00Z';
@@ -75,4 +75,19 @@ test('measurementSeries: weight and temperature points oldest first, junk skippe
   ]);
   assert.deepEqual(measurementSeries(entries, 'temperature').map((p) => p.v), [37.2]);
   assert.deepEqual(measurementSeries(entries, 'diaper'), []);
+});
+
+test('avgPerDay: over the days that have the figure, never over the day to skip (today), rounded; null without any', () => {
+  const rows = [
+    { day: '2026-09-20', meals: 0, ml: 0 },
+    { day: '2026-09-21', meals: 8, ml: 150 },
+    { day: '2026-09-22', meals: 7, ml: 105 },
+    { day: '2026-09-23', meals: 3, ml: 40 }, // today, half over
+  ];
+  assert.equal(avgPerDay(rows, (r) => r.meals, '2026-09-23'), 7.5, 'today left out, the empty day too');
+  assert.equal(avgPerDay(rows, (r) => r.meals), 6, 'without a day to skip, today counts');
+  assert.equal(avgPerDay(rows, (r) => r.ml, '2026-09-23', 0), 128, '127.5 rounds to 128 at 0 digits');
+  assert.equal(avgPerDay(rows, (r) => r.ml, '2026-09-23', 1), 127.5);
+  assert.equal(avgPerDay(rows.slice(3), (r) => r.meals, '2026-09-23'), null, 'only today: no average yet');
+  assert.equal(avgPerDay([], (r) => r.meals, '2026-09-23'), null);
 });
