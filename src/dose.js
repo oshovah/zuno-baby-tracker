@@ -110,16 +110,19 @@ export function mealTargetMl(dailyMl, mealsPerDay = DEFAULT_MEALS_PER_DAY) {
 /**
  * The weight the rule goes by: the newest live `weight` entry among `entries`
  * as { grams, at, date } (`date` = the Zurich day of the weighing), or null.
- * The caller hands in the entries UP TO the day in question
- * (store.entries.range), so a Nachtragen for last week is not measured
- * against today's weight.
+ * A day is measured against the weight known THEN, not today's: the caller
+ * hands in the entries up to the day in question (store.entries.range), or
+ * names that day as `upTo` («YYYY-MM-DD») and later weighings are skipped —
+ * the Verlauf walks the days of one list that way.
  */
-export function lastWeight(entries) {
+export function lastWeight(entries, upTo = null) {
+  const limit = isDate(upTo) ? upTo : null;
   let best = null;
   for (const e of entries || []) {
     if (!e || e.type !== 'weight' || e.deletedAt != null || e.error) continue;
     const grams = e.details && e.details.grams;
     if (!Number.isInteger(grams) || grams <= 0 || typeof e.startedAt !== 'string') continue;
+    if (limit !== null && zurichDateOf(e.startedAt) > limit) continue;
     if (best === null || e.startedAt > best.at) best = { grams, at: e.startedAt };
   }
   return best && { ...best, date: zurichDateOf(best.at) };
@@ -181,6 +184,20 @@ export function doseFor(settings, localDate, weight = null) {
     source = 'expired';
   }
   return { lifeDay: day, dailyMl, rule, mealsPerDay, mealMl, source };
+}
+
+/**
+ * The day's target — what the Verlauf measures a day's milk against
+ * (meals.dayMilk), from doseFor()'s result: the rule's day amount, or, once
+ * the midwife's amount per meal is set, that amount times the meals a day
+ * (the rules step back for it, so their day amount would contradict what
+ * the meals add up to). null without a target: no birth date, the birth
+ * day, the rules' horizon passed — each without a recommended amount.
+ */
+export function dayTargetMl(dose) {
+  if (!dose) return null;
+  if (dose.source === 'manual') return dose.mealMl * dose.mealsPerDay;
+  return Number.isInteger(dose.dailyMl) && dose.dailyMl > 0 ? dose.dailyMl : null;
 }
 
 /**

@@ -28,6 +28,7 @@ import {
   mealTargetMl,
   lastWeight,
   doseFor,
+  dayTargetMl,
   supplementFor,
 } from '../dose.js';
 
@@ -170,6 +171,35 @@ test('lastWeight: the newest live weight entry with its Zurich day, whatever the
   assert.equal(lastWeight([]), null);
   assert.equal(lastWeight(null), null);
   assert.equal(lastWeight([null, { type: 'bottle' }]), null);
+  // `upTo`: the weight known on that day — later weighings are skipped.
+  assert.deepEqual(lastWeight(rows, '2026-09-15'), { grams: 3500, at: '2026-09-14T07:30:00Z', date: '2026-09-14' });
+  assert.deepEqual(lastWeight(rows, '2026-09-18'), { grams: 3650, at: '2026-09-18T07:30:00Z', date: '2026-09-18' });
+  assert.equal(lastWeight(rows, '2026-09-09'), null);
+  // The limit is a Zurich day too: 22:30 UTC on the 18th is already the 19th there.
+  assert.equal(lastWeight([weightRow('2026-09-18T22:30:00Z', 3650)], '2026-09-18'), null);
+  // A limit that is no date does not limit.
+  assert.equal(lastWeight(rows, 'yesterday').grams, 3650);
+  assert.equal(lastWeight(rows, undefined).grams, 3650);
+});
+
+test("dayTargetMl: the rule's day amount, the recommended amount times the meals once one is set, null without either", () => {
+  const s = { birthDate: '2026-09-01', mealsPerDay: 8 };
+  // The first days' rule: day 8 → (8 − 1) × 60.
+  assert.equal(dayTargetMl(doseFor(s, '2026-09-08')), 420);
+  // By weight on day 14: 4230 g / 6, rounded to 10 ml.
+  const w = lastWeight([{ type: 'weight', startedAt: '2026-09-14T07:00:00Z', details: { grams: 4230 } }]);
+  assert.equal(dayTargetMl(doseFor(s, '2026-09-14', w)), 710);
+  // By age without a weight: week two → 600.
+  assert.equal(dayTargetMl(doseFor(s, '2026-09-14')), 600);
+  // The midwife's amount per meal times the meals a day, whatever the rule says.
+  assert.equal(dayTargetMl(doseFor({ ...s, recommendedMl: 90 }, '2026-09-08')), 720);
+  assert.equal(dayTargetMl(doseFor({ birthDate: '2026-09-01', recommendedMl: 90 }, '2026-09-08')), 540, 'six meals by default');
+  assert.equal(dayTargetMl(doseFor({ recommendedMl: 90 }, '2026-09-08')), 540, 'no birth date needed');
+  // Nothing: the birth day, no birth date, the rules' horizon passed.
+  assert.equal(dayTargetMl(doseFor(s, '2026-09-01')), null);
+  assert.equal(dayTargetMl(doseFor({}, '2026-09-08')), null);
+  assert.equal(dayTargetMl(doseFor(s, '2027-03-01')), null);
+  assert.equal(dayTargetMl(null), null);
 });
 
 test('doseFor: the rule from the birth date, the manual amount on top, nothing without either', () => {

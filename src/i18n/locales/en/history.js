@@ -53,7 +53,9 @@ export default {
   'milk.nursed.other': 'nursed {n} ×',
   'milk.estimate': '≈ {ml} ml',
   'milk.total': 'Total ≈ {ml} ml',
+  'milk.target': 'Daily target {ml} ml',
   'milk.hint': 'The nursing amount is an estimate: per nursing meal the amount under More › Settings › Nursing.',
+  'milk.targetHint': "The daily target is the day's feeding amount (More › Settings › Feeding amount) – or the recommended amount times the meals per day.",
   'entryCount.one': '{n} entry',
   'entryCount.other': '{n} entries',
   // The placeholder before the first sync and the paging button while it works

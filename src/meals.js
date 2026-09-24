@@ -273,9 +273,12 @@ export function dayCounts(dayItems, localDate, allEntries, now = nowMs()) {
  * the family estimates what one nursing meal gives (settings.nursingMl, the
  * number the Schoppen form takes off the target) — about how much the
  * breast gave. `totalMl` = bottles + estimate; null while there are nursed
- * meals but no estimate (an unknown part makes no total).
+ * meals but no estimate (an unknown part makes no total). `targetMl` is the
+ * day's target handed in (dose.dayTargetMl), kept only beside a whole total
+ * — next to bottles alone, with nursed meals no estimate covers, it would
+ * read as a shortfall.
  */
-export function dayMilk(dayItems, settings) {
+export function dayMilk(dayItems, settings, targetMl = null) {
   let breastMl = 0;
   let formulaMl = 0;
   let nursedMeals = 0;
@@ -294,14 +297,16 @@ export function dayMilk(dayItems, settings) {
   const estimateMl = nursedMeals > 0 && perMealMl ? nursedMeals * perMealMl : null;
   const bottleMl = breastMl + formulaMl;
   const totalMl = nursedMeals > 0 && !perMealMl ? null : bottleMl + (estimateMl || 0);
-  return { breastMl, formulaMl, bottleMl, nursedMeals, nursingMinutes, perMealMl, estimateMl, totalMl };
+  const target = Number.isInteger(targetMl) && targetMl > 0 && totalMl !== null && totalMl > 0 ? targetMl : null;
+  return { breastMl, formulaMl, bottleMl, nursedMeals, nursingMinutes, perMealMl, estimateMl, totalMl, targetMl: target };
 }
 
 /**
  * The line under a «Mahlzeiten» day head, as parts to join with « · »:
  * «Schoppen 250 ml (180 Muttermilch · 70 Formula)», «4 × gestillt · 48 Min.
  * · ≈ 200 ml», «Zusammen ≈ 450 ml» (the total only when both a bottle and
- * an estimate are in it — otherwise one of the two lines already says it).
+ * an estimate are in it — otherwise one of the two lines already says it),
+ * «Tagesziel 600 ml» last — right beside whichever part is the total.
  * Empty for a day without milk.
  */
 export function dayMilkParts(milk) {
@@ -319,6 +324,7 @@ export function dayMilkParts(milk) {
     parts.push(bits.join(' · '));
   }
   if (milk.bottleMl > 0 && milk.estimateMl) parts.push(t('history.milk.total', { ml: milk.totalMl }));
+  if (milk.targetMl) parts.push(t('history.milk.target', { ml: milk.targetMl }));
   return parts;
 }
 

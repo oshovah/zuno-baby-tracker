@@ -34,6 +34,7 @@ import { openSheet } from '../sheet.js';
 import { historyItems, mealSummary, mealPartsLabel, mealClockRange, dayCounts, dayMilk, dayMilkParts, wetCountLabel, WET_PER_DAY_GUIDE } from '../meals.js';
 import { lastDays, dailyStats, measurementSeries, avgPerDay } from '../stats.js';
 import { barChart, lineChart } from '../charts.js';
+import { doseFor, lastWeight, dayTargetMl } from '../dose.js';
 import { openEntryForm } from '../entry-form.js';
 import {
   escapeHtml,
@@ -511,11 +512,21 @@ export function renderHistory(el) {
           </section>`;
     };
     // Under the head: the day's milk — the bottles by kind, the nursed meals
-    // with their minutes and the estimated amount, the total (meals.dayMilk).
+    // with their minutes and the estimated amount, the total — and beside
+    // the total the day's target (meals.dayMilk): the drinking rule for THAT
+    // day over the weight known then (dose.doseFor, dose.dayTargetMl — the
+    // day and the weight the Schoppen form went by), or the midwife's amount
+    // times the meals a day. Every weight there is, read once per render.
     const fam = store.settings.current;
-    const milkLine = (dayItems) => {
-      const parts = dayMilkParts(dayMilk(dayItems, fam));
-      return parts.length ? `<p class="day-milk">${parts.map((p) => `<span>${p}</span>`).join('<span class="sep"> · </span>')}</p>` : '';
+    const weights = view === 'meals' ? store.entries.range('2000-01-01', localToday()).filter((e) => e.type === 'weight') : [];
+    let targetShown = false;
+    const milkLine = (day, dayItems) => {
+      const milk = dayMilk(dayItems, fam, dayTargetMl(doseFor(fam, day, lastWeight(weights, day))));
+      if (milk.targetMl) targetShown = true;
+      // The first part (the bottles, the long one) may wrap inside; the rest
+      // wrap at the separators only, so a number never parts from its unit.
+      const parts = dayMilkParts(milk);
+      return parts.length ? `<p class="day-milk">${parts.map((p, i) => `<span${i ? ' class="nobr"' : ''}>${p}</span>`).join('<span class="sep"> · </span>')}</p>` : '';
     };
     const mealsOnly = ([day, dayItems]) => {
       const meals = dayItems.filter((it) => it.meal);
@@ -526,7 +537,7 @@ export function renderHistory(el) {
               <h2>${fmtDayHeading(day)}</h2>
               <span class="day-summary">${daySummaryHtml(dayItems, day, entries)}</span>
             </header>
-            ${milkLine(dayItems)}
+            ${milkLine(day, dayItems)}
             ${meals.map((it) => foldedMeal(it.meal)).join('')}
           </section>`;
     };
@@ -534,9 +545,13 @@ export function renderHistory(el) {
     const sectionOf = { entries: unfolded, days: folded, meals: mealsOnly }[view];
     const charts = view === 'charts';
     let sections = charts ? chartsHtml() : [...groups.entries()].map(sectionOf).join('');
-    // «Mahlzeiten» with an estimate in play: say once that it is one.
-    if (view === 'meals' && sections && fam.breastfeeding !== false && Number.isInteger(fam.nursingMl) && fam.nursingMl >= 1) {
-      sections += `<p class="hint milk-hint">${t('history.milk.hint')}</p>`;
+    // «Mahlzeiten»: say once that the nursing amount is an estimate (with
+    // one in play) and where the day's target comes from (with one shown).
+    if (view === 'meals' && sections) {
+      const hints = [];
+      if (fam.breastfeeding !== false && Number.isInteger(fam.nursingMl) && fam.nursingMl >= 1) hints.push(t('history.milk.hint'));
+      if (targetShown) hints.push(t('history.milk.targetHint'));
+      if (hints.length) sections += `<p class="hint milk-hint">${hints.join(' ')}</p>`;
     }
 
     el.innerHTML = `

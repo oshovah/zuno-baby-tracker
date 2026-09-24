@@ -15,6 +15,11 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-24',
+    de: ['Verlauf › Mahlzeiten schreibt neben die Milch des Tages das Tagesziel – die Trinkmenge des Tages aus Mehr › Einstellungen oder die empfohlene Menge mal eure Mahlzeiten pro Tag.'],
+    en: ["History › Meals writes the daily target beside the day's milk – the day's feeding amount from More › Settings or the recommended amount times your meals per day."],
+  },
+  {
     id: '2026-09-23-d',
     de: [
       'Antwortet der Server mit einer Prüfseite («Anfrage wird geprüft»), wartet der Eintrag jetzt und wird später gesendet – er galt bisher fälschlich als abgelehnt.',

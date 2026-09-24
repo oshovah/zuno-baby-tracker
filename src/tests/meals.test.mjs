@@ -393,8 +393,21 @@ test('dayMilk: the bottles by kind, the nursed meals with their minutes, the est
     perMealMl: 50,
     estimateMl: 150,
     totalMl: 340,
+    targetMl: null,
   });
   assert.deepEqual(dayMilkParts(milk), ['Schoppen 190 ml (90 Muttermilch · 100 Formula)', '3 × gestillt · 20 Min. · ≈ 150 ml', 'Zusammen ≈ 340 ml']);
+  // The day's target stands last, beside the total.
+  const aimed = dayMilk(items, { nursingMl: 50 }, 600);
+  assert.equal(aimed.targetMl, 600);
+  assert.deepEqual(dayMilkParts(aimed), [
+    'Schoppen 190 ml (90 Muttermilch · 100 Formula)',
+    '3 × gestillt · 20 Min. · ≈ 150 ml',
+    'Zusammen ≈ 340 ml',
+    'Tagesziel 600 ml',
+  ]);
+  // … but never beside a total that is not whole (nursed meals without an estimate).
+  assert.equal(dayMilk(items, null, 600).targetMl, null);
+  assert.deepEqual(dayMilkParts(dayMilk(items, null, 600)), ['Schoppen 190 ml (90 Muttermilch · 100 Formula)', '3 × gestillt · 20 Min.']);
 
   // No estimate: the nursed meals count, no ml for them and no total.
   const none = dayMilk(items, { nursingMl: null });
@@ -414,7 +427,15 @@ test('dayMilk: the bottles by kind, the nursed meals with their minutes, the est
   const nursed = day([bf('L', a(90), a(80)), bf('R', a(80), a(70))]);
   assert.deepEqual(dayMilkParts(dayMilk(nursed, { nursingMl: 60 })), ['1 × gestillt · 20 Min. · ≈ 60 ml']);
   assert.equal(dayMilk(nursed, { nursingMl: 60 }).totalMl, 60);
-  // A day of diapers only: nothing.
+  // With a target, the bottle line or the nursing line is the total it stands beside.
+  assert.deepEqual(dayMilkParts(dayMilk(bottles, null, 420)), ['Schoppen 140 ml Muttermilch', 'Tagesziel 420 ml']);
+  assert.deepEqual(dayMilkParts(dayMilk(nursed, { nursingMl: 60 }, 420)), ['1 × gestillt · 20 Min. · ≈ 60 ml', 'Tagesziel 420 ml']);
+  // No target, a garbage target: none shown.
+  assert.equal(dayMilk(bottles, null, null).targetMl, null);
+  assert.equal(dayMilk(bottles, null, '420').targetMl, null);
+  assert.equal(dayMilk(bottles, null, 0).targetMl, null);
+  // A day of diapers only: nothing — a target alone is not a milk line either.
   assert.deepEqual(dayMilkParts(dayMilk(day([entry('diaper', a(10), null, { kind: 'pee' })]), { nursingMl: 50 })), []);
-  assert.deepEqual(dayMilkParts(dayMilk([], null)), []);
+  assert.deepEqual(dayMilkParts(dayMilk(day([entry('diaper', a(10), null, { kind: 'pee' })]), { nursingMl: 50 }, 420)), []);
+  assert.deepEqual(dayMilkParts(dayMilk([], null, 420)), []);
 });

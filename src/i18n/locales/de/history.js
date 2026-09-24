@@ -53,7 +53,9 @@ export default {
   'milk.nursed.other': '{n} × gestillt',
   'milk.estimate': '≈ {ml} ml',
   'milk.total': 'Zusammen ≈ {ml} ml',
+  'milk.target': 'Tagesziel {ml} ml',
   'milk.hint': 'Die Stillmenge ist geschätzt: pro Stillmahlzeit die Menge unter Mehr › Einstellungen › Stillen.',
+  'milk.targetHint': 'Das Tagesziel ist die Trinkmenge des Tages (Mehr › Einstellungen › Trinkmenge) – oder die empfohlene Menge mal die Mahlzeiten pro Tag.',
   'entryCount.one': '{n} Eintrag',
   'entryCount.other': '{n} Einträge',
   // The placeholder before the first sync and the paging button while it works
