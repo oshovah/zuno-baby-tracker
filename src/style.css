@@ -1857,6 +1857,25 @@ input[type='datetime-local'] {
   vertical-align: -1px;
 }
 
+/* The legend of a two-series chart is buttons: a tap draws that series
+ * alone (views/history.js, charts.soloSeries), the item left out dims and
+ * is struck through. The negative margins keep the row where a plain
+ * legend sits while the tap area grows around each item. */
+.chart-legend button {
+  margin: -5px -4px;
+  padding: 5px 4px;
+  border: 0;
+  background: none;
+  line-height: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chart-legend button.dimmed {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
 .chart svg {
   display: block;
   width: 100%;

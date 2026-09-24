@@ -44,6 +44,8 @@ export default {
   'chart.guide': '~{n}',
   'chart.sleep': 'Sleep · hours per day',
   'chart.temperature': 'Temperature',
+  // The legend of a two-series chart (buttons: one series alone, the same again both)
+  'legend.label': 'Show one series only',
   // A day whose rows none of the chips count (a weight, say): "1 entry" / "3 entries"
   // The milk line under a "Meals" day head (meals.dayMilkParts)
   'milk.bottleBoth': 'Bottle {ml} ml ({breast} breast milk · {formula} formula)',

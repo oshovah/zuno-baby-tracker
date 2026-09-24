@@ -44,6 +44,8 @@ export default {
   'chart.guide': '~{n}',
   'chart.sleep': 'Schlaf · Stunden pro Tag',
   'chart.temperature': 'Temperatur',
+  // The legend of a two-series chart (buttons: one series alone, the same again both)
+  'legend.label': 'Nur eine Reihe zeigen',
   // A day whose rows none of the chips count (a weight, say): «1 Eintrag» / «3 Einträge»
   // The milk line under a «Mahlzeiten» day head (meals.dayMilkParts)
   'milk.bottleBoth': 'Schoppen {ml} ml ({breast} Muttermilch · {formula} Formula)',

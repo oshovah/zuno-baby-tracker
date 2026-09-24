@@ -15,6 +15,11 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-25',
+    de: ['Grafik: Bei Stillen, Schoppen und Windeln zeigt ein Tipp auf einen Eintrag der Legende – etwa «Pipi» – nur noch diese Reihe, der Durchschnitt im Kopf rechnet mit; ein zweiter Tipp bringt beide zurück.'],
+    en: ['Charts: for nursing, bottles and diapers a tap on a legend entry – "Pee", say – shows that series alone, the average in the head follows; a second tap brings both back.'],
+  },
+  {
     id: '2026-09-24',
     de: ['Verlauf › Mahlzeiten schreibt neben die Milch des Tages das Tagesziel – die Trinkmenge des Tages aus Mehr › Einstellungen oder die empfohlene Menge mal eure Mahlzeiten pro Tag.'],
     en: ["History › Meals writes the daily target beside the day's milk – the day's feeding amount from More › Settings or the recommended amount times your meals per day."],

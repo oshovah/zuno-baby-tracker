@@ -19,7 +19,11 @@
 //                 data (stats.js counts, charts.js draws). The filter button
 //                 beside the chips hides charts for this phone
 //                 (prefs.hiddenCharts, a sheet of switches; the button
-//                 itself never changes its look).
+//                 itself never changes its look). A tap on a legend item
+//                 of a two-series chart (Stillen, Schoppen, Windeln) draws
+//                 that series alone, the average in the head follows; the
+//                 same item again brings both back — the visit's choice,
+//                 like the view (charts.soloSeries).
 // Tapping an entry opens the edit sheet. The list is read from the store's
 // decrypted model (store.entries.range) once store.ready resolves — no
 // request of its own; the store's sync notifications re-render it.
@@ -33,7 +37,7 @@ import { t, tn } from '../i18n/index.js';
 import { openSheet } from '../sheet.js';
 import { historyItems, mealSummary, mealPartsLabel, mealClockRange, dayCounts, dayMilk, dayMilkParts, wetCountLabel, WET_PER_DAY_GUIDE } from '../meals.js';
 import { lastDays, dailyStats, measurementSeries, avgPerDay } from '../stats.js';
-import { barChart, lineChart } from '../charts.js';
+import { barChart, lineChart, soloSeries, toggleSolo } from '../charts.js';
 import { doseFor, lastWeight, dayTargetMl } from '../dose.js';
 import { openEntryForm } from '../entry-form.js';
 import {
@@ -144,6 +148,8 @@ export function renderHistory(el) {
   const openDays = new Set();
   /** The meals unfolded in the «Mahlzeiten» view (the first entry's eid). */
   const openMeals = new Set();
+  /** «Grafik»: per two-series chart (its CHART_KEYS key) the index of the series drawn alone (charts.soloSeries) — this visit's choice. */
+  const solo = new Map();
 
   /** Nothing to list yet: the placeholder, or the first sync's failure with a retry. */
   function renderPlaceholder(err) {
@@ -226,8 +232,28 @@ export function renderHistory(el) {
       const value = String(a).replace('.', localeMeta().decimalSeparator);
       return t('history.chart.avg', { value: unit ? `${value} ${unit}` : value });
     };
-    const legendHtml = (legend) =>
-      `<div class="chart-legend">${legend.map(([cls, label]) => `<span><i class="${cls}"></i>${escapeHtml(label)}</span>`).join('')}</div>`;
+    // The legend of a two-series chart: one button per series — a tap draws
+    // that series alone and dims the other's item, a tap on the item already
+    // alone brings both back (charts.soloSeries / toggleSolo).
+    const legendHtml = ({ key, items, dimmed, solo: only }) =>
+      `<div class="chart-legend" role="group" aria-label="${escapeHtml(t('history.legend.label'))}">${items
+        .map(
+          ([cls, label], i) =>
+            `<button type="button"${dimmed[i] ? ' class="dimmed"' : ''} data-legend="${key}" data-series="${i}" aria-pressed="${only === i}"><i class="${cls}"></i>${escapeHtml(label)}</button>`
+        )
+        .join('')}</div>`;
+    // A chart of two series, each { id, label, cls, pick }: what the legend's
+    // solo leaves in, as the series to draw, the average's pick over exactly
+    // those, the legend with its dimmed item, and whether a given id is shown.
+    const twoSeries = (key, parts) => {
+      const s = soloSeries(parts, solo.get(key));
+      return {
+        series: s.series.map((p) => ({ label: p.label, values: stats.map(p.pick), cls: p.cls })),
+        pick: (r) => s.series.reduce((sum, p) => sum + p.pick(r), 0),
+        legend: { key, items: parts.map((p) => [p.cls, p.label]), dimmed: s.dimmed, solo: s.solo },
+        shown: (id) => s.series.some((p) => p.id === id),
+      };
+    };
     const card = (title, svg, { sub = '', legend = null } = {}) => `
       <section class="card chart-card">
         <div class="chart-head"><h2 class="chart-title">${escapeHtml(title)}</h2>${sub ? `<span class="chart-sub">${escapeHtml(sub)}</span>` : ''}</div>
@@ -264,32 +290,29 @@ export function renderHistory(el) {
     const title = (key) => t(`history.chart.${key}`);
     if (has((r) => r.meals)) {
       const guide = fam.mealsPerDay ? { v: fam.mealsPerDay, label: t('history.chart.target', { n: fam.mealsPerDay }) } : null;
-      cards.push(['meals', card(title('meals'), barChart({ days, series: [{ label: title('meals'), values: stats.map((r) => r.meals), cls: 'milk' }], guide, xLabel: dayNum, title: title('meals') }), { sub: avgSub((r) => r.meals) })]);
+      cards.push(['meals', card(title('meals'), barChart({ days, series: [{ label: title('meals'), values: stats.map((r) => r.meals), cls: 'milk' }], guide, xLabel: dayNum, title: title('meals'), minStep: 1 }), { sub: avgSub((r) => r.meals) })]);
     }
     if (has((r) => r.nursingMin.L + r.nursingMin.R)) {
       const unit = (v) => `${v} ${t('common.unit.min')}`;
+      const two = twoSeries('nursing', [
+        { id: 'L', label: t('history.chart.left'), cls: 'milk', pick: (r) => r.nursingMin.L },
+        { id: 'R', label: t('history.chart.right'), cls: 'milk second', pick: (r) => r.nursingMin.R },
+      ]);
       cards.push([
         'nursing',
         card(
           title('nursing'),
-          barChart({
-            days,
-            series: [
-              { label: t('history.chart.left'), values: stats.map((r) => r.nursingMin.L), cls: 'milk' },
-              { label: t('history.chart.right'), values: stats.map((r) => r.nursingMin.R), cls: 'milk second' },
-            ],
-            xLabel: dayNum,
-            yFormat: unit,
-            valueFormat: unit,
-            title: title('nursing'),
-          }),
-          { legend: [['milk', t('history.chart.left')], ['milk second', t('history.chart.right')]], sub: avgSub((r) => r.nursingMin.L + r.nursingMin.R, t('common.unit.min'), 0) }
+          barChart({ days, series: two.series, xLabel: dayNum, yFormat: unit, valueFormat: unit, title: title('nursing'), minStep: 1 }),
+          { legend: two.legend, sub: avgSub(two.pick, t('common.unit.min'), 0) }
         ),
       ]);
     }
     if (has((r) => r.bottleMl.breast + r.bottleMl.formula)) {
       const unit = (v) => `${v} ml`;
-      const formula = t('common.milk.formula');
+      const two = twoSeries('bottleMl', [
+        { id: 'breast', label: t('common.milk.breast'), cls: 'milk', pick: (r) => r.bottleMl.breast },
+        { id: 'formula', label: t('common.milk.formula'), cls: 'formula', pick: (r) => r.bottleMl.formula },
+      ]);
       cards.push([
         'bottleMl',
         card(
@@ -299,37 +322,38 @@ export function renderHistory(el) {
             // Stacked in two colours: the split shows in the bar, the number
             // above it is the day's total — three digits fit a 14-day slot,
             // never a grouped half bar (the exact split per day is on the
-            // «Mahlzeiten» view).
-            series: [
-              { label: t('common.milk.breast'), values: stats.map((r) => r.bottleMl.breast), cls: 'milk' },
-              { label: formula, values: stats.map((r) => r.bottleMl.formula), cls: 'formula' },
-            ],
+            // «Mahlzeiten» view). One series alone carries its own numbers.
+            series: two.series,
             xLabel: dayNum,
             yFormat: unit,
             valueFormat: unit,
             title: title('bottleMl'),
+            minStep: 1,
           }),
-          { legend: [['milk', t('common.milk.breast')], ['formula', formula]], sub: avgSub((r) => r.bottleMl.breast + r.bottleMl.formula, 'ml', 0) }
+          { legend: two.legend, sub: avgSub(two.pick, 'ml', 0) }
         ),
       ]);
     }
     if (has((r) => r.wet + r.soiled)) {
+      const two = twoSeries('diapers', [
+        { id: 'wet', label: t('common.diaper.wet'), cls: 'diaper', pick: (r) => r.wet },
+        { id: 'soiled', label: t('common.diaper.soiled'), cls: 'measure', pick: (r) => r.soiled },
+      ]);
       cards.push([
         'diapers',
         card(
           title('diapers'),
           barChart({
             days,
-            series: [
-              { label: t('common.diaper.wet'), values: stats.map((r) => r.wet), cls: 'diaper' },
-              { label: t('common.diaper.soiled'), values: stats.map((r) => r.soiled), cls: 'measure' },
-            ],
+            series: two.series,
             mode: 'grouped',
-            guide: { v: WET_PER_DAY_GUIDE, label: t('history.chart.guide', { n: WET_PER_DAY_GUIDE }) },
+            // The ~6 guide is about wet diapers: gone while «Gaggi» stands alone.
+            guide: two.shown('wet') ? { v: WET_PER_DAY_GUIDE, label: t('history.chart.guide', { n: WET_PER_DAY_GUIDE }) } : null,
             xLabel: dayNum,
             title: title('diapers'),
+            minStep: 1,
           }),
-          { legend: [['diaper', t('common.diaper.wet')], ['measure', t('common.diaper.soiled')]], sub: avgSub((r) => r.wet + r.soiled) }
+          { legend: two.legend, sub: avgSub(two.pick) }
         ),
       ]);
     }
@@ -583,6 +607,14 @@ export function renderHistory(el) {
         if (!CHART_RANGES.includes(n) || n === chartDays) return;
         chartDays = n;
         load({ from: firstDayFor(n), forceRender: true, userInitiated: true }).catch(() => {});
+      })
+    );
+    // «Grafik»: a legend item draws its series alone, the same item again both.
+    el.querySelectorAll('[data-legend]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.legend;
+        solo.set(key, toggleSolo(solo.get(key), Number(btn.dataset.series)));
+        render();
       })
     );
     el.querySelectorAll('.day-row').forEach((btn) =>

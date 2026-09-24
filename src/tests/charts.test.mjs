@@ -3,11 +3,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { niceStep, niceScale, niceRange, barChart, lineChart, CHART_W, CHART_H } from '../charts.js';
+import { niceStep, niceScale, niceRange, barChart, lineChart, soloSeries, toggleSolo, CHART_W, CHART_H } from '../charts.js';
 
 const count = (s, re) => (s.match(re) || []).length;
 
 test('niceStep / niceScale / niceRange', () => {
+  // A count's axis never steps below one: two a day → 0, 1, 2.
+  assert.deepEqual(niceScale(2, 4, 1), { max: 2, step: 1 });
+  assert.deepEqual(niceScale(3, 4, 1), { max: 3, step: 1 });
+  assert.deepEqual(niceScale(0, 4, 1), { max: 1, step: 1 });
+  assert.deepEqual(niceScale(2), { max: 2, step: 0.5 });
+  assert.ok(barChart({ days: ['2026-09-01'], series: [{ label: 'Gaggi', values: [2], cls: 'measure' }], minStep: 1 }).includes('>1</text>'));
+  assert.ok(!barChart({ days: ['2026-09-01'], series: [{ label: 'Gaggi', values: [2], cls: 'measure' }], minStep: 1 }).includes('>0.5</text>'));
   assert.deepEqual([0.3, 3, 37, 120].map(niceStep), [0.5, 5, 50, 200]);
   assert.equal(niceStep(0), 1);
   assert.deepEqual(niceScale(9), { max: 10, step: 5 });
@@ -113,6 +120,24 @@ test('lineChart: a path through the points, a dot each, the last value labelled,
   assert.equal(count(one, /<path/g), 0);
   assert.equal(count(one, /<circle/g), 1);
   assert.ok(one.includes('38 °C'));
+});
+
+test('soloSeries / toggleSolo: one series alone on a legend tap, the same tap lifts it, a stray index counts as none', () => {
+  const series = [{ label: 'Pipi' }, { label: 'Gaggi' }];
+  assert.deepEqual(soloSeries(series, null), { series, solo: null, dimmed: [false, false] });
+  assert.deepEqual(soloSeries(series, undefined), { series, solo: null, dimmed: [false, false] });
+  assert.deepEqual(soloSeries(series, 1), { series: [series[1]], solo: 1, dimmed: [true, false] });
+  assert.deepEqual(soloSeries(series, 0), { series: [series[0]], solo: 0, dimmed: [false, true] });
+  assert.equal(soloSeries(series, 2).solo, null, 'an index the list does not have');
+  assert.equal(soloSeries(series, '1').solo, null, 'no number');
+  assert.equal(toggleSolo(null, 1), 1);
+  assert.equal(toggleSolo(undefined, 0), 0);
+  assert.equal(toggleSolo(1, 1), null, 'the item already alone lifts the solo');
+  assert.equal(toggleSolo(1, 0), 0, 'the other item takes it');
+  // A single series drawn grouped still gets its bars and their numbers.
+  const one = barChart({ days: ['2026-09-01', '2026-09-02'], series: soloSeries([{ label: 'Pipi', values: [5, 6], cls: 'diaper' }, { label: 'Gaggi', values: [2, 1], cls: 'measure' }], 0).series, mode: 'grouped' });
+  assert.equal((one.match(/<rect/g) || []).length, 2);
+  assert.ok(one.includes('>5</text>') && one.includes('>6</text>') && !one.includes('Gaggi'));
 });
 
 test('the stylesheet keeps a line chart a line: the path rule outranks the series fill', () => {

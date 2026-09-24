@@ -29,9 +29,11 @@ export function niceStep(raw) {
   return 10 * p;
 }
 
-/** An axis from 0 to a nice top ≥ max in about `count` steps: { max, step }. */
-export function niceScale(max, count = 4) {
-  const step = niceStep((max > 0 ? max : 1) / count);
+/** An axis from 0 to a nice top ≥ max in about `count` steps: { max, step } —
+ *  the step never below `minStep` (1 for a count: a chart of two Gaggi a day
+ *  has no half diapers on its axis). */
+export function niceScale(max, count = 4, minStep = 0) {
+  const step = Math.max(niceStep((max > 0 ? max : 1) / count), minStep);
   return { max: Math.max(step, Math.ceil(max / step) * step), step };
 }
 
@@ -98,13 +100,13 @@ function guideHtml(p, scaleY, guide) {
  * other (neighbouring bars of about the same height) the later one is left
  * out. A number above a bar is always THAT bar's value: no total above a
  * grouped pair, it would read as the taller bar's. `values: false` leaves
- * them out.
+ * them out. `minStep` keeps the axis to whole numbers for counts (1).
  */
-export function barChart({ days, series, mode = 'stacked', guide = null, yFormat = fmt, valueFormat = fmt, labelFormat = fmt, xLabel = (d) => d, title = '', values = true }) {
+export function barChart({ days, series, mode = 'stacked', guide = null, yFormat = fmt, valueFormat = fmt, labelFormat = fmt, xLabel = (d) => d, title = '', values = true, minStep = 0 }) {
   const n = days.length;
   const totals = days.map((_, i) => (mode === 'stacked' ? series.reduce((s, sr) => s + (sr.values[i] || 0), 0) : Math.max(...series.map((sr) => sr.values[i] || 0), 0)));
   const dataMax = Math.max(0, ...totals, guide && guide.v > 0 ? guide.v : 0);
-  const { max, step } = niceScale(dataMax);
+  const { max, step } = niceScale(dataMax, 4, minStep);
   const ticks = tickValues(0, max, step);
   const p = plot(ticks.map(yFormat));
   const scaleY = (v) => p.y + p.h - (v / max) * p.h;
@@ -152,6 +154,23 @@ export function barChart({ days, series, mode = 'stacked', guide = null, yFormat
     .join('');
   return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" role="img" aria-label="${escapeHtml(title)}">` +
     gridHtml(p, scaleY, ticks, yFormat) + guideHtml(p, scaleY, guide) + bars.join('') + valueLabels.join('') + labels + '</svg>';
+}
+
+/**
+ * The legend's solo of a chart with two (or more) series: `solo` = null for
+ * every series, else the index of the ONE series to draw — a tap on a
+ * legend item under «Grafik» (views/history.js). Returns the series to
+ * draw, the solo in force (an index the list does not have, or no number,
+ * counts as none) and, per legend item, whether it is dimmed = left out.
+ */
+export function soloSeries(series, solo) {
+  const one = Number.isInteger(solo) && solo >= 0 && solo < series.length ? solo : null;
+  return { series: one === null ? series : [series[one]], solo: one, dimmed: series.map((_, i) => one !== null && i !== one) };
+}
+
+/** The solo after a tap on legend item `i`: the item already alone lifts the solo, any other takes it. */
+export function toggleSolo(solo, i) {
+  return solo === i ? null : i;
 }
 
 /**
