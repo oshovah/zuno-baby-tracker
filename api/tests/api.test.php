@@ -29,6 +29,7 @@ require_once __DIR__ . '/../lib/http.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/entries.php';
+require_once __DIR__ . '/../lib/feedback.php';
 define('BT_NO_SERVE', true);
 require_once __DIR__ . '/../index.php';
 
@@ -99,9 +100,10 @@ function fake_eid(): string
 function empty_db(): PDO
 {
     $pdo = bt_db(['db_path' => $GLOBALS['__bt_db_file']]);
-    foreach (['entries', 'auth_tokens', 'login_attempts', 'users', 'families', 'sqlite_sequence'] as $table) {
+    foreach (['entries', 'auth_tokens', 'login_attempts', 'users', 'families', 'feedback', 'sqlite_sequence'] as $table) {
         $pdo->exec("DELETE FROM $table");
     }
+    $pdo->exec("DELETE FROM settings WHERE key IN ('feedback_pub', 'feedback_priv')");
     logout();
     $GLOBALS['__bt_fix'] = null;
     return $pdo;

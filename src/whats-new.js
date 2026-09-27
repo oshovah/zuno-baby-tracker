@@ -15,6 +15,11 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-09-27',
+    de: ['Neu unter Mehr › Anleitung, ganz unten: Feedback. Ein Wunsch, ein Fehler, eine Idee geht direkt an die Person, die Zuno betreibt – auf dem Handy verschlüsselt, auf Wunsch anonym.'],
+    en: ['New under More › Guide, at the very end: Feedback. A wish, a bug or an idea goes straight to the person who runs Zuno – encrypted on the phone, anonymously if you like.'],
+  },
+  {
     id: '2026-09-25',
     de: ['Grafik: Bei Stillen, Schoppen und Windeln zeigt ein Tipp auf einen Eintrag der Legende – etwa «Pipi» – nur noch diese Reihe, der Durchschnitt im Kopf rechnet mit; ein zweiter Tipp bringt beide zurück.'],
     en: ['Charts: for nursing, bottles and diapers a tap on a legend entry – "Pee", say – shows that series alone, the average in the head follows; a second tap brings both back.'],

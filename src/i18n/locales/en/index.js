@@ -11,5 +11,6 @@ import howto from './howto.js';
 import forms from './forms.js';
 import errors from './errors.js';
 import api from './api.js';
+import feedback from './feedback.js';
 
-export default buildLocale(meta, { common, shell, home, history, more, login, authInfo, howto, forms, errors, api });
+export default buildLocale(meta, { common, shell, home, history, more, login, authInfo, howto, forms, errors, api, feedback });

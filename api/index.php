@@ -29,7 +29,8 @@
  *   PATCH  /api/me                    {profileBlob} -> {ok, user}
  *   PATCH  /api/me/password           {currentAuthKey, authKey, kdf, fdkWrappedUser} -> {ok}
  *   PATCH  /api/families/password     {currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily} -> {ok}
- *   GET    /api/sync?since=&limit=    {serverNow, feed, rows, next[, reset][, art, artKey]}
+ *   GET    /api/sync?since=&limit=    {serverNow, feed, rows, next[, reset][, art, artKey][, feedback]
+ *                                     [, feedbackUnread]} (feedback: an inbox exists; the count: operator only)
  *   POST   /api/entries               {eid, blob} -> 201 row (507 at the family's or the database's row cap)
  *   PATCH  /api/entries/:eid          {blob, ifSeq} -> row (409 when the seq moved)
  *   DELETE /api/entries/:eid          [{ifSeq}] -> row (soft delete; with a body, 409 when the seq moved)
@@ -37,6 +38,14 @@
  *   GET    /api/art/k/<key>/<name>    the same files plus `manifest.webmanifest` for whoever holds the
  *                                     installation's random key (members get it as `artKey` on sync) —
  *                                     what a browser fetches without the session: the install icon
+ *   GET    /api/feedback/key          {publicKey} — the operator's inbox key to seal a message to
+ *                                     (404 while the feature is off or the inbox is not set up)
+ *   POST   /api/feedback              {blob} -> 201 {ok} (sealed message; no sender stored, see lib/feedback.php)
+ * Operator only (config admin_username; everyone else the same 404):
+ *   POST   /api/feedback/key          {publicKey, privateSealed} -> {publicKey} (once; 409 afterwards)
+ *   GET    /api/feedback?before=      {publicKey, privateSealed, items, next, unread}
+ *   PATCH  /api/feedback/:id          {read} -> item
+ *   DELETE /api/feedback/:id          -> {ok} (for good)
  *   GET    /api/art/<name>            a private artwork file (image/png) for members of the configured
  *                                     family; the same 404 for everyone and everything else (lib/art.php)
  * User JSON everywhere: {username, familyId, familyName, profileBlob}; row
@@ -55,7 +64,9 @@
  * DB counts, successes included) and never cleared on success. Wrong
  * secrets are additionally damped by 300 ms. Entry writes draw on a per-IP
  * write budget ('write:<ip>', 300 / 15 min) before anything else happens,
- * and a create stops at the row caps of lib/entries.php (507).
+ * and a create stops at the row caps of lib/entries.php (507). Feedback
+ * messages have a budget of their own ('fb:<ip>', 10 / hour) and a cap
+ * (lib/feedback.php).
  *
  * Routing works identically in three situations:
  *  1. Apache + .htaccess rewrite (possibly under a subdirectory):
@@ -76,6 +87,7 @@ require_once __DIR__ . '/lib/db.php';
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/entries.php';
 require_once __DIR__ . '/lib/art.php';
+require_once __DIR__ . '/lib/feedback.php';
 
 /** Damping delay after a wrong secret (microseconds). */
 const BT_WRONG_SECRET_DELAY_US = 300000;
@@ -440,7 +452,47 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
             $page['art'] = $art;
             $page['artKey'] = bt_art_key($pdo);
         }
+        // Feedback: every member learns whether there is an inbox to write
+        // to; the operator's phone also counts the unread (the dot on Mehr).
+        if (bt_feedback_on($config) && bt_feedback_public_key($pdo) !== null) {
+            $page['feedback'] = true;
+        }
+        if (bt_feedback_is_admin($config, $user)) {
+            $page['feedbackUnread'] = bt_feedback_unread($pdo);
+        }
         return [200, $page];
+    }
+
+    if ($segments === ['feedback', 'key']) {
+        bt_require_method($method, ['GET', 'POST']);
+        if ($method === 'GET') {
+            return [200, ['publicKey' => bt_feedback_key_for_writer($pdo, $config)]];
+        }
+        bt_feedback_assert_admin($config, $user);
+        return [200, ['publicKey' => bt_feedback_set_key($pdo, $readBody())]];
+    }
+
+    if ($segments === ['feedback']) {
+        bt_require_method($method, ['GET', 'POST']);
+        if ($method === 'POST') {
+            bt_charge_feedback($pdo, $ip);
+            bt_feedback_key_for_writer($pdo, $config); // off or not set up: nobody could read it
+            return [201, bt_feedback_create($pdo, $readBody())];
+        }
+        bt_feedback_assert_admin($config, $user);
+        return [200, bt_feedback_inbox($pdo, bt_query_int('before', 0))];
+    }
+
+    if (count($segments) === 2 && $segments[0] === 'feedback') {
+        bt_feedback_assert_admin($config, $user);
+        $id = bt_valid_feedback_id($segments[1]);
+        if ($method === 'PATCH') {
+            return [200, bt_feedback_set_read($pdo, $id, $readBody())];
+        }
+        if ($method === 'DELETE') {
+            return [200, bt_feedback_delete($pdo, $id)];
+        }
+        throw new HttpError(405, 'Methode nicht erlaubt', 'request.methodNotAllowed');
     }
 
     if ($segments === ['entries']) {

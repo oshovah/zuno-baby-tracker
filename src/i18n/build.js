@@ -3,7 +3,7 @@
 // (the completeness test in src/tests/i18n.test.mjs runs every language
 // through this, so a collision fails `npm test`, never a phone).
 
-const NAMESPACES = ['common', 'shell', 'home', 'history', 'more', 'login', 'authInfo', 'howto', 'forms', 'errors', 'api'];
+const NAMESPACES = ['common', 'shell', 'home', 'history', 'more', 'login', 'authInfo', 'howto', 'forms', 'errors', 'api', 'feedback'];
 
 export { NAMESPACES };
 

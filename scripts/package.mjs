@@ -6,7 +6,8 @@
  *   1. `npm run build` (vite) unless --no-build
  *   2. dist/*  -> deploy/            (built frontend, incl. sw.js + manifest)
  *      api/*   -> deploy/api/        (PHP backend, minus tests/ and the dev config.php)
- *   3. generate deploy/api/config.php   (db_path from DEPLOY_DB_PATH, the private-art family)
+ *   3. generate deploy/api/config.php   (db_path from DEPLOY_DB_PATH, the private-art family,
+ *                                        the feedback operator from ADMIN_USERNAME)
  *   4. generate deploy/.htaccess        (api rewrite, FilesMatch denials, caching)
  *   5. generate deploy/data/.htaccess   (deny-all stub — the SQLite db must never be served)
  *   5b. private-art/ -> deploy/private-art/ when PRIVATE_ART_FAMILY is set (deny-all stub;
@@ -194,6 +195,18 @@ if (env.PRIVATE_ART_FAMILY && env.PRIVATE_ART_FAMILY.trim() !== '') {
   if (/[\r\n\0]/.test(privateArtFamily)) fail('PRIVATE_ART_FAMILY contains a line break or NUL');
 }
 
+// ADMIN_USERNAME — the one account that reads the parents' feedback (Mehr ›
+// Feedback shows it the inbox instead of the form; api/lib/feedback.php).
+// Unset = feedback is off. Never printed: the log only says whether it is set.
+let adminUsername = null;
+if (env.ADMIN_USERNAME && env.ADMIN_USERNAME.trim() !== '') {
+  adminUsername = env.ADMIN_USERNAME.trim().toLowerCase();
+  if (/[\r\n\0]/.test(adminUsername)) fail('ADMIN_USERNAME contains a line break or NUL');
+  log('ADMIN_USERNAME set: feedback is on, that account reads it');
+} else {
+  log('no ADMIN_USERNAME in .env: feedback is off');
+}
+
 // ---------------------------------------------------------------------------
 // 1. Wipe deploy/, build
 // ---------------------------------------------------------------------------
@@ -312,6 +325,9 @@ return [
     // (PRIVATE_ART_FAMILY in .env at packaging time), or null: nobody does.
     'private_art_family' => ${privateArtFamily === null ? 'null' : phpSingleQuoted(privateArtFamily)},
     'private_art_dir' => null,
+    // Username of the account that reads the feedback (ADMIN_USERNAME in
+    // .env at packaging time), or null: feedback is off.
+    'admin_username' => ${adminUsername === null ? 'null' : phpSingleQuoted(adminUsername)},
 ];
 `;
 fs.writeFileSync(path.join(deployDir, 'api', 'config.php'), configPhp);

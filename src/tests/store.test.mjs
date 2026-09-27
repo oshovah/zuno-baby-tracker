@@ -325,7 +325,7 @@ function phone(server, opts = {}) {
   const skews = [];
   const events = [];
   const store = createStore({
-    api: server.api,
+    api: opts.api || server.api,
     db,
     keys,
     prefs,
@@ -2066,4 +2066,108 @@ test('outbox: an answer that is not the API\'s — a challenge page, a proxy err
   assert.equal(q.store.outbox.parked, 1);
   assert.equal(q.db.ops().length, 1);
   server.hook = null;
+});
+
+// --- feedback (store.feedback) ----------------------------------------------------
+
+/** The feedback routes of api/lib/feedback.php over the entries fake; `admin` = this phone is the operator. */
+function feedbackApi(server, fb, admin) {
+  const notFound = () => httpError(404, 'Nicht gefunden', 'request.notFound');
+  return {
+    ...server.api,
+    async get(path, opts) {
+      if (path === 'api/feedback/key') {
+        if (!fb.pub) throw httpError(404, 'Feedback ist nicht eingerichtet', 'feedback.unavailable');
+        return { publicKey: fb.pub };
+      }
+      if (/^api\/feedback(\?before=\d+)?$/.test(path)) {
+        if (!admin) throw notFound();
+        const items = [...fb.rows].reverse().map((r) => ({ ...r }));
+        return { publicKey: fb.pub, privateSealed: fb.priv, items, next: null, unread: fb.rows.filter((r) => !r.readAt).length };
+      }
+      const page = await server.api.get(path, opts);
+      return {
+        ...page,
+        ...(fb.pub ? { feedback: true } : {}),
+        ...(admin ? { feedbackUnread: fb.rows.filter((r) => !r.readAt).length } : {}),
+      };
+    },
+    async post(path, body) {
+      if (path === 'api/feedback/key') {
+        if (!admin) throw notFound();
+        if (fb.pub) throw httpError(409, 'Das Postfach ist schon eingerichtet', 'feedback.keyExists');
+        fb.pub = body.publicKey;
+        fb.priv = body.privateSealed;
+        return { publicKey: fb.pub };
+      }
+      if (path === 'api/feedback') {
+        fb.rows.push({ id: fb.rows.length + 1, blob: body.blob, createdAt: TODAY, readAt: null });
+        return { ok: true };
+      }
+      return server.api.post(path, body);
+    },
+    async patch(path, body) {
+      const m = /^api\/feedback\/(\d+)$/.exec(path);
+      if (!m) return server.api.patch(path, body);
+      if (!admin) throw notFound();
+      const row = fb.rows.find((r) => r.id === Number(m[1]));
+      row.readAt = body.read ? TODAY : null;
+      return { ...row };
+    },
+    async del(path, body) {
+      const m = /^api\/feedback\/(\d+)$/.exec(path);
+      if (!m) return server.api.del(path, body);
+      if (!admin) throw notFound();
+      fb.rows = fb.rows.filter((r) => r.id !== Number(m[1]));
+      return { ok: true };
+    },
+  };
+}
+
+test('feedback: the operator\'s first inbox sets it up; a parent seals named and anonymous messages; only the operator reads, counts and deletes them', async () => {
+  const server = fakeServer();
+  const fb = { pub: null, priv: null, rows: [] };
+  const fdkRaw = await generateFdkRaw();
+  const operator = await online(phone(server, { api: feedbackApi(server, fb, true) }), fdkRaw);
+  const parent = await online(phone(server, { api: feedbackApi(server, fb, false), username: 'papa', displayName: 'Papa' }), await generateFdkRaw());
+
+  // Before the operator opened the inbox there is nothing to write to.
+  assert.equal(parent.store.feedback.available, false);
+  assert.equal(parent.store.feedback.isInbox, false);
+  assert.equal(await parent.store.feedback.key(), null);
+  const off = await rejects(parent.store.feedback.send({ kind: 'idea', text: 'x' }), 'Feedback ist nicht eingerichtet', 404);
+  assert.equal(off.code, 'feedback.unavailable');
+
+  assert.equal(operator.store.feedback.isInbox, true, 'the operator\'s sync pages count');
+  const empty = await operator.store.feedback.inbox();
+  assert.deepEqual(empty.items, []);
+  assert.deepEqual(Object.keys(fb.pub), ['kty', 'crv', 'x', 'y'], 'only the public half went up in the clear');
+  assert.equal(JSON.stringify(fb.priv).includes('"d"'), false, 'the private half is sealed');
+
+  await parent.store.refresh();
+  assert.equal(parent.store.feedback.available, true);
+  await parent.store.feedback.send({ kind: 'bug', text: 'Der Knopf klemmt', from: { username: 'papa', familyName: 'Test' }, sentAt: NOW, app: null });
+  await parent.store.feedback.send({ kind: 'idea', text: 'Anonymer Wunsch', from: null, sentAt: NOW, app: null });
+  assert.equal(fb.rows.length, 2);
+  for (const row of fb.rows) {
+    for (const plain of ['papa', 'Knopf', 'Wunsch', 'bug']) assert.equal(row.blob.includes(plain), false, `no "${plain}" on the wire`);
+  }
+  assert.equal(parent.store.feedback.unread, null, 'a parent gets no count');
+
+  await operator.store.refresh();
+  assert.equal(operator.store.feedback.unread, 2);
+  const inbox = await operator.store.feedback.inbox();
+  assert.deepEqual(inbox.items.map((i) => i.message.text), ['Anonymer Wunsch', 'Der Knopf klemmt'], 'newest first, decrypted');
+  assert.equal(inbox.items[0].message.from, null);
+  assert.equal(inbox.items[1].message.from.username, 'papa');
+
+  const [anon, named] = inbox.items;
+  assert.equal(await operator.store.feedback.setRead(anon, true), TODAY);
+  assert.equal(operator.store.feedback.unread, 1);
+  await operator.store.feedback.remove(named);
+  assert.equal(operator.store.feedback.unread, 0, 'an unread message deleted counts down too');
+  assert.equal(fb.rows.length, 1);
+
+  // A parent's phone reaches no inbox route.
+  await assert.rejects(parent.store.feedback.inbox(), (e) => e.status === 404);
 });

@@ -27,7 +27,8 @@ and computes nothing.
 | The family's data key only *wrapped* (AES-KW) under keys derived from passwords | The family data key itself: it is generated on the phone and only ever leaves it wrapped |
 | Display names and family settings as encrypted blobs | |
 | SHA-256 hashes of the session tokens (HttpOnly, SameSite cookie) | |
-| Throttle counters keyed by the client's address (failed logins, registrations, entry writes) — rows older than a day are pruned at the next login or registration | |
+| Throttle counters keyed by the client's address (failed logins, registrations, entry writes, feedback messages) — rows older than a day are pruned at the next login or registration | |
+| Feedback messages to the operator (optional, see «Feedback»): per message ONE blob sealed on the phone to the operator's inbox key, a day-granular date and a read mark — no column for the sender | What a message says and who wrote it: a named message carries the name inside the blob, an anonymous one nowhere |
 
 What a server still learns, like any server: that a family exists, how many
 rows it has and roughly when a phone writes (request times, web-server logs),
@@ -148,6 +149,33 @@ server, to that service.
 Limits: an icon that already sits on an iOS home screen stays what it is
 (remove the app and add it again); an installed Android app follows the
 manifest by itself after a few days.
+
+## Feedback
+
+Optional: the parents can write to whoever runs the installation — a wish,
+a bug report, anything — under «Mehr › Anleitung», by name or anonymously.
+Name your own account in `.env` (`ADMIN_USERNAME`) and package; that one
+account sees an inbox there instead of the form. Unset, the section does
+not appear.
+
+The messages are end-to-end encrypted like everything else
+([`api/lib/feedback.php`](api/lib/feedback.php),
+[`src/feedback.js`](src/feedback.js), `sealFeedback` in
+[`src/crypto.js`](src/crypto.js)). The first time the operator opens the
+inbox, their phone makes an ECDH P-256 key pair: the public half goes to the
+server (every member's phone fetches it to write), the private half is sealed
+under the operator's family data key, so their other phones and the recovery
+code open it too. Each message is sealed to the public key with a throwaway
+key pair (ECDH → HKDF-SHA256 → AES-GCM, padded to 1 or 4 KB), so the server
+— or a leaked database — holds a blob it cannot read, and the sending phone
+cannot read it back either. The inbox routes answer 404 to everyone else.
+
+An anonymous message has no name inside, and the stored row has no user or
+family column for either kind, so the server cannot tell the two apart. The
+send request itself is made while logged in, like every request, and is
+throttled per address only (10 an hour — a per-account counter would write
+down the link the table leaves out); what the web server logs about any
+request (time, address) it logs about this one too.
 
 ## Licence
 
@@ -335,6 +363,15 @@ SELECT COUNT(*) FROM entries WHERE deleted_at IS NULL AND (family_id IS NULL
   OR legacy_details IS NOT NULL OR legacy_logged_by IS NOT NULL);
 ```
 
+## Schema v4 → v5
+
+v5 fügt nur die Tabelle `feedback` hinzu (id, blob, created_at als Datum,
+read_at) — ohne Spalte für Absender, Konto oder Familie. Die Migration läuft
+bei der ersten Anfrage nach dem Deploy, fasst keine andere Tabelle an und
+braucht keine Sicherungskopie; kein Handy synchronisiert neu. Ein älterer
+Stand öffnet eine v5-Datei unverändert (er kennt die Tabelle nicht und liest
+sie nie).
+
 ## Konten von Hand verwalten
 
 Direkt in der SQLite-Datei (`sqlite3 data/baby.db`, auf dem Server per SSH).
@@ -380,7 +417,9 @@ Adressen aus (20 / Stunde). Schreibzugriffe auf Einträge sind pro IP auf 300 /
 15 min begrenzt (429), und neue Einträge enden bei 50 000 Zeilen pro Familie
 bzw. 400 000 insgesamt (507; gelöschte Einträge zählen mit, sie bleiben als
 Tombstones) — die Registrierung ist offen, ohne diese Grenzen könnte ein
-Fremdkonto die Disk füllen.
+Fremdkonto die Disk füllen. Feedback-Nachrichten haben ein eigenes Budget
+(10 / Stunde pro IP) und eine eigene Grenze (2000). «Betreiber» = das Konto aus
+`ADMIN_USERNAME`; alle anderen bekommen auf diesen Routen dasselbe 404.
 Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 `authKey` (PBKDF2 + HKDF); Schlüssel und Datensätze sind base64url-Blobs.
 
@@ -397,11 +436,16 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `PATCH /api/me` | ✓ | `{profileBlob}` (verschlüsselter Anzeigename) |
 | `PATCH /api/me/password` | ✓ | `{currentAuthKey, authKey, kdf, fdkWrappedUser}` — meldet andere Geräte ab |
 | `PATCH /api/families/password` | ✓ | `{currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily}` |
-| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an |
+| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an. Dazu `feedback: true`, wenn es ein Feedback-Postfach gibt, und nur für das Betreiber-Konto `feedbackUnread` |
 | `POST /api/entries` | ✓ | `{eid, blob}` → Datensatz (507 an der Zeilengrenze der Familie bzw. der Datenbank) |
 | `PATCH /api/entries/:eid` | ✓ | `{blob, ifSeq}` → Datensatz (409, wenn ein anderes Gerät dazwischenkam) |
 | `DELETE /api/entries/:eid` | ✓ | Soft-Delete; optionaler JSON-Body `{ifSeq}` macht ihn bedingt (409, wenn ein anderes Gerät dazwischenkam) |
 | `POST /api/entries/:eid/restore` | ✓ | Soft-Delete rückgängig |
+| `GET /api/feedback/key` | ✓ | `{publicKey}` — der öffentliche Schlüssel des Postfachs (404, solange Feedback aus oder nicht eingerichtet ist) |
+| `POST /api/feedback` | ✓ | `{blob}` → 201 — eine versiegelte Nachricht; gespeichert ohne Absender (413 zu lang, 429 nach 10 / Stunde pro Adresse, 507 bei 2000 Nachrichten) |
+| `POST /api/feedback/key` | Betreiber | `{publicKey, privateSealed}` — richtet das Postfach einmalig ein (409 danach) |
+| `GET /api/feedback?before=` | Betreiber | `{publicKey, privateSealed, items, next, unread}` — neueste zuerst, 100 pro Seite |
+| `PATCH /api/feedback/:id` · `DELETE /api/feedback/:id` | Betreiber | `{read}` gelesen/ungelesen · endgültig löschen |
 | `GET /api/art/k/<key>/<name>` | – | Dieselben Bilder und `manifest.webmanifest` über den zufälligen Schlüssel der Installation (nur die Mitglieder jener Familie erhalten ihn, als `artKey` im Sync) — für das, was der Browser ohne Sitzung lädt: das Installations-Symbol. Falscher Schlüssel, unbekannter Name, Funktion aus: dasselbe 404 |
 | `GET /api/art/<name>` | (✓) | Privates Bildmaterial (`image/png`) für die Mitglieder der in `PRIVATE_ART_FAMILY` genannten Familie — für alle anderen, auch ohne Anmeldung, dasselbe 404 (siehe «Private artwork») |
 
@@ -490,7 +534,8 @@ src/            Frontend: main.js Shell, views/, store.js (lokales Modell +
                 model.js/validate.js/tz.js/meals.js/reminders.js/dose.js
                 (reine Logik, node-getestet), themes/ (ein CSS pro Design +
                 Registry; README dort), i18n/ (Sprachen: locales/<id>/,
-                README dort), whats-new.js (die Notizen fürs Update-Sheet)
+                README dort), whats-new.js (die Notizen fürs Update-Sheet),
+                feedback.js + feedback-sheet.js (Feedback an den Betreiber)
 public/         Manifest, Service Worker, Icons
 scripts/        dev-router, preview-router, package.mjs, deploy.mjs,
                 export-plain.mjs (Offline-Entschlüsselung), make-icons.mjs

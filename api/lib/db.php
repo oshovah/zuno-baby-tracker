@@ -3,7 +3,7 @@
  * Database setup: opens data/baby.db (WAL when the host allows it), creates
  * the schema and migrates an older file in place.
  *
- * Schema v4 — nothing here describes the baby:
+ * Schema v5 — nothing here describes the baby:
  *   families, users  bcrypt of client-derived auth values, the KDF parameters
  *                and the wrapped Family Data Key (plus a recovery hash per
  *                family and an encrypted profile per user).
@@ -17,6 +17,10 @@
  *                page carries: a phone that synced against another life of
  *                the file notices and wipes its mirror).
  *   login_attempts  the throttle counters.
+ *   feedback     messages to the operator (lib/feedback.php): one opaque
+ *                blob sealed on the phone to the operator's inbox key, a
+ *                day-granular date and a read mark. No column for the
+ *                sender, their user or their family — on purpose.
  * One open timer per type is a client rule: no partial unique index.
  *
  * Migration (bt_create_or_migrate): the version is detected STRUCTURALLY,
@@ -32,11 +36,16 @@
  * no public release can read it. Up-to-date databases take a fast path of two
  * reads and never write per request.
  *
- * Future DDL changes (v5): bump the stamp in bt_create_schema, add a
- * bt_migrate_v4_to_v5() with idempotent steps, detect v4 structurally (a
- * column or table that v5 introduces) in BOTH the pre-check and the re-check
- * under the lock in bt_create_or_migrate, and call it after
- * bt_migrate_v3_to_v4, before bt_create_schema.
+ * v4 -> v5 only adds the feedback table (bt_migrate_v4_to_v5, CREATE IF NOT
+ * EXISTS): a v4 file is detected by that table missing, in the fast path's
+ * check as in the re-check under the lock. An older release opens a v5 file
+ * unchanged (its stamp check passes, it never reads the table).
+ *
+ * Future DDL changes (v6): bump BT_SCHEMA_VERSION, add a bt_migrate_v5_to_v6()
+ * with idempotent steps, detect v5 structurally (a column or table that v6
+ * introduces) in BOTH the pre-check and the re-check under the lock in
+ * bt_create_or_migrate, and call it after bt_migrate_v4_to_v5, before
+ * bt_create_schema.
  *
  * The db path defaults to <app root>/data/baby.db (app root = parent of api/)
  * and can be overridden via config.php 'db_path' (absolute, or relative to the
@@ -49,7 +58,7 @@
 
 require_once __DIR__ . '/http.php';
 
-const BT_SCHEMA_VERSION = 4;
+const BT_SCHEMA_VERSION = 5;
 
 /** App root = parent directory of api/. */
 function bt_app_root(): string
@@ -144,6 +153,14 @@ function bt_entries_is_v3(array $columns): bool
     return in_array('blob', $columns, true) && in_array('legacy_type', $columns, true);
 }
 
+/** Does the table exist? */
+function bt_table_exists(PDO $pdo, string $name): bool
+{
+    $stmt = $pdo->prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
+    $stmt->execute([$name]);
+    return $stmt->fetchColumn() !== false;
+}
+
 /** settings.schema_version as int; 0 when the table or the row is missing. */
 function bt_schema_version(PDO $pdo): int
 {
@@ -156,8 +173,8 @@ function bt_schema_version(PDO $pdo): int
 }
 
 /**
- * Ensure the v4 schema exists, migrating a v3 database in place first.
- * Up-to-date databases return after two cheap reads (no write per request).
+ * Ensure the v5 schema exists, migrating a v3 or v4 database in place first.
+ * Up-to-date databases return after three cheap reads (no write per request).
  */
 function bt_create_or_migrate(PDO $pdo, string $dbPath): void
 {
@@ -165,7 +182,7 @@ function bt_create_or_migrate(PDO $pdo, string $dbPath): void
     $columns = bt_entries_columns($pdo);
     bt_assert_not_pre_v3($columns);
     $isV3 = bt_entries_is_v3($columns);
-    if ($columns !== [] && !$isV3 && bt_schema_version($pdo) >= BT_SCHEMA_VERSION) {
+    if ($columns !== [] && !$isV3 && bt_schema_version($pdo) >= BT_SCHEMA_VERSION && bt_table_exists($pdo, 'feedback')) {
         return;
     }
     if ($isV3) {
@@ -180,6 +197,9 @@ function bt_create_or_migrate(PDO $pdo, string $dbPath): void
         bt_assert_not_pre_v3($columns);
         if (bt_entries_is_v3($columns)) {
             bt_migrate_v3_to_v4($pdo);
+        }
+        if ($columns !== [] && !bt_table_exists($pdo, 'feedback')) {
+            bt_migrate_v4_to_v5($pdo);
         }
         bt_create_schema($pdo);
         $pdo->exec('COMMIT');
@@ -337,6 +357,33 @@ SQL);
 }
 
 /**
+ * v4 -> v5: the feedback table. Idempotent, runs inside the caller's BEGIN
+ * IMMEDIATE; bt_create_schema creates the same table on a fresh file.
+ */
+function bt_migrate_v4_to_v5(PDO $pdo): void
+{
+    bt_create_feedback_table($pdo);
+    error_log('[baby-tracker] schema v4 -> v5: feedback table added');
+}
+
+/**
+ * Messages to the operator (lib/feedback.php). Dates are 'YYYY-MM-DD'; the
+ * exact time lives inside the blob. No sender column: an anonymous message
+ * and a named one look the same here.
+ */
+function bt_create_feedback_table(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  blob TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  read_at TEXT
+)
+SQL);
+}
+
+/**
  * The schema (CREATE IF NOT EXISTS — also fills in the index on a migrated
  * DB), the per-install settings rows (INSERT OR IGNORE) and the version
  * stamp. Runs inside the caller's transaction.
@@ -386,6 +433,7 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 INSERT OR IGNORE INTO settings (key, value) VALUES ('salt_secret', lower(hex(randomblob(32))));
 INSERT OR IGNORE INTO settings (key, value) VALUES ('feed_id', lower(hex(randomblob(16))));
 SQL);
+    bt_create_feedback_table($pdo);
     $pdo->prepare(
         "INSERT INTO settings (key, value) VALUES ('schema_version', ?)
            ON CONFLICT(key) DO UPDATE SET value = excluded.value"

@@ -18,6 +18,10 @@
  *   private_art_dir       string|null  folder of those pictures; null =
  *                         <app root>/private-art (gitignored). Dev/tests:
  *                         BABY_ART_DIR.
+ *   admin_username        string|null  the account that reads the parents'
+ *                         feedback (lib/feedback.php); null = feedback off.
+ *                         Packaging takes it from ADMIN_USERNAME in .env; in
+ *                         dev the BABY_ADMIN_USER environment variable sets it.
  *
  * There is no password here: accounts live in the database (lib/auth.php).
  * In dev, register a user in the app.
@@ -26,9 +30,11 @@
 $envDbPath = getenv('BABY_DB_PATH');
 $envArtFamily = getenv('BABY_ART_FAMILY');
 $envArtDir = getenv('BABY_ART_DIR');
+$envAdmin = getenv('BABY_ADMIN_USER');
 
 return [
     'db_path' => (is_string($envDbPath) && $envDbPath !== '') ? $envDbPath : null,
     'private_art_family' => (is_string($envArtFamily) && $envArtFamily !== '') ? $envArtFamily : null,
     'private_art_dir' => (is_string($envArtDir) && $envArtDir !== '') ? $envArtDir : null,
+    'admin_username' => (is_string($envAdmin) && $envAdmin !== '') ? $envAdmin : null,
 ];

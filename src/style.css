@@ -2553,6 +2553,124 @@ textarea.code-input {
   padding-left: 22px;
 }
 
+/* --- feedback (feedback-sheet.js) ------------------------------------------- */
+
+textarea.fb-text {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px; /* prevents iOS zoom-on-focus */
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.feedback-form [data-count] {
+  float: right;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.feedback-form [data-count].over {
+  color: var(--danger);
+}
+
+.fb-tech {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.fb-tech-key {
+  font-weight: 600;
+}
+
+.fb-item {
+  padding: 12px 0;
+}
+
+.fb-item + .fb-item {
+  border-top: 1px solid var(--line);
+}
+
+.fb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fb-kind {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.fb-new {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--milk);
+  color: var(--on-milk);
+  font-weight: 700;
+}
+
+.fb-when {
+  margin-left: auto;
+}
+
+.fb-from {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.fb-detail {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.fb-body {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fb-item.unread:not(.fresh) .fb-body {
+  font-weight: 600;
+}
+
+.fb-tech-box summary {
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.fb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.fb-actions .chip {
+  padding: 8px 14px;
+}
+
+.fb-inbox > .btn {
+  margin-top: 12px;
+}
+
 /* --- tab bar ---------------------------------------------------------------- */
 
 .tabbar[hidden] {
@@ -2582,6 +2700,7 @@ textarea.code-input {
 }
 
 .tabbar a {
+  position: relative; /* the unread-feedback dot sits in its corner */
   flex: 1;
   max-width: 140px;
   display: flex;
@@ -2604,6 +2723,17 @@ textarea.code-input {
 
 .tabbar a.active {
   color: var(--milk);
+}
+
+/* The operator's unread feedback (main.js syncFeedbackDot). */
+.tab-dot {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 20px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
 }
 
 /* --- toasts ------------------------------------------------------------------ */

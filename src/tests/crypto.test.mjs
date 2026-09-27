@@ -2,12 +2,13 @@
 //
 // Tests for src/crypto.js: encodings, key derivation (determinism, NFC,
 // domain separation, fixed vectors cross-checked against node:crypto),
-// FDK wrap/unwrap, recovery code, padding buckets and the entry/profile
-// envelope incl. AAD binding and tamper detection.
+// FDK wrap/unwrap, recovery code, padding buckets, the entry/profile
+// envelope incl. AAD binding and tamper detection, and the feedback inbox
+// (sealed messages, cross-checked against node:crypto's ECDH).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pbkdf2Sync, hkdfSync, createCipheriv } from 'node:crypto';
+import { pbkdf2Sync, hkdfSync, createCipheriv, createDecipheriv, createECDH } from 'node:crypto';
 
 import {
   KDF_ITER,
@@ -31,6 +32,12 @@ import {
   encryptProfile,
   decryptProfile,
   padTo,
+  FEEDBACK_V,
+  generateInboxKeys,
+  sealInboxPrivate,
+  openInboxPrivate,
+  sealFeedback,
+  openFeedback,
 } from '../crypto.js';
 
 const B64U_RE = /^[A-Za-z0-9_-]+$/;
@@ -516,4 +523,76 @@ test('encryptProfile / decryptProfile: round trip, AAD by username, buckets', as
   await assert.rejects(decryptProfile(key, 'papa', b64u(bytes)), /Unbekanntes Datenformat/);
   const crafted = await craft(key, 'bt1|profile|papa', JSON.stringify({ v: 1, name: 'x' }), 128);
   await assert.rejects(decryptProfile(key, 'papa', crafted), /Ungültiger Datensatz/);
+});
+
+// ---------------------------------------------------------------------------
+// Feedback inbox
+
+const MSG = { kind: 'bug', text: 'Grüezi – der Knopf klemmt 🐛', from: null, sentAt: '2026-09-27T08:00:00Z', app: null };
+
+test('feedback: sealed to the inbox key, opened with the private half; the wire format is the documented one', async () => {
+  const { publicJwk, privateJwk } = await generateInboxKeys();
+  assert.deepEqual(Object.keys(publicJwk), ['kty', 'crv', 'x', 'y'], 'only the public fields');
+  assert.equal(typeof privateJwk.d, 'string');
+
+  const blob = await sealFeedback(publicJwk, MSG);
+  assert.match(blob, B64U_RE);
+  const bytes = unb64u(blob);
+  assert.equal(bytes[0], FEEDBACK_V);
+  assert.equal(bytes.length, 1 + 65 + 12 + 1024 + 16, 'the 1024-byte bucket');
+  assert.equal(bytes[1], 0x04, 'an uncompressed P-256 point follows');
+
+  const fdk = await importFdk(FDK_FIXED);
+  const sealed = await sealInboxPrivate(fdk, 7, privateJwk);
+  const { privateKey, publicJwk: back } = await openInboxPrivate(fdk, 7, sealed);
+  assert.deepEqual(back, publicJwk);
+  assert.equal(privateKey.extractable, false, 'the opened private key stays in the browser');
+  assert.deepEqual(await openFeedback(privateKey, publicJwk, blob), { ...MSG, v: FEEDBACK_V });
+
+  // Independent check with node:crypto: ECDH, HKDF(salt = eph ‖ inbox), AES-GCM.
+  const ecdh = createECDH('prime256v1');
+  ecdh.setPrivateKey(Buffer.from(unb64u(privateJwk.d)));
+  const eph = bytes.subarray(1, 66);
+  const inboxRaw = Buffer.concat([Buffer.from([4]), Buffer.from(unb64u(publicJwk.x)), Buffer.from(unb64u(publicJwk.y))]);
+  const shared = ecdh.computeSecret(Buffer.from(eph));
+  const key = Buffer.from(hkdfSync('sha256', shared, Buffer.concat([Buffer.from(eph), inboxRaw]), 'bt/v1/feedback', 32));
+  const d = createDecipheriv('aes-256-gcm', key, bytes.subarray(66, 78));
+  d.setAAD(Buffer.from('bt1|feedback'));
+  d.setAuthTag(Buffer.from(bytes.subarray(bytes.length - 16)));
+  const plain = Buffer.concat([d.update(bytes.subarray(78, bytes.length - 16)), d.final()]).toString('utf8');
+  assert.deepEqual(JSON.parse(plain.trimEnd()), { ...MSG, v: FEEDBACK_V });
+});
+
+test('feedback: a fresh throwaway key per message, the 4096 bucket for long ones, too long throws', async () => {
+  const { publicJwk } = await generateInboxKeys();
+  const a = unb64u(await sealFeedback(publicJwk, MSG));
+  const b = unb64u(await sealFeedback(publicJwk, MSG));
+  assert.notDeepEqual(a.subarray(1, 66), b.subarray(1, 66), 'another ephemeral key');
+  const long = unb64u(await sealFeedback(publicJwk, { ...MSG, text: 'x'.repeat(2000) }));
+  assert.equal(long.length, 1 + 65 + 12 + 4096 + 16);
+  await assert.rejects(sealFeedback(publicJwk, { ...MSG, text: 'x'.repeat(4100) }), /zu gross/);
+});
+
+test('feedback: another inbox, a tampered byte, another family key or family id all fail', async () => {
+  const mine = await generateInboxKeys();
+  const other = await generateInboxKeys();
+  const fdk = await importFdk(FDK_FIXED);
+  const blob = await sealFeedback(mine.publicJwk, MSG);
+
+  const otherKey = (await openInboxPrivate(fdk, 1, await sealInboxPrivate(fdk, 1, other.privateJwk))).privateKey;
+  await assert.rejects(openFeedback(otherKey, other.publicJwk, blob), /Entschlüsselung fehlgeschlagen/);
+
+  const myKey = (await openInboxPrivate(fdk, 1, await sealInboxPrivate(fdk, 1, mine.privateJwk))).privateKey;
+  const bytes = unb64u(blob);
+  bytes[100] ^= 1;
+  await assert.rejects(openFeedback(myKey, mine.publicJwk, b64u(bytes)), /Entschlüsselung fehlgeschlagen/);
+  const entryLike = unb64u(blob);
+  entryLike[0] = 1;
+  await assert.rejects(openFeedback(myKey, mine.publicJwk, b64u(entryLike)), /Unbekanntes Datenformat/);
+
+  const sealed = await sealInboxPrivate(fdk, 1, mine.privateJwk);
+  await assert.rejects(openInboxPrivate(fdk, 2, sealed), /Entschlüsselung fehlgeschlagen/, 'bound to the family id');
+  const otherFdk = await importFdk(new Uint8Array(32).fill(9));
+  await assert.rejects(openInboxPrivate(otherFdk, 1, sealed), /Entschlüsselung fehlgeschlagen/);
+  await assert.rejects(sealInboxPrivate(fdk, 1, mine.publicJwk), /Ungültige Schlüsseldaten/, 'a public key is no private key');
 });

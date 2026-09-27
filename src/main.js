@@ -21,7 +21,7 @@ applyTheme(prefs.theme);
 applyScheme(prefs.scheme);
 setLocale(detectLocale(prefs.lang, navigator.languages || [navigator.language]));
 import { decryptProfile } from './crypto.js';
-import { toast, setToastHint, isFeedingNow } from './ui.js';
+import { toast, setToastHint, isFeedingNow, escapeHtml } from './ui.js';
 import { closeActiveSheet } from './sheet.js';
 import { renderLogin } from './views/login.js';
 import { renderHome } from './views/home.js';
@@ -54,6 +54,24 @@ labelShell();
 applyKeptArt();
 store.subscribe(() => syncArt(store.artVersion, store.artKey));
 
+// The operator's unread feedback: a dot on the «Mehr» tab (its «Anleitung»
+// sub tab carries one too, views/more.js).
+function syncFeedbackDot() {
+  const tab = tabbar.querySelector('a[data-tab="mehr"]');
+  if (!tab) return;
+  const want = store.feedback.isInbox && store.feedback.unread > 0;
+  const dot = tab.querySelector('.tab-dot');
+  if (want && !dot) {
+    tab.insertAdjacentHTML('beforeend', `<span class="tab-dot" aria-label="${escapeHtml(t('feedback.section.unread', { n: store.feedback.unread }))}"></span>`);
+  } else if (!want && dot) {
+    dot.remove();
+  } else if (want && dot) {
+    dot.setAttribute('aria-label', t('feedback.section.unread', { n: store.feedback.unread }));
+  }
+}
+syncFeedbackDot();
+store.subscribe(syncFeedbackDot);
+
 let cleanup = null;
 let mode = 'boot'; // 'boot' | 'auth' | 'app'
 
@@ -62,8 +80,9 @@ const routes = [
   { pattern: /^#\/nachtragen\/?$/, tab: 'nachtragen', render: (el) => renderBackfill(el) },
   { pattern: /^#\/verlauf\/?$/, tab: 'verlauf', render: (el) => renderHistory(el) },
   // `familie` is the deep link into the family half of the «Konto» pane (the
-  // recovery toast below, older links) — the sub tab itself writes `konto`.
-  { pattern: /^#\/mehr(\/(einstellungen|konto|familie|anleitung))?\/?$/, tab: 'mehr', render: (el) => renderMore(el) },
+  // recovery toast below, older links) — the sub tab itself writes `konto`;
+  // `feedback` opens «Anleitung» at its feedback section.
+  { pattern: /^#\/mehr(\/(einstellungen|konto|familie|anleitung|feedback))?\/?$/, tab: 'mehr', render: (el) => renderMore(el) },
 ];
 
 function runCleanup() {

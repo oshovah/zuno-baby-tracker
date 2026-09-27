@@ -44,4 +44,14 @@ export default {
   'entries.conflict': 'This entry was changed on another device in the meantime',
   'entries.familyFull': 'The family\'s storage limit has been reached – no new entries possible',
   'entries.serverFull': 'The server is out of storage – no new entries possible',
+
+  // feedback to the operator (lib/feedback.php, auth.php's fb:<ip> budget)
+  'feedback.unavailable': 'Feedback is not set up',
+  'feedback.badKey': 'Invalid key',
+  'feedback.keyExists': 'The inbox is already set up',
+  'feedback.tooLarge': 'The message is too long',
+  'feedback.full': 'The inbox is full – please try again later',
+  'feedback.notFound': 'Message not found',
+  'feedback.badRead': 'Invalid value',
+  'feedback.throttled': 'Too many messages in a short time – please try again later',
 };

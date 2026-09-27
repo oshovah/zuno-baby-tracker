@@ -15,8 +15,16 @@
 // Envelope: b64u(0x01 || iv12 || AES-GCM(fdk, iv, aad, padded JSON)).
 //   entry   AAD "bt1|<familyId>|<eid>", plaintext padded to 256 / 512 bytes
 //   profile AAD "bt1|profile|<username>", plaintext padded to 128 / 256 bytes
+//   inbox   AAD "bt1|inbox|<familyId>", the operator's private inbox key
+//           (a JWK) padded to 512 bytes
 // Padding is trailing 0x20 so JSON.parse ignores it; the fixed buckets keep
 // the blob length from revealing the entry type.
+//
+// Feedback (a message to the operator, sealed to the inbox's public key):
+//   b64u(0x02 || ephPub65 || iv12 || AES-GCM(k, iv, "bt1|feedback", padded JSON))
+//   k = HKDF-SHA256(ECDH-P256(eph, inbox), salt = ephPub65 || inboxPub65,
+//       info "bt/v1/feedback"); a throwaway key pair per message, so the
+//   sending phone cannot open its own message afterwards; 1024 / 4096 buckets.
 
 import { t } from './i18n/index.js';
 
@@ -34,6 +42,11 @@ const IV_BYTES = 12;
 const TAG_BITS = 128;
 const ENTRY_BUCKETS = [256, 512];
 const PROFILE_BUCKETS = [128, 256];
+const INBOX_BUCKETS = [512];
+export const FEEDBACK_V = 2;
+export const FEEDBACK_BUCKETS = [1024, 4096];
+const EC = { name: 'ECDH', namedCurve: 'P-256' };
+const P256_RAW_BYTES = 65;
 const ROLES = ['user', 'family'];
 const HKDF_PREFIX = 'bt/v1/';
 
@@ -372,4 +385,136 @@ export async function decryptProfile(fdk, username, blob) {
   const plain = await open(fdk, profileAad(username), blob);
   if (typeof plain.displayName !== 'string') throw new Error(t('errors.validate.invalidRecord'));
   return { displayName: plain.displayName };
+}
+
+// ---------------------------------------------------------------------------
+// Feedback inbox (ECDH P-256 — X25519 is too young for the phones we support)
+
+/** Only the public fields of an EC JWK: what the server stores and hands out. */
+function publicJwkOf(jwk) {
+  if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256' || typeof jwk.x !== 'string' || typeof jwk.y !== 'string') {
+    throw new Error(t('errors.crypto.keyData'));
+  }
+  return { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y };
+}
+
+async function importInboxPublic(publicJwk) {
+  try {
+    return await subtle().importKey('jwk', publicJwkOf(publicJwk), EC, true, []);
+  } catch (e) {
+    throw withCause(new Error(t('errors.crypto.keyData')), e);
+  }
+}
+
+/** The AES-GCM key of one message: HKDF over the ECDH secret, bound to both public keys. */
+async function feedbackKey(privateKey, peerPublic, ephRaw, inboxRaw) {
+  const s = subtle();
+  const shared = await s.deriveBits({ name: 'ECDH', public: peerPublic }, privateKey, 256);
+  const ikm = await s.importKey('raw', shared, { name: 'HKDF' }, false, ['deriveKey']);
+  const salt = new Uint8Array(ephRaw.length + inboxRaw.length);
+  salt.set(ephRaw);
+  salt.set(inboxRaw, ephRaw.length);
+  return s.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt, info: utf8(HKDF_PREFIX + 'feedback') },
+    ikm,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+/** A fresh inbox key pair → {publicJwk (the 4 public fields), privateJwk}. */
+export async function generateInboxKeys() {
+  const s = subtle();
+  const pair = await s.generateKey(EC, true, ['deriveBits']);
+  return {
+    publicJwk: publicJwkOf(await s.exportKey('jwk', pair.publicKey)),
+    privateJwk: await s.exportKey('jwk', pair.privateKey),
+  };
+}
+
+function inboxAad(familyId) {
+  const fid = String(familyId);
+  if (!/^\d+$/.test(fid)) throw new Error(t('errors.crypto.familyId'));
+  return utf8('bt1|inbox|' + fid);
+}
+
+/** The private inbox key sealed under the operator's FDK (an entry-style 0x01 envelope). */
+export async function sealInboxPrivate(fdk, familyId, privateJwk) {
+  if (!privateJwk || typeof privateJwk.d !== 'string') throw new Error(t('errors.crypto.keyData'));
+  const jwk = { ...publicJwkOf(privateJwk), d: privateJwk.d };
+  return seal(fdk, inboxAad(familyId), utf8(JSON.stringify({ v: ENVELOPE_V, jwk })), INBOX_BUCKETS);
+}
+
+/** Inverse of sealInboxPrivate → {privateKey (non-extractable ECDH CryptoKey), publicJwk}. */
+export async function openInboxPrivate(fdk, familyId, blob) {
+  const plain = await open(fdk, inboxAad(familyId), blob);
+  const jwk = plain.jwk;
+  if (!jwk || typeof jwk.d !== 'string') throw new Error(t('errors.crypto.keyData'));
+  const publicJwk = publicJwkOf(jwk);
+  let privateKey;
+  try {
+    privateKey = await subtle().importKey('jwk', { ...publicJwk, d: jwk.d }, EC, false, ['deriveBits']);
+  } catch (e) {
+    throw withCause(new Error(t('errors.crypto.keyData')), e);
+  }
+  return { privateKey, publicJwk };
+}
+
+/**
+ * Seal a feedback message (a plain object; src/feedback.js builds it) to
+ * the inbox's public key. {v: 2} is set here. Throws errors.crypto.tooBig
+ * when the JSON does not fit the 4096-byte bucket.
+ */
+export async function sealFeedback(publicJwk, plain) {
+  if (!plain || typeof plain !== 'object') throw new Error(t('errors.validate.invalidRecord'));
+  const s = subtle();
+  const inbox = await importInboxPublic(publicJwk);
+  const inboxRaw = new Uint8Array(await s.exportKey('raw', inbox));
+  const eph = await s.generateKey(EC, true, ['deriveBits']);
+  const ephRaw = new Uint8Array(await s.exportKey('raw', eph.publicKey));
+  const key = await feedbackKey(eph.privateKey, inbox, ephRaw, inboxRaw);
+  const padded = padTo(utf8(JSON.stringify({ ...plain, v: FEEDBACK_V })), FEEDBACK_BUCKETS);
+  const iv = randomBytes(IV_BYTES);
+  const ct = new Uint8Array(
+    await s.encrypt({ name: 'AES-GCM', iv, additionalData: utf8('bt1|feedback'), tagLength: TAG_BITS }, key, padded)
+  );
+  const out = new Uint8Array(1 + P256_RAW_BYTES + IV_BYTES + ct.length);
+  out[0] = FEEDBACK_V;
+  out.set(ephRaw, 1);
+  out.set(iv, 1 + P256_RAW_BYTES);
+  out.set(ct, 1 + P256_RAW_BYTES + IV_BYTES);
+  return b64u(out);
+}
+
+/** Open a feedback blob with the inbox's private key (openInboxPrivate) → the plain object. */
+export async function openFeedback(privateKey, publicJwk, blob) {
+  const bytes = unb64u(blob);
+  const head = 1 + P256_RAW_BYTES + IV_BYTES;
+  if (bytes.length < head + TAG_BITS / 8) throw new Error(t('errors.validate.invalidRecord'));
+  if (bytes[0] !== FEEDBACK_V) throw new Error(t('errors.crypto.version'));
+  const s = subtle();
+  const inboxRaw = new Uint8Array(await s.exportKey('raw', await importInboxPublic(publicJwk)));
+  const ephRaw = bytes.slice(1, 1 + P256_RAW_BYTES);
+  let padded;
+  try {
+    const eph = await s.importKey('raw', ephRaw, EC, true, []);
+    const key = await feedbackKey(privateKey, eph, ephRaw, inboxRaw);
+    padded = await s.decrypt(
+      { name: 'AES-GCM', iv: bytes.subarray(1 + P256_RAW_BYTES, head), additionalData: utf8('bt1|feedback'), tagLength: TAG_BITS },
+      key,
+      bytes.subarray(head)
+    );
+  } catch (e) {
+    throw withCause(new Error(t('errors.crypto.decrypt')), e);
+  }
+  let obj;
+  try {
+    obj = JSON.parse(textDecoder.decode(padded).trimEnd());
+  } catch (e) {
+    throw withCause(new Error(t('errors.validate.invalidRecord')), e);
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error(t('errors.validate.invalidRecord'));
+  if (obj.v !== FEEDBACK_V) throw new Error(t('errors.crypto.version'));
+  return obj;
 }

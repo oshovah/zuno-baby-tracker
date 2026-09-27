@@ -48,4 +48,14 @@ export default {
   'entries.conflict': 'Der Eintrag wurde inzwischen auf einem anderen Gerät geändert',
   'entries.familyFull': 'Speicherlimit der Familie erreicht – keine neuen Einträge möglich',
   'entries.serverFull': 'Der Speicher des Servers ist voll – keine neuen Einträge möglich',
+
+  // feedback to the operator (lib/feedback.php, auth.php's fb:<ip> budget)
+  'feedback.unavailable': 'Feedback ist nicht eingerichtet',
+  'feedback.badKey': 'Ungültiger Schlüssel',
+  'feedback.keyExists': 'Das Postfach ist schon eingerichtet',
+  'feedback.tooLarge': 'Die Nachricht ist zu lang',
+  'feedback.full': 'Das Postfach ist voll – bitte später nochmals versuchen',
+  'feedback.notFound': 'Nachricht nicht gefunden',
+  'feedback.badRead': 'Ungültige Angabe',
+  'feedback.throttled': 'Zu viele Nachrichten in kurzer Zeit – bitte später nochmals versuchen',
 };

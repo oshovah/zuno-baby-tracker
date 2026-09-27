@@ -44,7 +44,9 @@ other, so one install can host several. Session cookie, long-lived (stay
 logged in for months), backed by revocable DB tokens bound to a user.
 Deliberately minimal: no registration gate, no admin panel, no e-mail —
 abuse is bounded instead: per-address and per-target attempt budgets, a
-per-address write budget and row caps per family and in total.
+per-address write budget and row caps per family and in total. The one
+account named in the config (`ADMIN_USERNAME`) reads the parents' feedback,
+nothing more: it has no power over anybody's data.
 
 **End-to-end encrypted.** The database alone reveals nothing usable: every
 entry (type, times, amounts, names) is one AES-GCM blob encrypted on the
@@ -304,8 +306,15 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
    registration on a device points to it: a toast «Neu hier? … unter Mehr ›
    Anleitung» with «Anzeigen» on every app start until the pane was opened
    once. No interactive walkthrough, no overlays on the home screen.
+   At the foot of Anleitung, when the installation has an operator:
+   **Feedback** — a wish, a bug or anything else to the person who runs
+   Zuno (kind, text, «Anonym senden», «Technische Angaben» shown before
+   sending), sealed on the phone to the operator's inbox key. The operator's
+   account sees «Postfach öffnen» there instead (newest first, «Neu» on the
+   unread, mark unread, delete for good) and a dot on «Mehr» while something
+   is unread. One-way: no replies in the app.
 
-## Data model (schema v4)
+## Data model (schema v5)
 
 - `families` (id, name, name_key UNIQUE — case-folded, auth_hash = bcrypt of
   the family auth value, kdf_salt, kdf_iter, fdk_wrapped — the family data key
@@ -331,8 +340,14 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
   token every sync page carries as `feed`; a file created anew gets a new
   one, so phones drop a mirror that belongs to another file)
 - `login_attempts` (ip, fails, window_start) — every attempt budget: per
-  address (`<ip>`, `reg:<ip>`, `write:<ip>`) and per target (`user:<name>`,
-  `family:<name key>`); the key prefix picks the budget
+  address (`<ip>`, `reg:<ip>`, `write:<ip>`, `fb:<ip>`) and per target
+  (`user:<name>`, `family:<name key>`); the key prefix picks the budget
+- `feedback` (id, blob — a message sealed to the operator's inbox key,
+  created_at DATE, read_at DATE) — no sender column; inside the blob `{v: 2,
+  kind: idea | bug | other, text, from: {username, familyName, displayName?}
+  | null, sentAt, app | null}`. The inbox key: `settings.feedback_pub` (the
+  public JWK) and `settings.feedback_priv` (the private JWK sealed under the
+  operator's family data key)
 
 One baby only — no `babies` table until reality demands it.
 
@@ -349,6 +364,12 @@ One baby only — no `babies` table until reality demands it.
   `POST /entries {eid, blob}`, `PATCH /entries/:eid {blob, ifSeq}` (409 when
   moved), `DELETE /entries/:eid` (optional body `{ifSeq}` → 409 when moved),
   `POST /entries/:eid/restore` — no route takes or returns an entry's content
+- feedback: `GET /feedback/key` (the inbox's public key), `POST /feedback
+  {blob}` (a sealed message, no sender stored; `fb:<ip>` 10 / hour, 2000 rows);
+  the operator only — everyone else the same 404 —: `POST /feedback/key`
+  (once), `GET /feedback?before=`, `PATCH /feedback/:id {read}`, `DELETE
+  /feedback/:id` (for good). Sync pages carry `feedback: true` when an inbox
+  exists and, for the operator, `feedbackUnread`
 - `GET /art/<name>`: private artwork. The repo ships its own icon set
   (`public/img/`, drawn by `scripts/make-icons.mjs`); an installation may keep
   other pictures in the gitignored `private-art/` and name ONE family
@@ -369,8 +390,8 @@ One baby only — no `babies` table until reality demands it.
   open — no Background Sync, no push)
 - Push notifications (the reminders are in-app only: the home screen shows
   what is due, nothing rings)
-- Multiple babies, roles/permissions (every family member is equal), admin
-  panel, e-mail / server-side password reset (impossible by design: the
+- Multiple babies, roles/permissions (every family member is equal; the
+  feedback operator only reads feedback), admin panel, e-mail / server-side password reset (impossible by design: the
   server holds no key)
 - Native app
 

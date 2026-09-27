@@ -946,6 +946,9 @@ function bt_update_family_password(PDO $pdo, array $user, array $body): void
 //   user:<username>     guesses AGAINST one account, from any address
 //   family:<name key>   guesses AGAINST one family password, from any address
 //   write:<ip>          entry writes from that address
+//   fb:<ip>             feedback messages from that address (lib/feedback.php;
+//                       per address only, never per account: the stored
+//                       message must not be linkable to its sender)
 // The address budgets stop one machine; the target budgets stop a guesser
 // who rotates addresses (a botnet, an IPv6 /64) against one account or
 // family: however many machines join in, a target sees at most
@@ -963,6 +966,8 @@ const BT_TARGET_MAX_FAILS = 20;
 const BT_TARGET_WINDOW_SECONDS = 3600;
 const BT_WRITE_MAX_PER_WINDOW = 300;
 const BT_WRITE_WINDOW_SECONDS = 900;
+const BT_FEEDBACK_MAX_PER_WINDOW = 10;
+const BT_FEEDBACK_WINDOW_SECONDS = 3600;
 
 /** Throttle key of guesses against one account (the lowercased username, capped so junk cannot bloat the table). */
 function bt_user_throttle_key(string $username): string
@@ -990,6 +995,9 @@ function bt_throttle_budget(string $key): array
     }
     if (strpos($key, 'write:') === 0) {
         return [BT_WRITE_MAX_PER_WINDOW, BT_WRITE_WINDOW_SECONDS];
+    }
+    if (strpos($key, 'fb:') === 0) {
+        return [BT_FEEDBACK_MAX_PER_WINDOW, BT_FEEDBACK_WINDOW_SECONDS];
     }
     return [BT_LOGIN_MAX_FAILS, BT_LOGIN_WINDOW_SECONDS];
 }
@@ -1044,6 +1052,26 @@ function bt_charge_write(PDO $pdo, string $ip): void
             'Zu viele Änderungen in kurzer Zeit – bitte später nochmals versuchen',
             'request.writeBudget',
             ['minutes' => (int) ceil(BT_WRITE_WINDOW_SECONDS / 60)]
+        );
+    }
+    bt_record_login_failure($pdo, $key);
+}
+
+/**
+ * The feedback budget of an address: 429 'Zu viele Nachrichten …' once it is
+ * used up, else the message is counted (before validation, like writes).
+ */
+function bt_charge_feedback(PDO $pdo, string $ip): void
+{
+    $key = 'fb:' . $ip;
+    try {
+        bt_assert_login_allowed($pdo, $key);
+    } catch (HttpError $e) {
+        throw new HttpError(
+            429,
+            'Zu viele Nachrichten in kurzer Zeit – bitte später nochmals versuchen',
+            'feedback.throttled',
+            ['minutes' => (int) ceil(BT_FEEDBACK_WINDOW_SECONDS / 60)]
         );
     }
     bt_record_login_failure($pdo, $key);

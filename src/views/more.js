@@ -1,6 +1,7 @@
 // "Mehr" — the family's reminders, per-device and family settings, the
 // account (display name, own password, logout) with the family below it
-// (password, recovery code, export, encryption status), and the how-to.
+// (password, recovery code, export, encryption status), and the how-to with
+// the feedback section at its foot (the form, or the operator's inbox).
 //
 // Every key flow lives in session.js; this view only collects the typed
 // passwords, shows the KDF/server progress on the submit button and toasts
@@ -34,6 +35,7 @@ import { zurichDateOf } from '../tz.js';
 import { THEMES, DEFAULT_THEME, SCHEMES, applyTheme, applyScheme } from '../themes/index.js';
 import { t, tn, availableLocales, getLocale, setLocale } from '../i18n/index.js';
 import { openWhatsNewSheet } from '../whats-new-sheet.js';
+import { openFeedbackForm, openFeedbackInbox } from '../feedback-sheet.js';
 import { WHATS_NEW } from '../whats-new.js';
 
 // Labels are read when shown (getters), never at module load: the language
@@ -280,7 +282,8 @@ async function exportData() {
 // shares below it, then the how-to. The pane lives in the hash (#/mehr,
 // #/mehr/einstellungen, #/mehr/konto, #/mehr/anleitung) so a toast can
 // deep-link to it; #/mehr/familie (the recovery nag, older links) opens the
-// Konto pane scrolled to its family half. Switching panes only toggles
+// Konto pane scrolled to its family half, #/mehr/feedback the Anleitung pane
+// scrolled to the feedback section (a fifth sub tab does not fit a phone). Switching panes only toggles
 // [hidden] and rewrites the hash without a hashchange, so typed input
 // survives.
 const PANES = [
@@ -291,18 +294,42 @@ const PANES = [
 ];
 
 function paneFromHash() {
-  const m = (location.hash || '').match(/^#\/mehr\/(einstellungen|konto|familie|anleitung)\/?$/);
+  const m = (location.hash || '').match(/^#\/mehr\/(einstellungen|konto|familie|anleitung|feedback)\/?$/);
   if (!m) return 'erinnerungen';
-  return m[1] === 'familie' ? 'konto' : m[1];
+  if (m[1] === 'familie') return 'konto';
+  return m[1] === 'feedback' ? 'anleitung' : m[1];
 }
 
 const isFamilyLink = () => /^#\/mehr\/familie\/?$/.test(location.hash || '');
+const isFeedbackLink = () => /^#\/mehr\/feedback\/?$/.test(location.hash || '');
+
+/** The operator has unread feedback (the dot on Anleitung and on the Mehr tab). */
+const feedbackUnread = () => store.feedback.isInbox && store.feedback.unread > 0;
 
 /** The dot on a sub tab: something to do there (the unconfirmed recovery
- *  code under Konto, the unread how-to after a sign-up). */
+ *  code under Konto, the unread how-to after a sign-up, the operator's
+ *  unread feedback). */
 function paneDot(key) {
-  const on = (key === 'konto' && prefs.recoveryPending) || (key === 'anleitung' && prefs.howtoPending);
+  const on =
+    (key === 'konto' && prefs.recoveryPending) || (key === 'anleitung' && (prefs.howtoPending || feedbackUnread()));
   return on ? `<span class="seg-dot" aria-label="${escapeHtml(t('more.pane.dot'))}"></span>` : '';
+}
+
+/** The feedback section under the how-to: the operator's inbox, the form,
+ *  or nothing while this installation has no inbox. */
+function feedbackSectionHtml() {
+  if (store.feedback.isInbox) {
+    const n = store.feedback.unread;
+    return `
+      <h2 class="section-title">${t('feedback.section.title')}</h2>
+      <p class="hint">${t('feedback.section.inboxHint')}${n > 0 ? ` <strong>${escapeHtml(t('feedback.section.unread', { n }))}</strong>` : ''}</p>
+      <button type="button" class="btn wide" data-feedback-inbox>${t('feedback.section.open')}</button>`;
+  }
+  if (!store.feedback.available) return '';
+  return `
+    <h2 class="section-title">${t('feedback.section.title')}</h2>
+    <p class="hint">${t('feedback.section.hint')}</p>
+    <button type="button" class="btn wide" data-feedback-send>${t('feedback.section.send')}</button>`;
 }
 
 export function renderMore(el) {
@@ -548,6 +575,7 @@ export function renderMore(el) {
       <section ${paneAttr('anleitung')}>
       ${howtoHtml()}
       <button type="button" class="btn wide" data-whats-new>${t('shell.whatsNew.title')}</button>
+      <div data-feedback-wrap>${feedbackSectionHtml()}</div>
       </section>`;
 
     // --- sub tabs: toggle the panes, keep the hash in step (no hashchange:
@@ -575,7 +603,7 @@ export function renderMore(el) {
     function howtoSeen() {
       if (!prefs.howtoPending) return;
       prefs.howtoPending = false;
-      el.querySelector('[data-subtab="anleitung"] .seg-dot')?.remove();
+      if (!feedbackUnread()) el.querySelector('[data-subtab="anleitung"] .seg-dot')?.remove();
     }
     if (pane === 'anleitung') howtoSeen();
     // «Was ist neu»: the release notes, re-readable from the how-to's foot.
@@ -584,6 +612,26 @@ export function renderMore(el) {
     // deep link) — scroll there, the route just reset the page to the top.
     if (isFamilyLink()) {
       el.querySelector('[data-family-group]').scrollIntoView({ block: 'start' });
+    }
+
+    // --- feedback: the form for everyone, the inbox for the operator; the
+    //     section and the dot follow the sync (the inbox may appear later) ---
+    const feedbackWrap = el.querySelector('[data-feedback-wrap]');
+    feedbackWrap.addEventListener('click', (e) => {
+      if (e.target.closest('[data-feedback-send]')) openFeedbackForm();
+      if (e.target.closest('[data-feedback-inbox]')) openFeedbackInbox();
+    });
+    function syncFeedback() {
+      const html = feedbackSectionHtml();
+      if (feedbackWrap.innerHTML !== html) feedbackWrap.innerHTML = html;
+      const tab = el.querySelector('[data-subtab="anleitung"]');
+      const dot = tab.querySelector('.seg-dot');
+      const want = prefs.howtoPending || feedbackUnread();
+      if (want && !dot) tab.insertAdjacentHTML('beforeend', paneDot('anleitung'));
+      if (!want && dot) dot.remove();
+    }
+    if (isFeedbackLink() && feedbackWrap.firstElementChild) {
+      feedbackWrap.scrollIntoView({ block: 'start' });
     }
 
     // --- reminders: the list follows the store (the partner may add one);
@@ -634,6 +682,7 @@ export function renderMore(el) {
       if (cryptoNode.innerHTML !== html) cryptoNode.innerHTML = html;
       syncFamilyInputs();
       syncReminders();
+      syncFeedback();
     });
 
     // --- family settings: the inputs follow the synced document, except the

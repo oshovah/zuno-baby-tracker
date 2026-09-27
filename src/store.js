@@ -54,6 +54,12 @@
 // the duplicate-timer resolver's compare-and-set delete never queue: they
 // go straight to the server and fail as before without network.
 //
+// Feedback (store.feedback, src/feedback.js): a message to the operator is
+// sealed to the inbox's public key and sent at once — never queued, the
+// text waits in the form. The operator's phone gets `feedbackUnread` on
+// every sync page and reads the inbox through store.feedback.inbox(), which
+// sets the inbox key up on first use (the private half sealed under the FDK).
+//
 // `createStore(deps)` builds an instance from injectable dependencies so the
 // sync/write logic runs under `node --test` with a fake api/db; the default
 // export is the real one.
@@ -62,7 +68,18 @@ import { api as realApi } from './api.js';
 import * as realDb from './db.js';
 import * as realKeys from './keys.js';
 import { toast as realToast, setClockSkew as realSetClockSkew, nowMs as realNowMs } from './ui.js';
-import { randomEid, importFdk, encryptEntry, decryptEntry } from './crypto.js';
+import {
+  randomEid,
+  importFdk,
+  encryptEntry,
+  decryptEntry,
+  generateInboxKeys,
+  sealInboxPrivate,
+  openInboxPrivate,
+  sealFeedback,
+  openFeedback,
+} from './crypto.js';
+import { readMessage } from './feedback.js';
 import { t } from './i18n/index.js';
 import {
   PENDING_SEQ_BASE,
@@ -105,6 +122,9 @@ const STATE_KEY = 'bt.state';
 // state carries lastMeal + today.meals, 5 = reminders + todos.
 const SNAPSHOT_V = 5;
 const IDENTITY_KEY = 'bt.identity';
+// Feedback as the last sync page told it ({on, unread}), kept for the first
+// paint (the section under Anleitung, the operator's dot).
+const FB_KEY = 'bt.feedback';
 const POLL_MS = 60000;
 export const STALE_AFTER_MS = 2 * 60000;
 
@@ -132,6 +152,18 @@ function fail(message, status) {
 const label = (type) => TYPE_LABELS[type] || type;
 
 // --- storage ------------------------------------------------------------------
+
+function loadFeedbackState(storage) {
+  try {
+    const kept = JSON.parse(storage.getItem(FB_KEY) || 'null');
+    if (kept && typeof kept === 'object') {
+      return { on: kept.on === true, unread: Number.isInteger(kept.unread) && kept.unread >= 0 ? kept.unread : null };
+    }
+  } catch {
+    /* unreadable: as if nothing was kept */
+  }
+  return { on: false, unread: null };
+}
 
 function memoryStorage() {
   const m = new Map();
@@ -468,6 +500,8 @@ export function createStore(deps) {
   let noticeType = null; // the entry type with two open timers too far apart (store.notice)
   let artVersion; // private artwork (src/art.js): undefined = no sync heard yet, null = none for us
   let artKey = null; // … and the installation's capability key for the install icon (members only)
+  let feedbackState = loadFeedbackState(storage); // {on: an inbox exists, unread: the operator's count | null}
+  let inboxKey = null; // {sealed, privateKey, publicJwk}: the opened inbox key (operator only)
 
   // The outbox (src/outbox.js): ops still to send, oldest first, `plain`
   // decrypted in memory. Bookkeeping for judging them against the confirmed
@@ -673,6 +707,8 @@ export function createStore(deps) {
     noticeType = null;
     artVersion = undefined;
     artKey = null;
+    feedbackState = { on: false, unread: null };
+    inboxKey = null;
     snapshot = null;
     lastSyncTs = 0;
     lastDataKey = null;
@@ -689,6 +725,7 @@ export function createStore(deps) {
     try {
       storage.removeItem(STATE_KEY);
       storage.removeItem(IDENTITY_KEY);
+      storage.removeItem(FB_KEY);
     } catch {
       /* ignore */
     }
@@ -959,6 +996,9 @@ export function createStore(deps) {
         // their pictures with every page; everyone else gets no key at all.
         artVersion = typeof page.art === 'string' && /^[0-9a-f]{6,64}$/.test(page.art) ? page.art : null;
         artKey = artVersion && typeof page.artKey === 'string' && /^[0-9a-f]{32}$/.test(page.artKey) ? page.artKey : null;
+        // Whether there is an inbox to write to; only the operator's pages
+        // count its unread messages.
+        setFeedbackState(page.feedback === true, page.feedbackUnread);
         const pageFeed = typeof page.feed === 'string' && page.feed !== '' ? page.feed : null;
         if (pageFeed && feed && pageFeed !== feed) {
           // Another database behind the same URL (restored backup, re-run
@@ -1664,6 +1704,130 @@ export function createStore(deps) {
   // fresh document is fetched and the change laid over THAT, never over a
   // stale copy (a plain update would replay the stale merge).
 
+  // --- feedback (api/lib/feedback.php) --------------------------------------
+
+  function setFeedbackState(on, unread) {
+    feedbackState = { on: !!on, unread: Number.isInteger(unread) && unread >= 0 ? unread : null };
+    try {
+      storage.setItem(FB_KEY, JSON.stringify(feedbackState));
+    } catch {
+      /* best effort: only the first paint */
+    }
+  }
+
+  function setFeedbackUnread(unread) {
+    setFeedbackState(feedbackState.on, unread);
+  }
+
+  /** The operator's private inbox key, opened with the FDK (memoised per sealed blob). */
+  async function openInbox(sealed) {
+    if (inboxKey && inboxKey.sealed === sealed) return inboxKey;
+    const opened = await openInboxPrivate(fdk, familyId, sealed);
+    inboxKey = { sealed, ...opened };
+    return inboxKey;
+  }
+
+  const feedback = {
+    /** There is an inbox to write to (the operator configured and set it up). */
+    get available() {
+      return feedbackState.on;
+    },
+
+    /** The operator reads here: this account's sync pages count unread messages. */
+    get isInbox() {
+      return feedbackState.unread !== null;
+    },
+
+    /** Unread messages in the operator's inbox; null on everyone else's phone. */
+    get unread() {
+      return feedbackState.unread;
+    },
+
+    /** The inbox's public key (a JWK), or null while feedback is off or not set up yet. */
+    async key() {
+      try {
+        const res = await api.get('api/feedback/key');
+        return res && res.publicKey && typeof res.publicKey === 'object' ? res.publicKey : null;
+      } catch (e) {
+        if (e.status === 404) return null;
+        throw e;
+      }
+    },
+
+    /** Seal a message (feedback.buildMessage) to the inbox and send it. Rejects with the API's error. */
+    async send(message) {
+      const publicKey = await feedback.key();
+      if (!publicKey) {
+        const err = fail(t('api.feedback.unavailable'), 404);
+        err.code = 'feedback.unavailable';
+        throw err;
+      }
+      const blob = await sealFeedback(publicKey, message);
+      await api.post('api/feedback', { blob });
+    },
+
+    /**
+     * The operator's inbox, one page (newest first; `before` = the previous
+     * page's `next`), decrypted: {items: [{id, createdAt, readAt, message}],
+     * next, unread}; `message` is null when a blob does not open. The first
+     * call sets the inbox up: a fresh key pair, its private half sealed
+     * under the FDK (the other phone of the family may win that race: 409).
+     */
+    async inbox(before = 0) {
+      if (keyState !== 'ready' || !fdk) throw fail(t('errors.store.locked'));
+      const path = `api/feedback${before ? `?before=${Number(before)}` : ''}`;
+      let page = await api.get(path);
+      if (!page || typeof page.privateSealed !== 'string') {
+        const { publicJwk, privateJwk } = await generateInboxKeys();
+        const privateSealed = await sealInboxPrivate(fdk, familyId, privateJwk);
+        try {
+          await api.post('api/feedback/key', { publicKey: publicJwk, privateSealed });
+        } catch (e) {
+          if (e.status !== 409) throw e;
+        }
+        page = await api.get(path);
+      }
+      if (!page || typeof page.privateSealed !== 'string' || !Array.isArray(page.items)) {
+        throw fail(t('errors.store.badPage'), 502);
+      }
+      const opened = await openInbox(page.privateSealed);
+      const items = [];
+      for (const row of page.items) {
+        let message = null;
+        try {
+          message = readMessage(await openFeedback(opened.privateKey, opened.publicJwk, row.blob));
+        } catch {
+          /* shown as «nicht lesbar» */
+        }
+        items.push({ id: row.id, createdAt: row.createdAt, readAt: row.readAt, message });
+      }
+      setFeedbackState(true, page.unread);
+      notify(false);
+      return { items, next: Number.isInteger(page.next) ? page.next : null, unread: feedbackState.unread };
+    },
+
+    /** Mark a message read (true) or unread; `item` = an inbox item. Resolves with its new readAt. */
+    async setRead(item, read) {
+      const row = await api.patch(`api/feedback/${Number(item.id)}`, { read: !!read });
+      const unread = feedbackState.unread;
+      if (unread !== null && !item.readAt !== !row.readAt) {
+        setFeedbackUnread(Math.max(0, unread + (row.readAt ? -1 : 1)));
+        notify(false);
+      }
+      return row.readAt;
+    },
+
+    /** Delete a message for good; `item` = an inbox item. */
+    async remove(item) {
+      await api.del(`api/feedback/${Number(item.id)}`);
+      const unread = feedbackState.unread;
+      if (unread !== null && !item.readAt) {
+        setFeedbackUnread(Math.max(0, unread - 1));
+        notify(false);
+      }
+    },
+  };
+
   const settings = {
     /** The values that apply on this phone: family row over this device's
      *  older per-device values over the defaults. Works from the cached
@@ -1821,6 +1985,8 @@ export function createStore(deps) {
     entries,
 
     settings,
+
+    feedback,
 
     /** fn(snapshot, changed) after every sync attempt and local write. Returns unsubscribe. */
     subscribe(fn) {
