@@ -48,4 +48,19 @@ export default {
   'inbox.deleteConfirm': 'Really delete?',
   'inbox.deleted': 'Message deleted',
   'inbox.more': 'Load older',
+
+  // the operator's usage numbers under the inbox button (api/lib/stats.php)
+  'usage.title': 'Usage',
+  'usage.hint': 'Numbers only, no names – every family of this installation, yours included. Entries include settings, reminders and ticked items.',
+  'usage.families.one': '{n} family',
+  'usage.families.other': '{n} families',
+  'usage.familiesActive': '{week} logged something in the last 7 days, {month} in 30 days',
+  'usage.accounts.one': '{n} account',
+  'usage.accounts.other': '{n} accounts',
+  'usage.accountsNew': '{n} new in the last 30 days',
+  'usage.entries.one': '{n} entry',
+  'usage.entries.other': '{n} entries',
+  'usage.entriesNew': '{n} new in the last 7 days',
+  'usage.loading': 'Loading the numbers …',
+  'usage.failed': 'Numbers not available right now.',
 };

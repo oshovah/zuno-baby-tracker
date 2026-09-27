@@ -177,6 +177,14 @@ throttled per address only (10 an hour — a per-account counter would write
 down the link the table leaves out); what the web server logs about any
 request (time, address) it logs about this one too.
 
+Below the inbox, the operator's account also sees a few usage numbers
+([`api/lib/stats.php`](api/lib/stats.php)): how many families and accounts
+the installation has, how many accounts are new this month, how many rows
+are stored and how many families logged something in the last 7 / 30 days
+(judged by the rows' day-granular dates). Counts only, no names — nothing
+the database does not show whoever runs it anyway, and `GET /api/stats` is
+the same 404 for everyone else.
+
 ## Licence
 
 [GNU Affero General Public License v3.0](LICENSE). In short: use it, host it,
@@ -446,6 +454,7 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `POST /api/feedback/key` | Betreiber | `{publicKey, privateSealed}` — richtet das Postfach einmalig ein (409 danach) |
 | `GET /api/feedback?before=` | Betreiber | `{publicKey, privateSealed, items, next, unread}` — neueste zuerst, 100 pro Seite |
 | `PATCH /api/feedback/:id` · `DELETE /api/feedback/:id` | Betreiber | `{read}` gelesen/ungelesen · endgültig löschen |
+| `GET /api/stats` | Betreiber | Nutzungszahlen: `{asOf, families, familiesActive7, familiesActive30, accounts, accountsNew30, entries, entriesNew7}` — nur Zahlen |
 | `GET /api/art/k/<key>/<name>` | – | Dieselben Bilder und `manifest.webmanifest` über den zufälligen Schlüssel der Installation (nur die Mitglieder jener Familie erhalten ihn, als `artKey` im Sync) — für das, was der Browser ohne Sitzung lädt: das Installations-Symbol. Falscher Schlüssel, unbekannter Name, Funktion aus: dasselbe 404 |
 | `GET /api/art/<name>` | (✓) | Privates Bildmaterial (`image/png`) für die Mitglieder der in `PRIVATE_ART_FAMILY` genannten Familie — für alle anderen, auch ohne Anmeldung, dasselbe 404 (siehe «Private artwork») |
 

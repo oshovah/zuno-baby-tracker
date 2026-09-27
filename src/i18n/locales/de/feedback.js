@@ -49,4 +49,19 @@ export default {
   'inbox.deleteConfirm': 'Wirklich löschen?',
   'inbox.deleted': 'Nachricht gelöscht',
   'inbox.more': 'Ältere laden',
+
+  // the operator's usage numbers under the inbox button (api/lib/stats.php)
+  'usage.title': 'Nutzung',
+  'usage.hint': 'Nur Zahlen, keine Namen – alle Familien dieser Installation, deine eingeschlossen. Einträge zählen auch Einstellungen, Erinnerungen und Abgehaktes.',
+  'usage.families.one': '{n} Familie',
+  'usage.families.other': '{n} Familien',
+  'usage.familiesActive': '{week} mit Einträgen in den letzten 7 Tagen, {month} in 30 Tagen',
+  'usage.accounts.one': '{n} Konto',
+  'usage.accounts.other': '{n} Konten',
+  'usage.accountsNew': '{n} neu in den letzten 30 Tagen',
+  'usage.entries.one': '{n} Eintrag',
+  'usage.entries.other': '{n} Einträge',
+  'usage.entriesNew': '{n} neu in den letzten 7 Tagen',
+  'usage.loading': 'Zahlen werden geladen …',
+  'usage.failed': 'Zahlen gerade nicht verfügbar.',
 };

@@ -45,8 +45,8 @@ logged in for months), backed by revocable DB tokens bound to a user.
 Deliberately minimal: no registration gate, no admin panel, no e-mail —
 abuse is bounded instead: per-address and per-target attempt budgets, a
 per-address write budget and row caps per family and in total. The one
-account named in the config (`ADMIN_USERNAME`) reads the parents' feedback,
-nothing more: it has no power over anybody's data.
+account named in the config (`ADMIN_USERNAME`) reads the parents' feedback
+and a few usage counts, nothing more: it has no power over anybody's data.
 
 **End-to-end encrypted.** The database alone reveals nothing usable: every
 entry (type, times, amounts, names) is one AES-GCM blob encrypted on the
@@ -312,7 +312,9 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
    sending), sealed on the phone to the operator's inbox key. The operator's
    account sees «Postfach öffnen» there instead (newest first, «Neu» on the
    unread, mark unread, delete for good) and a dot on «Mehr» while something
-   is unread. One-way: no replies in the app.
+   is unread. One-way: no replies in the app. Below it, «Nutzung»: counts of
+   families (and how many logged something in 7 / 30 days), accounts (new in
+   30 days) and rows (new in 7 days) — numbers only, no names.
 
 ## Data model (schema v5)
 
@@ -368,8 +370,8 @@ One baby only — no `babies` table until reality demands it.
   {blob}` (a sealed message, no sender stored; `fb:<ip>` 10 / hour, 2000 rows);
   the operator only — everyone else the same 404 —: `POST /feedback/key`
   (once), `GET /feedback?before=`, `PATCH /feedback/:id {read}`, `DELETE
-  /feedback/:id` (for good). Sync pages carry `feedback: true` when an inbox
-  exists and, for the operator, `feedbackUnread`
+  /feedback/:id` (for good), `GET /stats` (usage counts). Sync pages carry
+  `feedback: true` when an inbox exists and, for the operator, `feedbackUnread`
 - `GET /art/<name>`: private artwork. The repo ships its own icon set
   (`public/img/`, drawn by `scripts/make-icons.mjs`); an installation may keep
   other pictures in the gitignored `private-art/` and name ONE family

@@ -1817,6 +1817,13 @@ export function createStore(deps) {
       return row.readAt;
     },
 
+    /** The operator's usage numbers (api/lib/stats.php): counts only. Rejects for everyone else (404). */
+    async usage() {
+      const res = await api.get('api/stats');
+      if (!res || typeof res !== 'object' || !Number.isInteger(res.families)) throw fail(t('errors.store.badPage'), 502);
+      return res;
+    },
+
     /** Delete a message for good; `item` = an inbox item. */
     async remove(item) {
       await api.del(`api/feedback/${Number(item.id)}`);

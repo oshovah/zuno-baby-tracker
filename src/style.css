@@ -2671,6 +2671,22 @@ textarea.fb-text {
   margin-top: 12px;
 }
 
+/* The operator's usage numbers (more.js usageHtml). */
+.usage-list {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+}
+
+.usage-list li {
+  margin: 6px 0;
+}
+
+.usage-list strong {
+  color: var(--ink);
+}
+
 /* --- tab bar ---------------------------------------------------------------- */
 
 .tabbar[hidden] {

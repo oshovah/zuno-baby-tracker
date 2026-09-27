@@ -46,6 +46,7 @@
  *   GET    /api/feedback?before=      {publicKey, privateSealed, items, next, unread}
  *   PATCH  /api/feedback/:id          {read} -> item
  *   DELETE /api/feedback/:id          -> {ok} (for good)
+ *   GET    /api/stats                 usage counts (families, accounts, rows, active lately — lib/stats.php)
  *   GET    /api/art/<name>            a private artwork file (image/png) for members of the configured
  *                                     family; the same 404 for everyone and everything else (lib/art.php)
  * User JSON everywhere: {username, familyId, familyName, profileBlob}; row
@@ -88,6 +89,7 @@ require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/entries.php';
 require_once __DIR__ . '/lib/art.php';
 require_once __DIR__ . '/lib/feedback.php';
+require_once __DIR__ . '/lib/stats.php';
 
 /** Damping delay after a wrong secret (microseconds). */
 const BT_WRONG_SECRET_DELAY_US = 300000;
@@ -481,6 +483,13 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
         }
         bt_feedback_assert_admin($config, $user);
         return [200, bt_feedback_inbox($pdo, bt_query_int('before', 0))];
+    }
+
+    // Usage numbers for the operator only (counts, no names: lib/stats.php).
+    if ($segments === ['stats']) {
+        bt_feedback_assert_admin($config, $user); // before the method: anyone else sees no route at all
+        bt_require_method($method, ['GET']);
+        return [200, bt_usage_stats($pdo)];
     }
 
     if (count($segments) === 2 && $segments[0] === 'feedback') {

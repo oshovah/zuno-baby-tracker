@@ -332,6 +332,23 @@ function feedbackSectionHtml() {
     <button type="button" class="btn wide" data-feedback-send>${t('feedback.section.send')}</button>`;
 }
 
+/** The operator's usage block: null = loading, false = failed, else the
+ *  numbers of GET api/stats (all integers — escaped anyway). */
+function usageHtml(stats) {
+  const head = `<h2 class="section-title">${t('feedback.usage.title')}</h2>`;
+  if (stats === null) return `${head}<p class="hint">${t('feedback.usage.loading')}</p>`;
+  if (stats === false) return `${head}<p class="hint">${t('feedback.usage.failed')}</p>`;
+  const n = (v) => (Number.isInteger(v) ? v : 0);
+  const row = (main, detail) => `<li><strong>${escapeHtml(main)}</strong> · ${escapeHtml(detail)}</li>`;
+  return `${head}
+    <ul class="usage-list">
+      ${row(tn('feedback.usage.families', n(stats.families)), t('feedback.usage.familiesActive', { week: n(stats.familiesActive7), month: n(stats.familiesActive30) }))}
+      ${row(tn('feedback.usage.accounts', n(stats.accounts)), t('feedback.usage.accountsNew', { n: n(stats.accountsNew30) }))}
+      ${row(tn('feedback.usage.entries', n(stats.entries)), t('feedback.usage.entriesNew', { n: n(stats.entriesNew7) }))}
+    </ul>
+    <p class="hint">${t('feedback.usage.hint')}</p>`;
+}
+
 export function renderMore(el) {
   let disposed = false;
   let unsubscribe = null;
@@ -576,6 +593,7 @@ export function renderMore(el) {
       ${howtoHtml()}
       <button type="button" class="btn wide" data-whats-new>${t('shell.whatsNew.title')}</button>
       <div data-feedback-wrap>${feedbackSectionHtml()}</div>
+      <div data-usage-wrap></div>
       </section>`;
 
     // --- sub tabs: toggle the panes, keep the hash in step (no hashchange:
@@ -629,7 +647,26 @@ export function renderMore(el) {
       const want = prefs.howtoPending || feedbackUnread();
       if (want && !dot) tab.insertAdjacentHTML('beforeend', paneDot('anleitung'));
       if (!want && dot) dot.remove();
+      loadUsage(); // the operator may be recognised only by the first sync
     }
+    // The operator's usage numbers under the inbox: fetched once per visit
+    // (they are not part of the sync), and only on the operator's phone.
+    const usageWrap = el.querySelector('[data-usage-wrap]');
+    let usageAsked = false;
+    function loadUsage() {
+      if (usageAsked || !store.feedback.isInbox) return;
+      usageAsked = true;
+      usageWrap.innerHTML = usageHtml(null);
+      store.feedback.usage().then(
+        (stats) => {
+          if (!disposed) usageWrap.innerHTML = usageHtml(stats);
+        },
+        () => {
+          if (!disposed) usageWrap.innerHTML = usageHtml(false);
+        }
+      );
+    }
+    loadUsage();
     if (isFeedbackLink() && feedbackWrap.firstElementChild) {
       feedbackWrap.scrollIntoView({ block: 'start' });
     }
