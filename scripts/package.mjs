@@ -195,8 +195,8 @@ if (env.PRIVATE_ART_FAMILY && env.PRIVATE_ART_FAMILY.trim() !== '') {
   if (/[\r\n\0]/.test(privateArtFamily)) fail('PRIVATE_ART_FAMILY contains a line break or NUL');
 }
 
-// ADMIN_USERNAME — the one account that reads the parents' feedback (Mehr ›
-// Feedback shows it the inbox instead of the form; api/lib/feedback.php).
+// ADMIN_USERNAME — the one account that reads the parents' feedback (the foot
+// of Mehr › Anleitung shows it the inbox instead of the form; api/lib/feedback.php).
 // Unset = feedback is off. Never printed: the log only says whether it is set.
 let adminUsername = null;
 if (env.ADMIN_USERNAME && env.ADMIN_USERNAME.trim() !== '') {
