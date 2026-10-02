@@ -15,6 +15,11 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-10-02',
+    de: ['Stillen und Schlaf bearbeiten: Neben «Ende» leert ein ✕ die Zeit wieder – der Timer läuft dann weiter. Auf dem iPhone liess sich ein einmal angetipptes «Ende» nicht mehr leeren; wer nur den Start korrigieren wollte, stoppte so den Timer.'],
+    en: ['Editing nursing and sleep: next to "End" a ✕ empties the time again – the timer then keeps running. On an iPhone an "End" that was touched once could not be emptied again; correcting just the start stopped the timer that way.'],
+  },
+  {
     id: '2026-09-27',
     de: ['Neu unter Mehr › Anleitung, ganz unten: Feedback. Ein Wunsch, ein Fehler, eine Idee geht direkt an die Person, die Zuno betreibt – auf dem Handy verschlüsselt, auf Wunsch anonym.'],
     en: ['New under More › Guide, at the very end: Feedback. A wish, a bug or an idea goes straight to the person who runs Zuno – encrypted on the phone, anonymously if you like.'],

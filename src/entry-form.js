@@ -439,12 +439,18 @@ export function openEntryForm({ type, entry = null, onSaved = () => {} }) {
           </span>
         </label>
         ${meta.timer
-          ? `<label class="field"><span>${t('forms.field.end')} <small>${t('forms.field.endHint')}</small></span>
-              <span class="end-row">
-                <input name="endedAt" type="datetime-local" value="${endValue}" max="${maxValue}" />
+          ? // Not a <label>: a label hands every tap on its caption and in the
+            // gaps between its buttons to the input, and an iPhone's picker
+            // writes "now" into an empty field the moment it opens — which
+            // stops a running timer on save. That picker has no way to empty
+            // the field again either, hence the ✕.
+            `<div class="field"><span>${t('forms.field.end')} <small>${t('forms.field.endHint')}</small></span>
+              <span class="end-row with-clear">
+                <input name="endedAt" type="datetime-local" value="${endValue}" max="${maxValue}" aria-label="${t('forms.field.end')}" />
+                <button type="button" class="chip end-clear" data-end-clear aria-label="${t('forms.action.clearEnd')}">✕</button>
                 <button type="button" class="chip" data-end-now>${t('forms.action.now')}</button>
               </span>
-            </label>`
+            </div>`
           : ''}
         ${type === 'breastfeed'
           ? `<p class="chip-row-label">${t('forms.nursing.durationHint')}</p>
@@ -468,22 +474,35 @@ export function openEntryForm({ type, entry = null, onSaved = () => {} }) {
         body.querySelector('[name="name"]').value = chip.dataset.med;
       })
     );
-    body.querySelector('[data-end-now]')?.addEventListener('click', () => {
-      body.querySelector('[name="endedAt"]').value = toLocalInput(isoNow());
-    });
+    const form = body.querySelector('form');
+    // The ✕ keeps its place in the row and is only switched off while Ende
+    // is empty: a button that came and went would move the field under a
+    // second tap.
+    const endClear = body.querySelector('[data-end-clear]');
+    const syncEndClear = () => {
+      endClear.disabled = !form.endedAt.value;
+    };
+    const setEnd = (value) => {
+      form.endedAt.value = value;
+      syncEndClear();
+    };
+    if (endClear) {
+      syncEndClear();
+      form.endedAt.addEventListener('input', syncEndClear);
+      form.endedAt.addEventListener('change', syncEndClear);
+      endClear.addEventListener('click', () => setEnd(''));
+    }
+    body.querySelector('[data-end-now]')?.addEventListener('click', () => setEnd(toLocalInput(isoNow())));
     // Duration chips: Ende = Start + X — the natural input when the feed's
     // length is known but its wall-clock end is not.
     body.querySelectorAll('[data-dur-min]').forEach((chip) =>
       chip.addEventListener('click', () => {
         const start = fromLocalInput(form.startedAt.value);
         if (!start) return;
-        form.endedAt.value = toLocalInput(
-          new Date(new Date(start).getTime() + Number(chip.dataset.durMin) * 60000).toISOString()
-        );
+        setEnd(toLocalInput(new Date(new Date(start).getTime() + Number(chip.dataset.durMin) * 60000).toISOString()));
       })
     );
 
-    const form = body.querySelector('form');
     const errEl = body.querySelector('.form-error');
     if (type === 'bottle') wireBottleDose(body, form, isEdit ? entry.eid : null);
 

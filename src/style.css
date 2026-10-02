@@ -1156,6 +1156,28 @@ button.mini:active {
   min-width: 0;
 }
 
+/* Ende · ✕ · «Jetzt» (entry-form.js): on a phone too narrow for all three
+ * the buttons drop below the field instead of squeezing the time out of it. */
+.end-row.with-clear {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.end-row.with-clear input {
+  flex: 1 1 200px;
+}
+
+/* The ✕ that empties Ende: dimmed while there is nothing to empty. */
+.end-clear {
+  flex: none;
+  padding: 12px 13px;
+}
+
+.end-clear:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 input[type='text'],
 input[type='password'],
 input[type='number'],

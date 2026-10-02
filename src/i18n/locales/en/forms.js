@@ -61,6 +61,7 @@ export default {
   // Sheet title when editing ("Edit Bottle", "Edit Reminder")
   'title.edit': 'Edit {type}',
   'action.now': 'Now',
+  'action.clearEnd': 'Clear end',
   'action.add': 'Add',
   'action.confirmDelete': 'Really delete?',
   // Inline validation (the .form-error line)

@@ -61,6 +61,7 @@ export default {
   // Sheet title when editing («Schoppen bearbeiten», «Erinnerung bearbeiten»)
   'title.edit': '{type} bearbeiten',
   'action.now': 'Jetzt',
+  'action.clearEnd': 'Ende leeren',
   'action.add': 'Hinzufügen',
   'action.confirmDelete': 'Wirklich löschen?',
   // Inline validation (the .form-error line)
