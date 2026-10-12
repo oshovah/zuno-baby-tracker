@@ -1799,6 +1799,12 @@ input[type='datetime-local'] {
   line-height: 1.45;
 }
 
+/* Under the reminders: the note that «Jetzt» shows the sleep instead sits a
+ * clear step below «Erinnerung hinzufügen». */
+[data-home-card-note-wrap] .notice {
+  margin-top: 18px;
+}
+
 .notice.privacy .link-btn {
   display: block;
   margin-top: 6px;
