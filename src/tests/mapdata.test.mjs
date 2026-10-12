@@ -316,6 +316,6 @@ test('mergeExtras: a row that adds the other kind replaces the listed feature in
   const { features, report } = mergeExtras(base, [row, rowOf({ use: 'no' })], { elements: [way] });
   assert.equal(features.length, base.length);
   const f = features.find((x) => x.properties.id === 'w202');
-  assert.deepEqual(f.properties, { id: 'w202', name: 'WC Test', cls: 'toilets', w: 1, ct: 'limited', wc: 'yes', n: 1, bf: 'room', acc: 'customers' });
+  assert.deepEqual(f.properties, { id: 'w202', name: 'WC Test', cls: 'toilets', w: 1, ct: 'limited', wc: 'yes', n: 1, bf: 'room', acc: 'customers', op: 'Stadt Bern' });
   assert.deepEqual(report.map((r) => r.action), ['merged', 'off']);
 });
