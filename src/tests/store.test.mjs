@@ -1128,6 +1128,31 @@ test('createPrefs: user/authed/bottle prefs round-trip and validate', () => {
   assert.deepEqual(prefs.hiddenCharts, []);
   storage.setItem('bt.hiddenCharts', '["meals","<x>"]');
   assert.deepEqual(prefs.hiddenCharts, ['meals']);
+  // The map (per device): a start view and the last view are {lon, lat,
+  // zoom} on this planet at a zoom the map has, rounded; the strip is open
+  // by default.
+  assert.equal(prefs.mapStart, null);
+  prefs.mapStart = { lon: 7.44741, lat: 46.94799, zoom: 13.4 };
+  assert.deepEqual(prefs.mapStart, { lon: 7.44741, lat: 46.94799, zoom: 13.5 });
+  prefs.mapStart = { lon: 200, lat: 46.9, zoom: 13 };
+  assert.equal(prefs.mapStart, null, 'off the planet → cleared');
+  prefs.mapStart = { lon: 7.4, lat: 46.9, zoom: 25 };
+  assert.equal(prefs.mapStart, null, 'zoom the map has not → cleared');
+  prefs.mapStart = { lon: '8.54', lat: '47.37', zoom: '12' };
+  assert.deepEqual(prefs.mapStart, { lon: 8.54, lat: 47.37, zoom: 12 }, 'numeric strings pass');
+  prefs.mapStart = null;
+  assert.equal(prefs.mapStart, null);
+  assert.equal(storage.getItem('bt.mapStart'), null);
+  storage.setItem('bt.mapView', '{"lon":"x"}');
+  assert.equal(prefs.mapView, null);
+  prefs.mapView = { lon: 7.4474, lat: 46.948, zoom: 14 };
+  assert.deepEqual(prefs.mapView, { lon: 7.4474, lat: 46.948, zoom: 14 });
+  assert.equal(prefs.mapStripFolded, false);
+  prefs.mapStripFolded = true;
+  assert.equal(prefs.mapStripFolded, true);
+  assert.equal(storage.getItem('bt.mapStripFolded'), '1');
+  prefs.mapStripFolded = false;
+  assert.equal(storage.getItem('bt.mapStripFolded'), null);
   prefs.hiddenCharts = [];
   assert.equal(storage.getItem('bt.hiddenCharts'), null);
   assert.equal(prefs.keepAwake, true);

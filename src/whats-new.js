@@ -16,8 +16,14 @@
 export const WHATS_NEW = [
   {
     id: '2026-10-12',
-    de: ['Neu: der Tab «Karte» zeigt Wickeltische und Still-Orte in der Schweiz – aus OpenStreetMap, von unserem eigenen Server. «Mein Standort» holt die Position, darunter stehen die drei nächsten Orte, «In der Nähe» listet zehn; ein Tipp auf einen Punkt sagt, wo genau der Tisch ist und was es dort gibt.'],
-    en: ['New: the "Map" tab shows changing tables and nursing places in Switzerland – from OpenStreetMap, served by our own server. "My location" gets your position, the three closest places sit below it, "Nearby" lists ten; a tap on a dot says where exactly the table is and what is there.'],
+    de: [
+      'Neu: der Tab «Karte» zeigt Wickeltische und Still-Orte in der Schweiz – aus OpenStreetMap, von unserem eigenen Server. «Mein Standort» holt die Position, darunter stehen die drei nächsten Orte, «In der Nähe» listet zehn; ein Tipp auf einen Punkt sagt, wo genau der Tisch ist und was es dort gibt.',
+      'Unter Mehr › Einstellungen › Karte legst du fest, wo die Karte beim Öffnen steht; die Leiste mit den nächsten Orten klappt mit einem Tipp zu.',
+    ],
+    en: [
+      'New: the "Map" tab shows changing tables and nursing places in Switzerland – from OpenStreetMap, served by our own server. "My location" gets your position, the three closest places sit below it, "Nearby" lists ten; a tap on a dot says where exactly the table is and what is there.',
+      'Under More › Settings › Map you set where the map stands when it opens; the strip of nearest places folds away with a tap.',
+    ],
   },
   {
     id: '2026-10-02',

@@ -590,8 +590,10 @@ auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
   Worker, keine Schriftdateien, keine Sprites); die Pins sind DOM-Elemente in
   den Farben des Designs, ab Zoom 11. «Mein Standort» nur auf Tipp
   (Geolocation; die Position verlässt das Handy nicht), die drei nächsten
-  Orte in der Leiste, «In der Nähe» zehn im Sheet – beides funktioniert auch
-  ohne Karte (kein Netz, kein Archiv auf dem Server). Der Service Worker
+  Orte in der Leiste (zuklappbar), «In der Nähe» zehn im Sheet – beides
+  funktioniert auch ohne Karte (kein Netz, kein Archiv auf dem Server). Wo
+  die Karte beim Öffnen steht, legt jedes Handy unter Mehr › Einstellungen ›
+  Karte fest (`prefs.mapStart`, aus dem zuletzt gezeigten Ausschnitt). Der Service Worker
   lässt Range-Anfragen und `basemap/` am Cache vorbei, `map/pois.json` bleibt
   gecacht.
 - **Was der Server erfährt**: welche Byte-Bereiche des Archivs ein Handy

@@ -3042,6 +3042,39 @@ body.map-open {
   font-size: 13px;
 }
 
+/* «Nächste Orte» folds the rows away (prefs.mapStripFolded). */
+.map-strip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.map-strip-toggle[hidden] {
+  display: none;
+}
+
+.map-strip-toggle svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.15s ease;
+}
+
+.map-strip-toggle[aria-expanded='false'] svg {
+  transform: rotate(-90deg);
+}
+
+[data-strip-rows][hidden] {
+  display: none;
+}
+
 .nearby-row {
   display: flex;
   align-items: center;
@@ -3156,7 +3189,8 @@ body.map-open {
   font-weight: 700;
 }
 
-.poi-actions {
+.poi-actions,
+.btn-row {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -3165,6 +3199,12 @@ body.map-open {
 
 .poi-actions .btn {
   text-decoration: none; /* the link to OpenStreetMap dressed as a button */
+}
+
+/* «Startansicht: …» in the settings' «Karte» section */
+.setting-value {
+  margin: 4px 2px 0;
+  font-weight: 600;
 }
 
 /* --- motion ------------------------------------------------------------------ */

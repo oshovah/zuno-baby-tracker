@@ -18,6 +18,7 @@ export default {
   'nearby.empty': 'Kein Ort in der Nähe bekannt.',
   'nearby.back': 'Zurück zur Liste',
   'strip.hint': 'Standort holen – die nächsten Orte erscheinen hier.',
+  'strip.title': 'Nächste Orte',
   'zoomIn': 'Näher heranzoomen, um die Orte zu sehen',
   'attribution': '© OpenStreetMap-Mitwirkende',
   'data.date': 'Orte: Stand {date}',

@@ -18,6 +18,7 @@ export default {
   'nearby.empty': 'No place known nearby.',
   'nearby.back': 'Back to the list',
   'strip.hint': 'Get your location – the closest places show up here.',
+  'strip.title': 'Nearest places',
   'zoomIn': 'Zoom in closer to see the places',
   'attribution': '© OpenStreetMap contributors',
   'data.date': 'Places as of {date}',

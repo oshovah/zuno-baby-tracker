@@ -17,7 +17,11 @@
 //
 // Module state survives a re-mount (every tab switch and a language switch
 // re-render the view): the places and the basemap index are fetched once,
-// the viewport, the filter and the last fix carry over.
+// the viewport, the filter and the last fix carry over. Two things are per
+// device (prefs): where the map starts — the whole box, or the view set
+// under Mehr › Einstellungen › Karte, which then wins over the last view —
+// and whether the strip of nearest places is folded away. The last view is
+// written to prefs on every move: the settings take it as the start view.
 
 import { prefs } from '../store.js';
 import { t, getLocale, localeMeta } from '../i18n/index.js';
@@ -29,6 +33,7 @@ const FILTERS = ['all', 'changing', 'nursing'];
 const STRIP_ROWS = 3;
 const LIST_ROWS = 10;
 
+const CHEVRON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>`;
 const LOCATE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="6.5" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /><path d="M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5" /></svg>`;
 
 let poisPromise = null; // the places file, once per app session
@@ -139,10 +144,11 @@ export function renderMap(el) {
       <p class="map-hint" data-hint hidden>${escapeHtml(t('map.zoomIn'))}</p>
       <div class="map-strip" data-strip>
         <div class="map-strip-head">
+          <button type="button" class="map-strip-toggle" data-fold aria-expanded="${prefs.mapStripFolded ? 'false' : 'true'}" hidden>${CHEVRON_SVG}${escapeHtml(t('map.strip.title'))}</button>
           <span data-strip-hint>${escapeHtml(t('map.strip.hint'))}</span>
           <button type="button" class="btn small" data-nearby>${escapeHtml(t('map.nearby.button'))}</button>
         </div>
-        <div data-strip-rows></div>
+        <div data-strip-rows ${prefs.mapStripFolded ? 'hidden' : ''}></div>
         <p class="map-attrib"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">${escapeHtml(t('map.attribution'))}</a><span data-date></span></p>
       </div>
     </div>`;
@@ -153,6 +159,7 @@ export function renderMap(el) {
   const hintEl = el.querySelector('[data-hint]');
   const stripHint = el.querySelector('[data-strip-hint]');
   const stripRows = el.querySelector('[data-strip-rows]');
+  const foldBtn = el.querySelector('[data-fold]');
   const dateEl = el.querySelector('[data-date]');
   const locateBtn = el.querySelector('[data-locate]');
 
@@ -171,17 +178,21 @@ export function renderMap(el) {
   const shown = () => filterKind(all, filter);
   const byId = (id) => all.find((f) => f.properties.id === id) || null;
 
-  /** The strip: the nearest three of the filter, or the hint to get a fix. */
+  /** The strip: the nearest three of the filter (folded away when the
+   *  phone says so), or the hint to get a fix. */
   function renderStrip() {
-    if (!me || !all.length) {
-      stripHint.hidden = false;
-      stripRows.innerHTML = '';
-      return;
-    }
-    const rows = nearest(shown(), me.lon, me.lat, STRIP_ROWS);
+    const rows = me && all.length ? nearest(shown(), me.lon, me.lat, STRIP_ROWS) : [];
+    const folded = prefs.mapStripFolded;
     stripHint.hidden = rows.length > 0;
+    foldBtn.hidden = rows.length === 0;
+    foldBtn.setAttribute('aria-expanded', folded ? 'false' : 'true');
+    stripRows.hidden = folded;
     stripRows.innerHTML = rows.length ? rows.map(({ feature, meters }) => rowHtml(feature, meters)).join('') : '';
   }
+  foldBtn.addEventListener('click', () => {
+    prefs.mapStripFolded = !prefs.mapStripFolded;
+    renderStrip();
+  });
 
   function applyFilter(next) {
     filter = next;
@@ -338,11 +349,14 @@ export function renderMap(el) {
         flavor: flavor(),
         lang: getLocale(),
         bounds: Array.isArray(index.bbox) && index.bbox.length === 4 ? index.bbox : fc.bbox,
-        view: lastView,
+        view: prefs.mapStart || lastView, // the phone's start view wins; else where this visit left off
         reducedMotion,
         onMove: ({ pinsShown }) => {
           hintEl.hidden = pinsShown;
-          lastView = engine ? engine.getView() : lastView;
+          if (engine) {
+            lastView = engine.getView();
+            prefs.mapView = lastView; // the settings offer it as the start view
+          }
         },
         onPoiTap: openPoi,
       });
@@ -362,6 +376,7 @@ export function renderMap(el) {
     document.body.classList.remove('map-open');
     if (engine) {
       lastView = engine.getView();
+      prefs.mapView = lastView;
       engine.destroy();
       engine = null;
     }

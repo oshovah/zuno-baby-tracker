@@ -203,6 +203,21 @@ const FEED_FROM_START_KEY = 'bt.feedFromStart';
 const LANG_KEY = 'bt.lang';
 const WHATS_NEW_SEEN_KEY = 'bt.whatsNewSeen';
 const HIDDEN_CHARTS_KEY = 'bt.hiddenCharts';
+const MAP_START_KEY = 'bt.mapStart';
+const MAP_VIEW_KEY = 'bt.mapView';
+const MAP_STRIP_FOLDED_KEY = 'bt.mapStripFolded';
+
+/** A map view {lon, lat, zoom} that is on this planet and at a zoom the map
+ *  has (views/map.js, the engine's min/max), rounded — or null. */
+export function cleanMapView(v) {
+  if (!v || typeof v !== 'object') return null;
+  const lon = Number(v.lon);
+  const lat = Number(v.lat);
+  const zoom = Number(v.zoom);
+  if (![lon, lat, zoom].every(Number.isFinite)) return null;
+  if (lon < -180 || lon > 180 || lat < -90 || lat > 90 || zoom < 3 || zoom > 19) return null;
+  return { lon: Math.round(lon * 1e5) / 1e5, lat: Math.round(lat * 1e5) / 1e5, zoom: Math.round(zoom * 2) / 2 };
+}
 
 /** What the home screen shows next to the diaper card and in the fourth
  *  quick tile: the sleep tracker, the family's reminders, both (a row of
@@ -403,6 +418,40 @@ export function createPrefs(storage) {
     set hiddenCharts(v) {
       const list = Array.isArray(v) ? [...new Set(v.filter((k) => typeof k === 'string' && k !== ''))] : [];
       write(HIDDEN_CHARTS_KEY, list.length ? JSON.stringify(list) : null);
+    },
+    /** Where the map starts on this phone (Mehr › Einstellungen › Karte):
+     *  {lon, lat, zoom}, or null = the whole box. Per device: the parents
+     *  may live apart from where the other one works. */
+    get mapStart() {
+      try {
+        return cleanMapView(JSON.parse(read(MAP_START_KEY) || 'null'));
+      } catch {
+        return null;
+      }
+    },
+    set mapStart(v) {
+      const c = cleanMapView(v);
+      write(MAP_START_KEY, c ? JSON.stringify(c) : null);
+    },
+    /** The view the map had last on this phone — what «Aktuellen
+     *  Kartenausschnitt übernehmen» in the settings takes. */
+    get mapView() {
+      try {
+        return cleanMapView(JSON.parse(read(MAP_VIEW_KEY) || 'null'));
+      } catch {
+        return null;
+      }
+    },
+    set mapView(v) {
+      const c = cleanMapView(v);
+      write(MAP_VIEW_KEY, c ? JSON.stringify(c) : null);
+    },
+    /** The map's strip of nearest places folded away (true); open by default. */
+    get mapStripFolded() {
+      return read(MAP_STRIP_FOLDED_KEY) === '1';
+    },
+    set mapStripFolded(v) {
+      write(MAP_STRIP_FOLDED_KEY, v ? '1' : null);
     },
     /** The family settings this device stored per device before they were
      *  synced — only the keys it actually set. They stand in until the
