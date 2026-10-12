@@ -125,7 +125,6 @@ export function renderMap(el) {
       </div>
       <div class="map-side">
         <button type="button" class="map-fab" data-locate aria-label="${escapeHtml(t('map.locate'))}">${LOCATE_SVG}</button>
-        <button type="button" class="map-fab" data-suggest aria-label="${escapeHtml(t('spots.fab'))}" hidden>${SUGGEST_SVG}</button>
       </div>
       <div class="map-cross" aria-hidden="true"></div>
       <div class="map-pick" data-pick hidden>
