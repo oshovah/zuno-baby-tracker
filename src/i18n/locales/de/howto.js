@@ -4,11 +4,12 @@
 export default {
   // The lead paragraph
   'lead': 'Zuno hält fest, wann das Baby getrunken hat, was in der Windel war und wie lange es geschlafen hat – auf beiden Handys derselbe Stand. Das Wichtigste geht mit einem Fingertipp, auch um drei Uhr nachts.',
-  // «Die vier Tabs»: one item per tab
-  'tabs.title': 'Die vier Tabs',
+  // «Die fünf Tabs»: one item per tab
+  'tabs.title': 'Die fünf Tabs',
   'tabs.now': '<strong>Jetzt</strong> – der Stand: seit wann keine Mahlzeit, der Tag bisher (Mahlzeiten und nasse Windeln gegen das Ziel), der Schlaf oder die nächste Erinnerung. Darunter die Knöpfe zum Erfassen.',
   'tabs.log': '<strong>Nachtragen</strong> – alles mit frei wählbarer Zeit, auch Gewicht, Temperatur und Medikamente.',
   'tabs.history': '<strong>Verlauf</strong> – alle Einträge nach Tag, zum Nachschauen, Korrigieren und Löschen.',
+  'tabs.map': '<strong>Karte</strong> – Wickeltische und Still-Orte in der Nähe, aus OpenStreetMap.',
   'tabs.more': '<strong>Mehr</strong> – Erinnerungen, Einstellungen, Konto und Familie, diese Anleitung.',
   // «Stillen»: one item per step
   'nursing.title': 'Stillen',
@@ -41,6 +42,9 @@ export default {
   // «Erinnerungen»
   'reminders.title': 'Erinnerungen',
   'reminders.body': 'Was täglich zu festen Zeiten ansteht – Vitamin D fürs Baby, ein Medikament für Mama oder Papa – legt ihr unter <strong>Mehr › Erinnerungen</strong> an: was, für wen, die Uhrzeiten – und ob täglich oder alle zwei, drei, sieben Tage, ab einem ersten Tag. Auf «Jetzt» erscheinen sie, sobald unter Einstellungen › Startbildschirm «Erinnerungen» oder «Beides» gewählt ist: Die Karte zeigt, was als Nächstes dran ist, und hakt es mit einem Tipp ab; der Knopf «Erinnerungen» öffnet die Liste des Tages. Ein Haken ist ein Eintrag «Erledigt» – beide Handys sehen ihn; in der Liste nimmt ein zweiter Tipp auf den Haken ihn zurück. Die App schickt keine Mitteilungen, sie zeigt nur, was fällig ist.',
+  // «Karte» — the places around the parents
+  'map.title': 'Karte',
+  'map.body': '<strong>«Karte»</strong> zeigt, was OpenStreetMap an Wickeltischen und Still-Orten kennt – in der Schweiz und im Grenzgebiet, auf einer Karte von unserem eigenen Server, ohne einen Dienst von Dritten. <strong>«Mein Standort»</strong> holt die Position, nur auf Tipp; sie bleibt auf dem Handy – der Server sieht nur, welche Kartenteile es lädt. Die Leiste unten nennt dann die drei nächsten Orte, <strong>«In der Nähe»</strong> die nächsten zehn, mit der Luftlinie. Die Chips oben filtern: Wickeltisch oder Stillen. Ein Tipp auf einen Punkt sagt, wo genau der Tisch ist (im Frauen-WC, im Rollstuhl-WC, ein eigener Raum), ob er etwas kostet, und die Öffnungszeiten, wenn sie bekannt sind. Die Orte sind ein Stand von OpenStreetMap – das Datum steht unten –; fehlt einer, dort eintragen, beim nächsten Update ist er dabei. Still-Orte sind dort noch selten erfasst.',
   // «Zu zweit» — the two-phone sync
   'twoPhones.title': 'Zu zweit',
   'twoPhones.body': 'Beide Handys zeigen dieselben Einträge: Die App holt jede Minute und bei jedem Öffnen den neusten Stand. Ein Timer, der auf dem einen Handy gestartet wurde, lässt sich auf dem anderen beenden. Wer etwas erfasst, steht mit dem Anzeigenamen am Eintrag. Ohne Netz zeigt «Jetzt» den letzten Stand («Stand 14:32» oben rechts) – erfassen geht trotzdem: Der Eintrag wird auf dem Handy gespeichert («wartet auf Netz») und gesendet, sobald Zuno offen ist und wieder Netz hat; oben rechts steht, wie viele noch warten, ein Tipp darauf zeigt sie. Hat das andere Handy denselben Eintrag inzwischen beendet, geändert oder gelöscht, gilt dessen Stand, und dieses Handy sagt es.',

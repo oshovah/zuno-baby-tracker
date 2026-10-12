@@ -5,11 +5,12 @@
 export default {
   // The lead paragraph
   'lead': 'Zuno keeps track of when the baby fed, what was in the diaper and how long it slept – the same on both phones. The essentials take one tap, even at three in the morning.',
-  // "The four tabs": one item per tab
-  'tabs.title': 'The four tabs',
+  // "The five tabs": one item per tab
+  'tabs.title': 'The five tabs',
   'tabs.now': '<strong>Now</strong> – where things stand: how long since the last meal, the day so far (meals and wet diapers against the target), sleep or the next reminder. Below that, the buttons for logging.',
   'tabs.log': '<strong>Log</strong> – anything with a time of your choosing, including weight, temperature and medication.',
   'tabs.history': '<strong>History</strong> – every entry by day, to look things up, correct and delete.',
+  'tabs.map': '<strong>Map</strong> – changing tables and nursing places nearby, from OpenStreetMap.',
   'tabs.more': '<strong>More</strong> – reminders, settings, account and family, this guide.',
   // "Nursing": one item per step
   'nursing.title': 'Nursing',
@@ -43,6 +44,9 @@ export default {
   'reminders.title': 'Reminders',
   'reminders.body': 'What is due every day at fixed times – vitamin D for the baby, a medication for Mom or Dad – you set up under <strong>More › Reminders</strong>: what, for whom, the times – and whether daily or every two, three, seven days, from a first day. They appear on "Now" as soon as "Reminders" or "Both" is chosen under Settings › Home screen: the card shows what is next up and ticks it off with one tap; the "Reminders" button opens the day\'s list. A tick is a "Done" entry – both phones see it; in the list a second tap on the tick takes it back. The app sends no notifications, it only shows what is due.',
   // "The two of you" — the two-phone sync
+  // "Map" — the places around the parents
+  'map.title': 'Map',
+  'map.body': '<strong>"Map"</strong> shows what OpenStreetMap knows of changing tables and nursing places – in Switzerland and across the border, on a map served by our own server, with no third-party service. <strong>"My location"</strong> gets the position, on a tap only; it stays on the phone – the server only sees which parts of the map it loads. The strip at the bottom then names the three closest places, <strong>"Nearby"</strong> the closest ten, as the crow flies. The chips at the top filter: changing table or nursing. A tap on a dot says where exactly the table is (in the women\'s toilet, in the accessible toilet, a room of its own), whether it costs anything, and the opening hours when they are known. The places are a snapshot of OpenStreetMap – the date is at the bottom –; one missing? Add it there, the next update brings it along. Nursing places are still rare there.',
   'twoPhones.title': 'The two of you',
   'twoPhones.body': 'Both phones show the same entries: the app fetches the latest state every minute and every time it opens. A timer started on one phone can be stopped on the other. Whoever logs something is named on the entry by their display name. Without a connection, "Now" shows the last known state ("As of 14:32" at the top right) – logging still works: the entry is saved on the phone ("waiting for network") and sent as soon as Zuno is open and online again; the top right says how many are still waiting, a tap shows them. If the other phone has ended, changed or deleted the same entry meanwhile, its version stands, and this phone says so.',
   // "Settings" — family vs. this phone

@@ -2740,6 +2740,7 @@ textarea.fb-text {
 .tabbar a {
   position: relative; /* the unread-feedback dot sits in its corner */
   flex: 1;
+  min-width: 0; /* five tabs: the label may not widen its tab (320 px) */
   max-width: 140px;
   display: flex;
   flex-direction: column;
@@ -2757,6 +2758,27 @@ textarea.fb-text {
 .tabbar a svg {
   width: 24px;
   height: 24px;
+}
+
+.tabbar a span {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Five tabs on the narrowest phones: tighter gaps, a size smaller — at
+ * 320 px each tab gets 59 px, «Nachtragen» needs about 55. */
+@media (max-width: 359px) {
+  .tabbar {
+    gap: 2px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .tabbar a {
+    font-size: 10px;
+  }
 }
 
 .tabbar a.active {
@@ -2839,6 +2861,310 @@ textarea.fb-text {
   padding: 14px 12px;
   margin: -12px -12px -12px -4px;
   white-space: nowrap;
+}
+
+/* --- map (the «Karte» tab, views/map.js) --------------------------------------
+ * A full-bleed stage between the status bar and the tab bar; the view's own
+ * node stays empty, so the page behind it has nothing to scroll. Leaflet's
+ * base styles come with the lazy engine chunk; the pins are plain divs in
+ * the event hues (a design restyles them like any token). */
+
+body.map-open {
+  overflow: hidden;
+}
+
+.map-stage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  z-index: 1; /* under the tab bar (30), the sheet (40), the toasts (50) */
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0; /* its own stacking context: Leaflet's panes (z-index 400) stay under the overlays below */
+}
+
+.map-canvas.leaflet-container {
+  background: var(--surface-2);
+  font-family: var(--font);
+}
+
+/* The filter, floating over the top edge. */
+.map-top {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.map-top .segmented {
+  pointer-events: auto;
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.poi-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--diaper);
+  vertical-align: -1px;
+}
+
+.poi-dot.nursing {
+  background: var(--milk);
+}
+
+.seg.active .poi-dot {
+  outline: 2px solid var(--on-milk);
+}
+
+/* The round buttons on the right (my location). */
+.map-side {
+  position: absolute;
+  right: 12px;
+  bottom: 126px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.map-fab {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--milk);
+  box-shadow: var(--shadow-pop);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.map-fab svg {
+  width: 24px;
+  height: 24px;
+}
+
+.map-fab.on {
+  color: var(--sleep);
+}
+
+.map-fab:disabled {
+  opacity: 0.55;
+}
+
+/* «Karte wird geladen …» / «Ohne Netz keine Karte» over the empty stage. */
+.map-notice {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 45%;
+  z-index: 2;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.map-notice[hidden] {
+  display: none;
+}
+
+/* «Näher heranzoomen» while the pins stay off. */
+.map-hint {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 112px;
+  z-index: 2;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.map-hint[hidden] {
+  display: none;
+}
+
+/* The strip over the bottom edge: the nearest places and the attribution. */
+.map-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 6px 12px 5px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+}
+
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+  .map-strip {
+    background: var(--bg);
+  }
+}
+
+.map-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.map-strip .btn.small {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.nearby-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 2px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.map-strip .nearby-row {
+  padding: 5px 2px;
+}
+
+.nearby-row .nr-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.nearby-row .nr-title {
+  display: block;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nearby-row .nr-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nearby-row .nr-dist {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.map-attrib {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.map-attrib a {
+  color: inherit;
+}
+
+/* The pins: a dot in the kind's hue with a ring of the surface, both kinds
+ * a diaper dot ringed in milk; «ich» in the sleep hue. */
+.poi-pin {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--diaper);
+  border: 3px solid var(--surface);
+  outline: 1px solid var(--line);
+}
+
+.poi-pin-nursing {
+  background: var(--milk);
+}
+
+.poi-pin-both {
+  background: var(--diaper);
+  border-color: var(--milk);
+}
+
+.poi-me {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--sleep);
+  border: 3px solid var(--surface);
+  outline: 1px solid var(--line);
+}
+
+/* The place in the sheet: the kind lines first, then the facts. */
+.poi-lines {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.poi-lines li {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.poi-lines li.kind {
+  font-weight: 600;
+}
+
+.poi-lines li:last-child {
+  border-bottom: 0;
+}
+
+.poi-sheet-title {
+  margin: 4px 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.poi-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
+}
+
+.poi-actions .btn {
+  text-decoration: none; /* the link to OpenStreetMap dressed as a button */
 }
 
 /* --- motion ------------------------------------------------------------------ */

@@ -6,8 +6,11 @@ and **end-to-end encrypted**: the server stores ciphertext only and never
 sees a password.
 
 No e-mail address, no tracking, no third-party requests, no app store. The
-client is a vanilla-JS PWA (Vite, zero runtime dependencies), the server a
-tiny PHP 7.4+ API over SQLite that runs on cheap shared hosting. The UI ships
+client is a vanilla-JS PWA (Vite; its only runtime dependencies are the
+map's — Leaflet, protomaps-leaflet and pmtiles, bundled from npm, nothing
+from a CDN), the server a tiny PHP 7.4+ API over SQLite that runs on cheap
+shared hosting. The «Karte» tab shows changing tables and nursing places
+from OpenStreetMap on a map this server hosts itself (see «Karte» below). The UI ships
 in German (Swiss flavour, the source language) and English.
 
 This repository is public so that anyone can check the privacy claims the app
@@ -28,6 +31,7 @@ and computes nothing.
 | Display names and family settings as encrypted blobs | |
 | SHA-256 hashes of the session tokens (HttpOnly, SameSite cookie) | |
 | Throttle counters keyed by the client's address (failed logins, registrations, entry writes, feedback messages) — rows older than a day are pruned at the next login or registration | |
+| Which parts of the self-hosted map a phone asks for while the «Karte» tab is open (byte ranges of one archive — ordinary access-log material) | Where the phone is: the position stays on the phone, and the map never comes from a map provider |
 | Feedback messages to the operator (optional, see «Feedback»): per message ONE blob sealed on the phone to the operator's inbox key, a day-granular date and a read mark — no column for the sender | What a message says and who wrote it: a named message carries the name inside the blob, an anonymous one nowhere |
 
 What a server still learns, like any server: that a family exists, how many
@@ -116,6 +120,10 @@ and `about.*` strings in `src/i18n/locales/*/login.js` and the description in
 `index.html` before you put it online. The same page links to the source
 (`SOURCE_URL`, next to `HOSTER`): if you run a **modified** copy for other
 people, the AGPL asks you to offer them *your* source — point it there.
+The map is yours as well: its places and tiles are cut from OpenStreetMap on
+your machine (`npm run map:data`, `npm run map:basemap`; the area is
+`BBOX` in [`scripts/lib/map-config.mjs`](scripts/lib/map-config.mjs)) and
+uploaded once with `npm run deploy:basemap` — see «Karte» in the German part.
 
 The pictures in the login page's slider are the real app with invented data,
 taken by `npm run screenshots` ([`scripts/make-screenshots.mjs`](scripts/make-screenshots.mjs):
@@ -193,7 +201,11 @@ offer them your source too. For an app whose whole point is that you can check
 what it does, that seemed the right rule. The icon set is original work,
 drawn by [`scripts/make-icons.mjs`](scripts/make-icons.mjs). The bundled fonts
 (Inter, Jost, Nunito) are under the SIL Open Font License, their licence texts
-sit next to them in [`src/themes/fonts/`](src/themes/fonts/).
+sit next to them in [`src/themes/fonts/`](src/themes/fonts/). The map's
+places and tiles (`public/map/pois.json` and `basemap/`, both generated — see
+«Karte») are OpenStreetMap data under the
+[Open Database License](https://www.openstreetmap.org/copyright): the map
+shows the attribution, and `basemap/LICENSE.txt` travels with the archive.
 
 ---
 
@@ -313,10 +325,25 @@ Einmalig: `.env.example` nach `.env` kopieren und die `DEPLOY_*`-Zugänge
 ausfüllen.
 
 ```bash
+npm run map:data  # die Orte der Karte holen (Overpass) – vor dem Packen, siehe «Karte»
 npm run package   # baut + stellt deploy/ zusammen
 npm run preview   # deploy/ lokal testen: http://127.0.0.1:8081 (auch /baby/)
 npm run deploy    # deploy/ hochladen (rsync/sftp/ftp gemäss .env)
+
+npm run map:basemap -- --build YYYYMMDD   # die Hintergrundkarte schneiden (einmal pro Build)
+npm run deploy:basemap                    # … und hochladen (einmal; nie mit der App)
+npm run deploy:beta                       # dasselbe auf eine zweite Installation (.env.beta)
 ```
+
+- **Karte**: `npm run map:data` vor dem Packen (ohne `public/map/pois.json`
+  bricht `package` ab); das Kartenarchiv (`basemap/`, ~570 MB) geht einmal
+  pro Build separat hoch – `npm run deploy:basemap`, zuerst das Archiv, dann
+  `index.json`, danach die Probe, dass der Server Byte-Ranges liefert (206).
+  Reihenfolge beim ersten Mal: Archiv hochladen, dann die App.
+- **Zweite Installation (Testserver)**: `.env.beta` neben `.env` mit
+  eigenem `DEPLOY_PATH` und `DEPLOY_URL` (kein `DEPLOY_DB_PATH` – die
+  Datenbank liegt dann in deren Docroot); `npm run deploy:beta` und
+  `npm run deploy:basemap:beta` nehmen diese Datei.
 
 - Re-Deploys fassen das entfernte `data/` **nie** an — die Datenbank auf dem
   Server bleibt bestehen.
@@ -488,7 +515,7 @@ die Tagesgrenzen; Push-Benachrichtigungen gibt es keine.
 «Mehr» hat vier Bereiche: Erinnerungen, Einstellungen, Konto (das eigene
 Konto und darunter alles zur Familie: Familien-Passwort,
 Wiederherstellungscode, Export, Verschlüsselungsstatus) und die
-**Anleitung** — wie die App benutzt wird, von den vier Tabs über das
+**Anleitung** — wie die App benutzt wird, von den fünf Tabs über das
 Ein-Tipp-Erfassen und die Mahlzeiten bis zu den Schlüsseln (statischer Text
 in `src/views/howto.js`). Wer sich auf einem Handy neu registriert, sieht
 beim Start eine Meldung «Neu hier? … unter Mehr › Anleitung» mit
@@ -534,6 +561,49 @@ Schrift-Tokens in `src/themes/`; ein neues entsteht aus `_template.css`
 plus einem Eintrag in `src/themes/index.js` — Anleitung und Checkliste in
 `src/themes/README.md`.
 
+## Karte
+
+Der fünfte Tab zeigt Wickeltische und Still-Orte – alles, was OpenStreetMap
+in der Schweiz und im Grenzgebiet kennt (`changing_table=*`,
+`baby_feeding=*`) – auf einer Karte, die dieser Server selbst ausliefert.
+Das Login-Versprechen («nichts ausserhalb des Hostings») und die CSP gelten
+auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
+
+- **Orte**: `npm run map:data` fragt Overpass (zuerst die Schweizer Instanz,
+  dann die Hauptinstanz) nach der Box in `scripts/lib/map-config.mjs` und
+  schreibt `public/map/pois.json` (~160 KB, gitignored; fährt mit jedem Build
+  mit, die Karte zeigt das Datum). `scripts/map-data.mjs`; die Normalisierung
+  und die Wortwahl sind pur in `src/mapdata.js` (node-getestet).
+- **Hintergrundkarte**: `npm run map:basemap -- --build YYYYMMDD` schneidet mit
+  der `pmtiles`-CLI (`brew install pmtiles`) aus dem täglichen Protomaps-
+  Planet-Build ein Archiv für dieselbe Box (Zoom 0–14, ~570 MB; `--maxzoom 15`
+  verdoppelt) nach `basemap/basemap-<build>.pmtiles`, dazu `index.json` (was
+  die App lädt) und `LICENSE.txt`. Der Ordner ist gitignored und nicht Teil
+  von `deploy/`: `npm run deploy:basemap` lädt ihn einmal pro Build nach
+  `<DEPLOY_PATH>/basemap/` und prüft, dass der Server Byte-Ranges liefert
+  (206) – so liest das Handy die Kacheln. Lokal liefern ihn ein Vite-Plugin
+  (`scripts/lib/map-assets-plugin.mjs`, auch in den Headless-Läufen) und der
+  Preview-Router mit Ranges aus. Ein neuer Build bekommt einen neuen
+  Dateinamen; ein Archiv wird nie an Ort und Stelle überschrieben.
+- **Im Handy**: Leaflet und protomaps-leaflet zeichnen die Kacheln auf
+  Canvas (`src/map-engine.js`, erst beim Öffnen des Tabs geladen; kein
+  Worker, keine Schriftdateien, keine Sprites); die Pins sind DOM-Elemente in
+  den Farben des Designs, ab Zoom 11. «Mein Standort» nur auf Tipp
+  (Geolocation; die Position verlässt das Handy nicht), die drei nächsten
+  Orte in der Leiste, «In der Nähe» zehn im Sheet – beides funktioniert auch
+  ohne Karte (kein Netz, kein Archiv auf dem Server). Der Service Worker
+  lässt Range-Anfragen und `basemap/` am Cache vorbei, `map/pois.json` bleibt
+  gecacht.
+- **Was der Server erfährt**: welche Byte-Bereiche des Archivs ein Handy
+  liest, während die Karte offen ist (normales Access-Log) – nicht den
+  Standort.
+- **Lizenz**: Daten © OpenStreetMap-Mitwirkende, ODbL; die Karte zeigt die
+  Attribution, `basemap/LICENSE.txt` liegt beim Archiv. Still-Orte sind in
+  OpenStreetMap noch dünn erfasst (Oktober 2026: 15 in der Box, dazu 800
+  Wickeltische) – mehr gibt es nur über Einträge dort.
+- **Anderes Gebiet**: die Box in `scripts/lib/map-config.mjs` ändern und
+  beide Scripts erneut laufen lassen.
+
 ## Struktur
 
 ```
@@ -544,11 +614,16 @@ src/            Frontend: main.js Shell, views/, store.js (lokales Modell +
                 (reine Logik, node-getestet), themes/ (ein CSS pro Design +
                 Registry; README dort), i18n/ (Sprachen: locales/<id>/,
                 README dort), whats-new.js (die Notizen fürs Update-Sheet),
-                feedback.js + feedback-sheet.js (Feedback an den Betreiber)
-public/         Manifest, Service Worker, Icons
+                feedback.js + feedback-sheet.js (Feedback an den Betreiber),
+                mapdata.js (die Orte der Karte, pur) + map-engine.js (Leaflet,
+                lazy) + views/map.js (der Tab «Karte»)
+public/         Manifest, Service Worker, Icons; map/pois.json (generiert, gitignored)
+basemap/        das Kartenarchiv + index.json (generiert, gitignored, eigener Upload)
 scripts/        dev-router, preview-router, package.mjs, deploy.mjs,
                 export-plain.mjs (Offline-Entschlüsselung), make-icons.mjs
                 (zeichnet das Icon-Set nach public/img/), make-screenshots.mjs
-                (die Bildschirmfotos der Anmeldeseite)
+                (die Bildschirmfotos der Anmeldeseite), map-data.mjs +
+                map-basemap.mjs (die Karte: Orte und Archiv), lib/map-config.mjs
+                (die Box), lib/map-assets-plugin.mjs (Ranges im Dev-Server)
 data/           lokale SQLite-DB (gitignored, nie deployt)
 ```

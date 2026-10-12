@@ -25,3 +25,9 @@ baby-tracker-export-*.json
 # artwork): packaged and served behind the session, never published.
 private-art/
 /.e2e/
+
+# The map (README › Karte): the self-hosted basemap archive (~600 MB, one
+# upload with `npm run deploy:basemap`) and the generated places file
+# (`npm run map:data`) — both built from OpenStreetMap, never tracked.
+/basemap/
+/public/map/

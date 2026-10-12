@@ -1,4 +1,4 @@
-// «Mehr › Anleitung» — how the app is used, as static copy: the four tabs,
+// «Mehr › Anleitung» — how the app is used, as static copy: the five tabs,
 // the one-tap logging on «Jetzt» (and the corrections around it), meals,
 // Nachtragen, Verlauf, the reminders, the two-phone sync, the settings, the
 // account and the keys, installing. Nothing here comes from the server or
@@ -32,6 +32,7 @@ export function howtoHtml() {
         ${li('howto.tabs.now')}
         ${li('howto.tabs.log')}
         ${li('howto.tabs.history')}
+        ${li('howto.tabs.map')}
         ${li('howto.tabs.more')}
       </ul>
 
@@ -67,6 +68,9 @@ export function howtoHtml() {
 
       ${head('reminder', 'howto.reminders.title')}
       ${p('howto.reminders.body')}
+
+      ${head('map', 'howto.map.title')}
+      ${p('howto.map.body')}
 
       ${head('phone', 'howto.twoPhones.title')}
       ${p('howto.twoPhones.body')}

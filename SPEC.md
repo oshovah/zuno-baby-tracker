@@ -316,6 +316,22 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
    families (and how many logged something in 7 / 30 days), accounts (new in
    30 days) and rows (new in 7 days) — numbers only, no names.
 
+7. **Karte** — the fifth tab: changing tables (`changing_table=*`) and
+    nursing places (`baby_feeding=*`) from OpenStreetMap inside the box of
+    `scripts/lib/map-config.mjs`, as a places file cut at build time
+    (`npm run map:data` → `public/map/pois.json`, ~160 KB, its date shown on
+    the map) on a basemap this server hosts itself (`npm run map:basemap` → a
+    date-named PMTiles archive in `basemap/`, uploaded once with
+    `npm run deploy:basemap`, read in byte ranges — the service worker and
+    the local servers let ranges through). Leaflet + protomaps-leaflet on
+    canvas, loaded on the first visit; DOM pins in the design's hues from
+    zoom 11; a filter (all · changing table · nursing); «Mein Standort» on
+    tap only (the position never leaves the phone); the three nearest places
+    in a strip, ten under «In der Nähe» in the sheet — both work without the
+    basemap; a tap on a pin opens the place (where the table is, fee,
+    wheelchair, hours, address, the link to OpenStreetMap). No third-party
+    request: the CSP stays as it is. Pure: `src/mapdata.js`.
+
 ## Data model (schema v5)
 
 - `families` (id, name, name_key UNIQUE — case-folded, auth_hash = bcrypt of

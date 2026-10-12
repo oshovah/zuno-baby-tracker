@@ -203,3 +203,7 @@
 [data-theme='bauhaus'] .ico[data-ico='phone'] {
   --ico: url('./icons/bauhaus/phone.svg');
 }
+
+[data-theme='bauhaus'] .ico[data-ico='map'] {
+  --ico: url('./icons/bauhaus/map.svg');
+}

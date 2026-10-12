@@ -12,6 +12,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
+import { basemapPlugin } from './map-assets-plugin.mjs';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -59,6 +60,9 @@ export async function startVite(apiPort) {
     configFile: false, // vite.config.js proxies to the dev API on :8788 — this one goes to the scratch API
     base: './',
     logLevel: 'error',
+    // the same two things vite.config.js adds for the map: the basemap folder with byte ranges, the lazy libraries pre-bundled
+    plugins: [basemapPlugin(path.join(root, 'basemap'))],
+    optimizeDeps: { include: ['leaflet', 'protomaps-leaflet', 'pmtiles'] },
     // no watcher, no HMR: the pictures a screenshot run writes are part of the page's module graph (login.js globs src/shots/)
     server: { host: '127.0.0.1', port: await freePort(), strictPort: true, hmr: false, watch: null, proxy: { '/api': `http://127.0.0.1:${apiPort}` } },
   });

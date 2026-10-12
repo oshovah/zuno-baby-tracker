@@ -65,7 +65,8 @@ list first so the same thing reads the same on every screen.
 
 | German                        | English                 |
 | ----------------------------- | ----------------------- |
-| Jetzt · Nachtragen · Verlauf · Mehr | Now · Log · History · More |
+| Jetzt · Nachtragen · Verlauf · Karte · Mehr | Now · Log · History · Map · More |
+| Wickeltisch · Still-Ort · In der Nähe · Mein Standort | Changing table · nursing place · Nearby · My location |
 | Erinnerungen · Einstellungen · Konto · Anleitung | Reminders · Settings · Account · Guide |
 | Familie · Familien-Passwort   | Family · Family password |
 | Stillen (links/rechts)        | Nursing (left/right)     |

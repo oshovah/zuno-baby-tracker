@@ -15,6 +15,11 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-10-12',
+    de: ['Neu: der Tab «Karte» zeigt Wickeltische und Still-Orte in der Schweiz – aus OpenStreetMap, von unserem eigenen Server. «Mein Standort» holt die Position, darunter stehen die drei nächsten Orte, «In der Nähe» listet zehn; ein Tipp auf einen Punkt sagt, wo genau der Tisch ist und was es dort gibt.'],
+    en: ['New: the "Map" tab shows changing tables and nursing places in Switzerland – from OpenStreetMap, served by our own server. "My location" gets your position, the three closest places sit below it, "Nearby" lists ten; a tap on a dot says where exactly the table is and what is there.'],
+  },
+  {
     id: '2026-10-02',
     de: ['Stillen und Schlaf bearbeiten: Neben «Ende» leert ein ✕ die Zeit wieder – der Timer läuft dann weiter. Auf dem iPhone liess sich ein einmal angetipptes «Ende» nicht mehr leeren; wer nur den Start korrigieren wollte, stoppte so den Timer.'],
     en: ['Editing nursing and sleep: next to "End" a ✕ empties the time again – the timer then keeps running. On an iPhone an "End" that was touched once could not be emptied again; correcting just the start stopped the timer that way.'],

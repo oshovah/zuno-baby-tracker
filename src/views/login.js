@@ -123,7 +123,7 @@ const SOURCE_URL = 'https://github.com/oshovah/zuno-baby-tracker';
 const extLink = (url, label) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 
 // What is missing on purpose — the tags under login.hosting.none.*
-const HOSTING_NONE = ['cdn', 'fonts', 'analytics', 'ads', 'login', 'ai'];
+const HOSTING_NONE = ['cdn', 'fonts', 'maps', 'analytics', 'ads', 'login', 'ai'];
 
 // The whole data path as a drawing: two phones, ONE server between them.
 // Strokes in currentColor — muted from .hosting-map, the server in the
