@@ -21,6 +21,9 @@ import {
   distanceLabel,
   mapFlavor,
   markersVisible,
+  parseExtraRow,
+  mergeExtras,
+  EXTRA_MATCH_M,
 } from '../mapdata.js';
 
 after(() => setLocale('de'));
@@ -210,4 +213,97 @@ test('English after setLocale("en"): titles, lines and the distance separator', 
   assert.equal(distanceLabel(1440), '1.4 km');
   setLocale('de');
   assert.equal(distanceLabel(1440), '1,4 km');
+});
+
+// --- the extra places (scripts/map/extra-places.csv) ---------------------
+
+/** One record as the CSV reader hands it over: a city toilet at 47.0, 8.5. */
+const ROW = {
+  id: 'bern-wc-test', use: 'yes', name: 'WC Test', feature: 'amenity=toilets', lat: '47.0', lon: '8.5',
+  changing_table: 'yes', 'changing_table:fee': 'no', 'changing_table:description': 'Hinter der Eurokey-Tür?', level: '',
+  source: 'a list', checked: '2026-10-12', note: 'for the maintainer only',
+};
+const rowOf = (patch = {}) => parseExtraRow({ ...ROW, ...patch }).row;
+const cand = (type, id, lat, lon, tags) => (type === 'node' ? { type, id, lat, lon, tags } : { type, id, center: { lat, lon }, tags });
+
+test('parseExtraRow: the columns become tags, the meta columns do not, empty cells vanish', () => {
+  const { row, error } = parseExtraRow(ROW);
+  assert.equal(error, undefined);
+  assert.equal(row.id, 'bern-wc-test');
+  assert.equal(row.use, 'yes');
+  assert.deepEqual(row.feature, { key: 'amenity', value: 'toilets' });
+  assert.deepEqual(row.tags, {
+    name: 'WC Test', changing_table: 'yes', 'changing_table:fee': 'no', 'changing_table:description': 'Hinter der Eurokey-Tür?', amenity: 'toilets',
+  });
+  assert.equal(row.lat, 47);
+  assert.equal(row.lon, 8.5);
+});
+
+test('parseExtraRow: what is refused, and the little a row with use=no needs', () => {
+  const bad = (patch) => parseExtraRow({ ...ROW, ...patch }).error;
+  assert.match(bad({ id: 'kramgasse' }), /dash/);
+  assert.match(bad({ id: 'Bern-WC' }), /dash/);
+  assert.match(bad({ use: 'maybe' }), /use/);
+  assert.match(bad({ feature: 'toilets' }), /feature/);
+  assert.match(bad({ lat: '' }), /lat and lon/);
+  assert.match(bad({ lon: 'x' }), /lat and lon/);
+  assert.match(bad({ changing_table: 'no' }), /neither/);
+  assert.match(bad({ checked: '12.10.2026' }), /checked/);
+  assert.equal(parseExtraRow({ id: 'a-b', use: 'no', feature: 'shop=kiosk' }).row.use, 'no');
+  assert.match(parseExtraRow({ id: 'a-b', use: 'no' }).error, /feature/);
+});
+
+test('mergeExtras: an object of the kind within 30 m that has the tag → covered, nothing changes', () => {
+  const base = normalizeOverpass(OVERPASS, META).features;
+  const { features, report } = mergeExtras(base, [rowOf()], { elements: [cand('node', 1, 47.0001, 8.5, { amenity: 'toilets', changing_table: 'yes' })] });
+  assert.deepEqual(features, base);
+  assert.equal(report.length, 1);
+  assert.equal(report[0].action, 'covered');
+  assert.equal(report[0].osm, 'n1');
+  assert.ok(report[0].meters > 5 && report[0].meters < 15, `${report[0].meters} m`);
+});
+
+test('mergeExtras: the object lacks the tag → merged: the OSM id and point, the row\'s tags over its own', () => {
+  const base = normalizeOverpass(OVERPASS, META).features;
+  const osm = cand('node', 2, 47.0001, 8.5, { amenity: 'toilets', fee: 'no', opening_hours: '24/7', level: '-1', name: 'Altes WC' });
+  const { features, report } = mergeExtras(base, [rowOf({ level: '5' })], { elements: [osm] });
+  assert.equal(features.length, base.length + 1);
+  const f = features.find((x) => x.properties.id === 'n2');
+  assert.deepEqual(f.geometry.coordinates, [8.5, 47.0001]);
+  assert.deepEqual(f.properties, { id: 'n2', name: 'WC Test', cls: 'toilets', w: 1, ct: 'yes', fee: 'no', desc: 'Hinter der Eurokey-Tür?', oh: '24/7', lvl: '5' });
+  assert.equal(report[0].action, 'merged');
+  assert.equal(report[0].osm, 'n2');
+  assert.equal(osmUrl(f.properties.id), 'https://www.openstreetmap.org/node/2');
+});
+
+test('mergeExtras: nothing of the kind in reach → added under the row id without an OSM link; an area counts to 60 m', () => {
+  const base = normalizeOverpass(OVERPASS, META).features;
+  const far = cand('node', 3, 47.0004, 8.5, { amenity: 'toilets' }); // ≈ 44 m: too far for a point
+  const other = cand('node', 5, 47.00001, 8.5, { shop: 'kiosk', changing_table: 'yes' }); // 1 m, but another kind
+  const r1 = mergeExtras(base, [rowOf()], { elements: [far, other] });
+  assert.equal(r1.features.length, base.length + 1);
+  const f = r1.features[0]; // a slug sorts before every n… id
+  assert.equal(f.properties.id, 'bern-wc-test');
+  assert.deepEqual(f.geometry.coordinates, [8.5, 47]);
+  assert.equal(f.properties.name, 'WC Test');
+  assert.equal(osmUrl(f.properties.id), null);
+  assert.equal(r1.report[0].action, 'added');
+  assert.equal(r1.report[0].near, 'n3');
+  assert.ok(r1.report[0].meters > 40 && r1.report[0].meters < 50, `${r1.report[0].meters} m`);
+  const r2 = mergeExtras(base, [rowOf()], { elements: [cand('way', 4, 47.0004, 8.5, { amenity: 'toilets' })] });
+  assert.equal(r2.report[0].action, 'merged');
+  assert.equal(r2.report[0].osm, 'w4');
+  assert.deepEqual(EXTRA_MATCH_M, { node: 30, area: 60 });
+  assert.deepEqual(mergeExtras(base, [rowOf()], { elements: [] }).report, [{ id: 'bern-wc-test', action: 'added' }]);
+});
+
+test('mergeExtras: a row that adds the other kind replaces the listed feature in place; use=no is off', () => {
+  const base = normalizeOverpass(OVERPASS, META).features; // w202: the toilet with a limited table at 46.948, 7.4474
+  const row = rowOf({ id: 'bern-still-test', lat: '46.948', lon: '7.4474', changing_table: '', 'changing_table:fee': '', 'changing_table:description': '', baby_feeding: 'room' });
+  const way = { type: 'way', id: 202, center: { lat: 46.948, lon: 7.4474 }, tags: OVERPASS.elements[1].tags };
+  const { features, report } = mergeExtras(base, [row, rowOf({ use: 'no' })], { elements: [way] });
+  assert.equal(features.length, base.length);
+  const f = features.find((x) => x.properties.id === 'w202');
+  assert.deepEqual(f.properties, { id: 'w202', name: 'WC Test', cls: 'toilets', w: 1, ct: 'limited', wc: 'yes', n: 1, bf: 'room', acc: 'customers' });
+  assert.deepEqual(report.map((r) => r.action), ['merged', 'off']);
 });

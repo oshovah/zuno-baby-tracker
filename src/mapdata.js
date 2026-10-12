@@ -8,6 +8,8 @@
 // dropped) with its sub-keys for where the table is, and `baby_feeding=*`
 // (yes | room) for a place to nurse. Every string a parent reads goes
 // through t() at call time; the raw OSM values travel in the properties.
+// A few places OSM does not know (yet) come from scripts/map/extra-places.csv
+// (parseExtraRow, mergeExtras: matched against what OSM has at that spot).
 
 import { t, hasKey, localeMeta } from './i18n/index.js';
 
@@ -45,70 +47,95 @@ function address(tags) {
   return line1 || line2;
 }
 
+/** The point of an Overpass element — a node's own, a way's or a relation's
+ *  `center` — with its `n|w|r<id>` id, or null when it has none. */
+function elementPoint(el) {
+  const prefix = { node: 'n', way: 'w', relation: 'r' }[el && el.type];
+  if (!prefix || !Number.isInteger(el.id)) return null;
+  const lat = typeof el.lat === 'number' ? el.lat : el.center && el.center.lat;
+  const lon = typeof el.lon === 'number' ? el.lon : el.center && el.center.lon;
+  if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return { id: `${prefix}${el.id}`, lon, lat };
+}
+
+/**
+ * The compact properties (short keys — the file ships with every build) of a
+ * place for its OSM tags, without the id: ONLY what the app reads. Null when
+ * the tags say neither changing table nor place to nurse.
+ */
+export function propsFromTags(tags) {
+  tags = tags || {};
+  const ct = clean(tags.changing_table, 40);
+  const bf = clean(tags.baby_feeding, 40);
+  const w = ct !== undefined && ct !== 'no';
+  const n = bf !== undefined && bf !== 'no';
+  if (!w && !n) return null;
+  const p = {};
+  const name = clean(tags.name, 120) || clean(tags.brand, 80);
+  if (name) p.name = name;
+  for (const key of CLASS_KEYS) {
+    const v = clean(tags[key], 40);
+    if (v && v !== 'yes') {
+      p.cls = v;
+      break;
+    }
+  }
+  if (w) {
+    p.w = 1;
+    p.ct = ct;
+    const loc = clean(tags['changing_table:location'], 120);
+    if (loc) p.loc = loc;
+    const fee = clean(tags['changing_table:fee'], 10);
+    if (fee) p.fee = fee;
+    const wc = clean(tags['changing_table:wheelchair'], 10);
+    if (wc) p.wc = wc;
+    const cnt = parseInt(tags['changing_table:count'], 10);
+    if (Number.isInteger(cnt) && cnt > 1) p.cnt = Math.min(cnt, 99);
+    const desc = clean(tags['changing_table:description'], 200);
+    if (desc) p.desc = desc;
+  }
+  if (n) {
+    p.n = 1;
+    p.bf = bf;
+    const female = clean(tags['baby_feeding:female'], 10);
+    const male = clean(tags['baby_feeding:male'], 10);
+    if (female === 'yes' && male !== 'yes') p.bff = 1;
+    if (male === 'no') p.bff = 1;
+  }
+  const oh = clean(tags.opening_hours, 200);
+  if (oh) p.oh = oh;
+  const acc = clean(tags.access, 20);
+  if (acc && acc !== 'yes') p.acc = acc;
+  const lvl = clean(tags.level, 10);
+  if (lvl && lvl !== '0') p.lvl = lvl;
+  const addr = address(tags);
+  if (addr) p.addr = addr;
+  return p;
+}
+
+function pointFeature(id, lon, lat, props) {
+  return { type: 'Feature', geometry: { type: 'Point', coordinates: [round5(lon), round5(lat)] }, properties: { id, ...props } };
+}
+
+const byId = (a, b) => (a.properties.id < b.properties.id ? -1 : a.properties.id > b.properties.id ? 1 : 0);
+
 /**
  * The Overpass answer (`out tags center`) as a FeatureCollection of points:
  * one feature per object that has a changing table or a place to nurse,
- * with ONLY the properties the app reads (short keys — the file ships with
- * every build). Ways and relations use their `center`. `generated` is the
- * day the data was fetched (shown on the map), `bbox` the box it covers.
+ * with ONLY the properties the app reads. Ways and relations use their
+ * `center`. `generated` is the day the data was fetched (shown on the
+ * map), `bbox` the box it covers.
  */
 export function normalizeOverpass(json, { generated, bbox }) {
   const features = [];
   for (const el of (json && json.elements) || []) {
-    const tags = el.tags || {};
-    const ct = clean(tags.changing_table, 40);
-    const bf = clean(tags.baby_feeding, 40);
-    const w = ct !== undefined && ct !== 'no';
-    const n = bf !== undefined && bf !== 'no';
-    if (!w && !n) continue;
-    const lat = typeof el.lat === 'number' ? el.lat : el.center && el.center.lat;
-    const lon = typeof el.lon === 'number' ? el.lon : el.center && el.center.lon;
-    if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    const prefix = { node: 'n', way: 'w', relation: 'r' }[el.type];
-    if (!prefix || !Number.isInteger(el.id)) continue;
-    const p = { id: `${prefix}${el.id}` };
-    const name = clean(tags.name, 120) || clean(tags.brand, 80);
-    if (name) p.name = name;
-    for (const key of CLASS_KEYS) {
-      const v = clean(tags[key], 40);
-      if (v && v !== 'yes') {
-        p.cls = v;
-        break;
-      }
-    }
-    if (w) {
-      p.w = 1;
-      p.ct = ct;
-      const loc = clean(tags['changing_table:location'], 120);
-      if (loc) p.loc = loc;
-      const fee = clean(tags['changing_table:fee'], 10);
-      if (fee) p.fee = fee;
-      const wc = clean(tags['changing_table:wheelchair'], 10);
-      if (wc) p.wc = wc;
-      const cnt = parseInt(tags['changing_table:count'], 10);
-      if (Number.isInteger(cnt) && cnt > 1) p.cnt = Math.min(cnt, 99);
-      const desc = clean(tags['changing_table:description'], 200);
-      if (desc) p.desc = desc;
-    }
-    if (n) {
-      p.n = 1;
-      p.bf = bf;
-      const female = clean(tags['baby_feeding:female'], 10);
-      const male = clean(tags['baby_feeding:male'], 10);
-      if (female === 'yes' && male !== 'yes') p.bff = 1;
-      if (male === 'no') p.bff = 1;
-    }
-    const oh = clean(tags.opening_hours, 200);
-    if (oh) p.oh = oh;
-    const acc = clean(tags.access, 20);
-    if (acc && acc !== 'yes') p.acc = acc;
-    const lvl = clean(tags.level, 10);
-    if (lvl && lvl !== '0') p.lvl = lvl;
-    const addr = address(tags);
-    if (addr) p.addr = addr;
-    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [round5(lon), round5(lat)] }, properties: p });
+    const p = propsFromTags(el.tags);
+    if (!p) continue;
+    const pt = elementPoint(el);
+    if (!pt) continue;
+    features.push(pointFeature(pt.id, pt.lon, pt.lat, p));
   }
-  features.sort((a, b) => (a.properties.id < b.properties.id ? -1 : a.properties.id > b.properties.id ? 1 : 0));
+  features.sort(byId);
   return { type: 'FeatureCollection', generated, bbox, features };
 }
 
@@ -239,4 +266,102 @@ export function mapFlavor(theme, scheme, systemDark) {
 /** Whether the pins show at this zoom. */
 export function markersVisible(zoom) {
   return Number(zoom) >= MARKER_MIN_ZOOM;
+}
+
+/** The columns of scripts/map/extra-places.csv that are not OSM tags. */
+const EXTRA_META = ['id', 'use', 'feature', 'lat', 'lon', 'source', 'checked', 'note'];
+
+/** The one-kind-of-object filter of an extra place: `amenity=toilets`, `shop=department_store` … */
+const FEATURE_RE = /^([a-z_]+)=([a-z_]+)$/;
+
+/** Within this distance an OSM object of the same kind IS the extra place
+ *  (a point), or holds it (an area's centre sits away from its door). */
+export const EXTRA_MATCH_M = { node: 30, area: 60 };
+
+/**
+ * One record of the extras file, checked: {id, use, feature: {key, value},
+ * tags, lat, lon} — every column outside EXTRA_META is an OSM tag (an empty
+ * cell = not set), the feature key=value is one of them. Returns {row} or
+ * {error}; a row with use=no only needs an id, use and feature.
+ */
+export function parseExtraRow(record) {
+  const r = record || {};
+  const id = String(r.id || '').trim();
+  if (!/^[a-z0-9]+(-[a-z0-9]+)+$/.test(id) || id.length > 60) return { error: `id «${id}»: letters, digits and at least one dash (bern-wc-kramgasse)` };
+  const use = String(r.use || '').trim();
+  if (use !== 'yes' && use !== 'no') return { error: `${id}: use must be yes or no` };
+  const feature = FEATURE_RE.exec(String(r.feature || '').trim());
+  if (!feature) return { error: `${id}: feature must be key=value (amenity=toilets)` };
+  const tags = {};
+  for (const [key, value] of Object.entries(r)) {
+    if (EXTRA_META.includes(key)) continue;
+    const v = clean(value, 200);
+    if (v !== undefined) tags[key] = v;
+  }
+  tags[feature[1]] = feature[2];
+  const lat = Number(r.lat);
+  const lon = Number(r.lon);
+  const row = { id, use, feature: { key: feature[1], value: feature[2] }, tags, lat, lon };
+  if (use === 'no') return { row };
+  if (String(r.lat).trim() === '' || String(r.lon).trim() === '' || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return { error: `${id}: lat and lon are needed (WGS 84 decimal degrees)` };
+  }
+  if (!propsFromTags(tags)) return { error: `${id}: neither changing_table nor baby_feeding (or both «no»)` };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.checked || '').trim())) return { error: `${id}: checked must be the day it was verified (YYYY-MM-DD)` };
+  return { row };
+}
+
+const hasKind = (tags, key) => tags[key] !== undefined && tags[key] !== 'no';
+
+/**
+ * The extra places laid over the OSM features: for every row with use=yes
+ * the closest OSM object of the row's kind (the `candidates`: an Overpass
+ * answer for what stands around each row) within EXTRA_MATCH_M decides —
+ * it already carries every kind the row claims → 'covered' (OSM stays the
+ * source, nothing changes); it lacks one → 'merged' (the OSM object with the
+ * row's tags over its own, the OSM id and point kept, so the link works);
+ * nothing there → 'added' (an own point under the row's id, no OSM link;
+ * `near` names an object of the kind that stood just beyond a point's reach).
+ * Rows with use=no are reported 'off'. Returns {features, report}.
+ */
+export function mergeExtras(features, rows, candidates, limits = EXTRA_MATCH_M) {
+  const out = features.slice();
+  const report = [];
+  const cands = [];
+  for (const el of (candidates && candidates.elements) || []) {
+    const pt = elementPoint(el);
+    if (pt) cands.push({ ...pt, type: el.type, tags: el.tags || {} });
+  }
+  for (const row of rows) {
+    if (row.use !== 'yes') {
+      report.push({ id: row.id, action: 'off' });
+      continue;
+    }
+    let hit = null;
+    let near = null;
+    for (const c of cands) {
+      if (c.tags[row.feature.key] !== row.feature.value) continue;
+      const meters = haversineM(row.lon, row.lat, c.lon, c.lat);
+      if (meters <= limits.area && (!near || meters < near.meters)) near = { c, meters };
+      if (meters > (c.type === 'node' ? limits.node : limits.area)) continue;
+      if (!hit || meters < hit.meters) hit = { c, meters };
+    }
+    if (!hit) {
+      out.push(pointFeature(row.id, row.lon, row.lat, propsFromTags(row.tags)));
+      report.push(near ? { id: row.id, action: 'added', near: near.c.id, meters: near.meters } : { id: row.id, action: 'added' });
+      continue;
+    }
+    const wants = ['changing_table', 'baby_feeding'].filter((k) => hasKind(row.tags, k));
+    if (wants.every((k) => hasKind(hit.c.tags, k))) {
+      report.push({ id: row.id, action: 'covered', osm: hit.c.id, meters: hit.meters });
+      continue;
+    }
+    const merged = pointFeature(hit.c.id, hit.c.lon, hit.c.lat, propsFromTags({ ...hit.c.tags, ...row.tags }));
+    const at = out.findIndex((f) => f.properties.id === hit.c.id);
+    if (at >= 0) out[at] = merged;
+    else out.push(merged);
+    report.push({ id: row.id, action: 'merged', osm: hit.c.id, meters: hit.meters });
+  }
+  out.sort(byId);
+  return { features: out, report };
 }

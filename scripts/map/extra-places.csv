@@ -1,0 +1,28 @@
+# Places for the «Karte» tab that OpenStreetMap does not know (yet) — README › Karte.
+# One row per place. Every column except id/use/feature/lat/lon/source/checked/note is
+# an OSM tag (an empty cell = not set); `feature` says what the place is (amenity=toilets,
+# shop=department_store …) and is a tag too. `npm run map:data` lays each row with
+# use=yes over OpenStreetMap: an object of that kind within 30 m (60 m for an area) that
+# already carries the tag wins («covered»), one without gets the row's tags («merged»,
+# the OSM link stays), nothing there → an own point («added», no OSM link). Rows with
+# use=no are kept as notes (checked and found wanting, or not verified yet).
+# Rooms open only to an institution's members (a university's nursing rooms) stay out:
+# the map is for everyone. The better home for every row is OpenStreetMap itself — once
+# entered there, the row turns «covered» on the next run.
+# Texts a parent reads (name, changing_table:description) are German like the OSM data
+# around them; lat/lon are WGS 84; `checked` is the day the row was last verified.
+id,use,name,feature,lat,lon,changing_table,changing_table:location,changing_table:fee,changing_table:description,baby_feeding,level,access,opening_hours,addr:street,addr:housenumber,addr:postcode,addr:city,source,checked,note
+bern-wc-kramgasse,yes,WC Kramgasse,amenity=toilets,46.94809,7.45070,yes,,no,Möglicherweise in der Eurokey-Kabine – dann nur mit Eurokey-Schlüssel zugänglich,,,,,Kramgasse,30,3011,Bern,city free-toilet list 2026-02,2026-10-12,"Free city toilet two minutes from the Zytglogge; the point is the address. No toilet in OSM within 60 m. Whether the table sits behind the Eurokey door is unconfirmed – check on site."
+bern-wc-allmendstrasse,yes,WC Allmendstrasse,amenity=toilets,46.95932,7.45158,yes,,no,Möglicherweise in der Eurokey-Kabine – dann nur mit Eurokey-Schlüssel zugänglich,,,,,Allmendstrasse,45,3014,Bern,city free-toilet list 2026-02,2026-10-12,"The point is the pair of OSM toilets on the street (n5189421706, n8654495585, both changing_table=yes); the address geocodes to no. 1. Expected: covered."
+bern-wc-goumoensstrasse,yes,WC Goumoënsstrasse,amenity=toilets,46.93431,7.42980,yes,,no,Möglicherweise in der Eurokey-Kabine – dann nur mit Eurokey-Schlüssel zugänglich,,,,,Goumoënsstrasse,,,Bern,city free-toilet list 2026-02,2026-10-12,"No house number in the source; the point is OSM n7438525430 (changing_table=yes) at the street's west end. Expected: covered."
+bern-wc-muehlemattstrasse,yes,WC Mühlemattstrasse,amenity=toilets,46.94221,7.43419,yes,,no,,,,,,Mühlemattstrasse,,,Bern,city free-toilet list 2026-02,2026-10-12,"No house number in the source; the point is OSM n10811509225 (changing_table=yes) on the street. Expected: covered."
+bern-wc-bahnhof,yes,WC Bahnhof Bern,amenity=toilets,46.94932,7.43989,yes,,,,,-1,,,Bahnhofplatz,10,3011,Bern,station operator 2026,2026-10-12,"The station's paid toilets below the hall, family toilet with a changing table; the point is OSM w379582630 (changing_table=yes). Expected: covered."
+bern-loeb,yes,Loeb,shop=department_store,46.94770,7.44135,yes,,no,,,5,permissive,,Spitalgasse,47-51,3011,Bern,city free-toilet list 2026-02; community tip,2026-10-12,"Free toilets on the upper floors without buying, during opening hours; the table on floor 5 per the tip. Merges into OSM n2917475609, which has no changing_table tag yet."
+bern-museum-kommunikation,yes,Museum für Kommunikation,tourism=museum,46.94181,7.45047,yes,,,,,,,,Helvetiastrasse,16,3005,Bern,family-outing portal,2026-10-12,"Listed with a changing table; whether it is reachable without a ticket is unknown. Merges into OSM w40859923 (an area, 38 m from the address)."
+bern-globus,no,Globus,shop=department_store,46.94775,7.44276,yes,,,,,,,,Spitalgasse,17-21,3011,Bern,community tip,2026-10-12,"Unverified tip; OSM n2917475608 has no changing_table tag. Check on site, then use=yes."
+bern-manor,no,Manor,shop=department_store,46.94807,7.44664,yes,,,,,,,,Marktgasse,,3011,Bern,community tip,2026-10-12,"Unverified tip; OSM n6427427198 has no changing_table tag. Check on site, then use=yes."
+bern-generationenhaus,no,Berner GenerationenHaus,amenity=social_facility,46.94768,7.43942,yes,,,,,,,,Bahnhofplatz,2,3011,Bern,community tip,2026-10-12,"Unverified tip; OSM n3337444993 has no changing_table tag. Check on site, then use=yes."
+bern-wc-parking-casino,no,WC Parking Casino,amenity=toilets,46.94672,7.44740,yes,,,,,,,,Kochergasse,1a,3011,Bern,city toilet concept 2010,2026-10-12,"Attended paid toilets at the car park, the table free of charge – in 2010. OSM n8045170060 next to it says changing_table=no today. Check on site."
+bern-wc-parking-metro,no,WC Parking Metro,amenity=toilets,46.94947,7.44479,yes,,,,,,,,,,,Bern,city toilet concept 2010,2026-10-12,"Attended paid toilets at the car park, the table free of charge – in 2010. No toilet in OSM there; the point is the car park. Check on site."
+bern-wc-nordring,no,WC Spielplatz Nordring,amenity=toilets,46.95980,7.44646,yes,,,,,,,,Nordring,,,Bern,city toilet concept 2010,2026-10-12,"In OSM as n7615164985 with changing_table=yes – nothing to add."
+bern-wc-lorrainepark,no,WC Lorrainepark,amenity=toilets,46.95573,7.44493,yes,,,,,,,,Lorrainestrasse,7a,3013,Bern,city toilet concept 2010,2026-10-12,"In OSM as n2381160438 with changing_table=yes – nothing to add."

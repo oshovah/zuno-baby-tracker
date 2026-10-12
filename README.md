@@ -574,6 +574,18 @@ auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
   schreibt `public/map/pois.json` (~160 KB, gitignored; fährt mit jedem Build
   mit, die Karte zeigt das Datum). `scripts/map-data.mjs`; die Normalisierung
   und die Wortwahl sind pur in `src/mapdata.js` (node-getestet).
+- **Ergänzungen**: `scripts/map/extra-places.csv` hält die wenigen Orte, die
+  OpenStreetMap (noch) nicht kennt – eine Zeile je Ort, die Spalten sind
+  OSM-Schlüssel (`changing_table`, `baby_feeding`, `level` …) plus `use`
+  (yes/no), Quelle, Prüfdatum und Notiz. `npm run map:data` fragt Overpass,
+  was an der Stelle schon steht (ein Objekt derselben Art, 30 m bei einem
+  Punkt, 60 m bei einer Fläche): trägt es den Tag schon, bleibt OSM die
+  Quelle («covered»); fehlt er, bekommt das OSM-Objekt die Angaben der Zeile
+  («merged», der OSM-Link bleibt); steht dort nichts, wird ein eigener Punkt
+  angelegt («added», ohne OSM-Link). Räume, die nur Angehörigen einer
+  Institution offenstehen, gehören nicht hinein. Der bessere Ort für jede
+  Zeile ist OpenStreetMap selbst – dort eingetragen, wird sie beim nächsten
+  Lauf «covered».
 - **Hintergrundkarte**: `npm run map:basemap -- --build YYYYMMDD` schneidet mit
   der `pmtiles`-CLI (`brew install pmtiles`) aus dem täglichen Protomaps-
   Planet-Build ein Archiv für dieselbe Box (Zoom 0–14, ~570 MB; `--maxzoom 15`
