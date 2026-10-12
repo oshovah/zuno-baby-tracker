@@ -75,6 +75,8 @@ export function propsFromTags(tags) {
   const p = {};
   const name = clean(tags.name, 120) || clean(tags.brand, 80);
   if (name) p.name = name;
+  const op = clean(tags.operator, 80); // who runs a nameless toilet: the city, the restaurant it is in
+  if (op) p.op = op;
   for (const key of CLASS_KEYS) {
     const v = clean(tags[key], 40);
     if (v && v !== 'yes') {
@@ -162,10 +164,12 @@ export function filterKind(features, kind) {
   return features.filter((f) => f.properties && f.properties[flag]);
 }
 
-/** The sheet's title: the place's name, else what it is («Öffentliches WC»). */
+/** The sheet's title: the place's name, else what it is («Öffentliches WC»)
+ *  — with who runs it when OSM knows («Öffentliches WC · Stadt Bern»). */
 export function poiTitle(p) {
   if (p && p.name) return p.name;
-  return classLabel(p && p.cls);
+  const what = classLabel(p && p.cls);
+  return p && p.op ? `${what} · ${p.op}` : what;
 }
 
 /** «Restaurant», «Bahnhof» … for an OSM class value, «Ort» for the rest. */
@@ -208,6 +212,7 @@ export function poiLines(p) {
     lines.push({ kind: 'nursing', text: t(p.bf === 'room' ? 'map.nursing.room' : 'map.nursing.yes') });
     if (p.bff) lines.push({ kind: 'info', text: t('map.nursing.female') });
   }
+  if (p.op && p.name) lines.push({ kind: 'info', text: t('map.operator', { name: p.op }) }); // a nameless place carries it in the title
   if (p.note) lines.push({ kind: 'info', text: p.note }); // a reported place's «wo genau», whatever its kind
   if (p.oh) lines.push({ kind: 'info', text: t('map.opening', { hours: p.oh }) });
   if (p.acc === 'private' || p.acc === 'customers') lines.push({ kind: 'info', text: t(`map.access.${p.acc}`) });

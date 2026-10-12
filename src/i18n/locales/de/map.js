@@ -54,6 +54,7 @@ export default {
   'nursing.yes': 'Platz zum Stillen',
   'nursing.female': 'Nur für Frauen',
   'opening': 'Öffnungszeiten: {hours}',
+  'operator': 'Betrieben von {name}',
   'access.private': 'Nicht öffentlich',
   'access.customers': 'Für Kundschaft',
   'level': 'Etage {n}',

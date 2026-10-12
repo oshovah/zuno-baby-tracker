@@ -54,6 +54,7 @@ export default {
   'nursing.yes': 'A place to nurse',
   'nursing.female': 'Women only',
   'opening': 'Opening hours: {hours}',
+  'operator': 'Run by {name}',
   'access.private': 'Not public',
   'access.customers': 'For customers',
   'level': 'Floor {n}',

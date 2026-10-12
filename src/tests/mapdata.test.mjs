@@ -43,7 +43,7 @@ const OVERPASS = {
         'addr:housenumber': '11', 'addr:postcode': '8001', 'addr:city': 'Zürich', level: '2',
       },
     },
-    { type: 'way', id: 202, center: { lat: 46.948, lon: 7.4474 }, tags: { amenity: 'toilets', changing_table: 'limited', 'changing_table:wheelchair': 'yes', fee: 'yes', access: 'customers' } },
+    { type: 'way', id: 202, center: { lat: 46.948, lon: 7.4474 }, tags: { amenity: 'toilets', changing_table: 'limited', 'changing_table:wheelchair': 'yes', fee: 'yes', access: 'customers', operator: ' Stadt  Bern ' } },
     { type: 'relation', id: 303, center: { lat: 47.05, lon: 8.3 }, tags: { name: 'Stadtbibliothek', amenity: 'library', baby_feeding: 'room', 'baby_feeding:female': 'yes', 'baby_feeding:male': 'no' } },
     { type: 'node', id: 404, lat: 46.2, lon: 6.15, tags: { amenity: 'cafe', changing_table: 'yes', baby_feeding: 'yes', 'changing_table:description': 'Im Gang hinter der Theke  ', level: '-1' } },
     { type: 'node', id: 505, lat: 47.0, lon: 8.0, tags: { amenity: 'toilets', changing_table: 'no' } },
@@ -69,7 +69,7 @@ test('normalizeOverpass: one point per object with a table or a nursing place, c
   });
   const wc = fc.features[3];
   assert.deepEqual(wc.geometry.coordinates, [7.4474, 46.948]); // the way's center
-  assert.deepEqual(wc.properties, { id: 'w202', cls: 'toilets', w: 1, ct: 'limited', wc: 'yes', acc: 'customers' });
+  assert.deepEqual(wc.properties, { id: 'w202', cls: 'toilets', w: 1, ct: 'limited', wc: 'yes', acc: 'customers', op: 'Stadt Bern' });
   const library = fc.features[2];
   assert.deepEqual(library.properties, { id: 'r303', name: 'Stadtbibliothek', cls: 'library', n: 1, bf: 'room', bff: 1 });
   const both = fc.features[1];
@@ -107,6 +107,10 @@ test('kindsOf, pinKind, filterKind', () => {
 test('poiTitle: the name, else what the place is — in German', () => {
   assert.equal(poiTitle({ name: 'Globus', cls: 'department_store' }), 'Globus');
   assert.equal(poiTitle({ cls: 'toilets' }), 'Öffentliches WC');
+  assert.equal(poiTitle({ cls: 'toilets', op: 'Stadt Bern' }), 'Öffentliches WC · Stadt Bern', 'a nameless place names who runs it');
+  assert.equal(poiTitle({ name: 'Lorrainepark', cls: 'toilets', op: 'Stadt Bern' }), 'Lorrainepark', 'a name wins');
+  assert.deepEqual(poiLines({ name: 'Lorrainepark', w: 1, ct: 'yes', op: 'Stadt Bern' }).map((l) => l.text), ['Wickeltisch', 'Betrieben von Stadt Bern']);
+  assert.deepEqual(poiLines({ w: 1, ct: 'yes', op: 'Stadt Bern' }).map((l) => l.text), ['Wickeltisch'], 'no line when the title has it');
   assert.equal(poiTitle({ cls: 'station' }), 'Bahnhof');
   assert.equal(poiTitle({ cls: 'some_unknown_value' }), 'Ort');
   assert.equal(poiTitle({}), 'Ort');
@@ -205,6 +209,8 @@ test('English after setLocale("en"): titles, lines and the distance separator', 
   setLocale('en');
   assert.equal(poiTitle({ cls: 'toilets' }), 'Public toilet');
   assert.equal(poiTitle({ cls: 'nope' }), 'Place');
+  assert.equal(poiTitle({ cls: 'toilets', op: 'Restaurant Kramer' }), 'Public toilet · Restaurant Kramer');
+  assert.equal(poiLines({ name: 'X', w: 1, ct: 'yes', op: 'Stadt Bern' })[1].text, 'Run by Stadt Bern');
   assert.deepEqual(poiLines({ w: 1, loc: 'female_toilet', fee: 'yes' }), [
     { kind: 'changing', text: "Changing table · in the women's toilet" },
     { kind: 'info', text: 'Fee' },
