@@ -1,10 +1,10 @@
 <?php
 /**
- * Schema tests for api/lib/db.php: fresh v5 creation, the v3 -> v4 migration
+ * Schema tests for api/lib/db.php: fresh v6 creation, the v3 -> v4 migration
  * (the legacy_* columns go, every row of a family stays), its refusal of a
  * file that still holds live plaintext, structural detection, the write-once
  * .v3.bak, the read-only fast path, the all-or-nothing transaction and the
- * v4 -> v5 step (the feedback table).
+ * v4 -> v5 and v5 -> v6 steps (the feedback table, the spots table).
  *
  * Every test opens its OWN scratch file through raw PDO (bt_db memoizes one
  * static handle, which api.test.php holds on its shared file); the files are
@@ -209,16 +209,19 @@ const V4_ENTRY_COLUMNS = ['eid', 'family_id', 'seq', 'blob', 'created_at', 'upda
 
 const V5_FEEDBACK_COLUMNS = ['id', 'blob', 'created_at', 'read_at'];
 
-/** The assertions every migrated or created file must satisfy (schema v5). */
+const V6_SPOT_COLUMNS = ['id', 'status', 'lat', 'lon', 'kinds', 'name', 'note', 'created_at', 'decided_at'];
+
+/** The assertions every migrated or created file must satisfy (schema v6). */
 function assert_current_schema(PDO $pdo, string $label = ''): void
 {
     $p = $label !== '' ? $label . ': ' : '';
-    assert_eq(bt_schema_version($pdo), 5, $p . 'stamp');
-    assert_eq(BT_SCHEMA_VERSION, 5);
+    assert_eq(bt_schema_version($pdo), 6, $p . 'stamp');
+    assert_eq(BT_SCHEMA_VERSION, 6);
     assert_eq(db_columns($pdo, 'entries'), V4_ENTRY_COLUMNS, $p . 'entries columns: no column for content');
     assert_eq(db_columns($pdo, 'feedback'), V5_FEEDBACK_COLUMNS, $p . 'feedback columns: no column for the sender');
+    assert_eq(db_columns($pdo, 'spots'), V6_SPOT_COLUMNS, $p . 'spots columns: no column for who reported it');
     assert_false(bt_entries_is_v3(bt_entries_columns($pdo)), $p . 'not detected as v3');
-    foreach (['families', 'users', 'entries', 'auth_tokens', 'settings', 'login_attempts', 'feedback'] as $table) {
+    foreach (['families', 'users', 'entries', 'auth_tokens', 'settings', 'login_attempts', 'feedback', 'spots'] as $table) {
         assert_true(table_exists($pdo, $table), $p . "table $table");
     }
     assert_false(table_exists($pdo, 'entries_v4'), $p . 'no working table left');
@@ -537,7 +540,7 @@ bt_test('bt_db: secure_delete is on and the handle is a v5 database', function (
     $pdo = bt_db(['db_path' => $file]);
     assert_eq((int) $pdo->query('PRAGMA secure_delete')->fetchColumn(), 1, 'secure_delete on');
     assert_eq((int) $pdo->query('PRAGMA busy_timeout')->fetchColumn(), 5000);
-    assert_eq(bt_schema_version($pdo), 5);
+    assert_eq(bt_schema_version($pdo), 6);
     assert_eq(db_columns($pdo, 'entries'), V4_ENTRY_COLUMNS);
     assert_true(bt_db(['db_path' => '/nonexistent/other.db']) === $pdo, 'memoized handle');
 });
@@ -546,12 +549,13 @@ bt_test('bt_db: secure_delete is on and the handle is a v5 database', function (
 // v4 -> v5
 // ---------------------------------------------------------------------------
 
-/** A v4 file: today's schema without the feedback table, stamped 4, with an account and two rows. */
+/** A v4 file: today's schema without the feedback and spots tables, stamped 4, with an account and two rows. */
 function seed_v4_db(PDO $pdo, string $file): void
 {
     bt_create_or_migrate($pdo, $file);
     $pdo->exec(<<<'SQL'
 DROP TABLE feedback;
+DROP TABLE spots;
 UPDATE settings SET value = '4' WHERE key = 'schema_version';
 INSERT INTO families (name, name_key, auth_hash, kdf_salt, kdf_iter, fdk_wrapped, recovery_hash)
   VALUES ('Testfamilie', 'testfamilie', 'H', 'S', 600000, 'W', 'R');
@@ -576,7 +580,8 @@ bt_test('migration v4 -> v5: the feedback table is added, every other table and 
     assert_current_schema($pdo, 'v4 -> v5');
     $after = db_content_dump($pdo);
     assert_eq($after['feedback'], [], 'an empty feedback table');
-    unset($after['feedback']);
+    assert_eq($after['spots'], [], 'an empty spots table (v5 -> v6 in the same run)');
+    unset($after['feedback'], $after['spots']);
     $before['settings'] = array_values(array_filter($before['settings'], function ($r) {
         return $r['key'] !== 'schema_version';
     }));
@@ -608,4 +613,74 @@ bt_test('migration v4 -> v5: the structure decides — a v4 file stamped 5 still
     // as up to date and never touches the table it does not know.
     assert_true(bt_schema_version($pdo) >= 4, 'a v4 release sees an up-to-date file');
     assert_eq(db_columns($pdo, 'entries'), V4_ENTRY_COLUMNS, 'the entries table a v4 release reads is unchanged');
+});
+
+// ---------------------------------------------------------------------------
+// v5 -> v6
+// ---------------------------------------------------------------------------
+
+/** A v5 file: today's schema without the spots table, stamped 5, with an account, two rows and a message. */
+function seed_v5_db(PDO $pdo, string $file): void
+{
+    bt_create_or_migrate($pdo, $file);
+    $pdo->exec(<<<'SQL'
+DROP TABLE spots;
+UPDATE settings SET value = '5' WHERE key = 'schema_version';
+INSERT INTO families (name, name_key, auth_hash, kdf_salt, kdf_iter, fdk_wrapped, recovery_hash)
+  VALUES ('Testfamilie', 'testfamilie', 'H', 'S', 600000, 'W', 'R');
+INSERT INTO users (family_id, username, auth_hash, kdf_salt, kdf_iter, fdk_wrapped)
+  VALUES (1, 'mama', 'H', 'S', 600000, 'W');
+INSERT INTO entries (eid, family_id, seq, blob, created_at, updated_at) VALUES
+  ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01', 1, 1, 'BLOB-1', '2026-09-20', '2026-09-20'),
+  ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa02', 1, 2, 'BLOB-2', '2026-09-21', '2026-09-21');
+INSERT INTO feedback (blob, created_at) VALUES ('SEALED', '2026-09-27');
+SQL);
+}
+
+bt_test('migration v5 -> v6: the spots table is added, every other table and row untouched, no backup; the second run is a pure read', function () {
+    $file = scratch_path();
+    $pdo = open_scratch_db($file);
+    seed_v5_db($pdo, $file);
+    assert_false(table_exists($pdo, 'spots'), 'fixture: a v5 file');
+    assert_true(table_exists($pdo, 'feedback'), 'fixture: a v5 file has the feedback table');
+    $before = db_content_dump($pdo);
+    $feed = db_setting($pdo, 'feed_id');
+
+    bt_create_or_migrate($pdo, $file);
+
+    assert_current_schema($pdo, 'v5 -> v6');
+    $after = db_content_dump($pdo);
+    assert_eq($after['spots'], [], 'an empty spots table');
+    unset($after['spots']);
+    $before['settings'] = array_values(array_filter($before['settings'], function ($r) {
+        return $r['key'] !== 'schema_version';
+    }));
+    $after['settings'] = array_values(array_filter($after['settings'], function ($r) {
+        return $r['key'] !== 'schema_version';
+    }));
+    assert_eq($after, $before, 'entries, accounts, the message and settings unchanged (seq, blob, feed_id: no phone resyncs)');
+    assert_eq(db_setting($pdo, 'feed_id'), $feed);
+    assert_false(is_file($file . '.v5.bak') || is_file($file . '.v3.bak'), 'adding a table needs no backup');
+    assert_second_run_noop($pdo, $file, 'v6, second run');
+});
+
+bt_test('migration v5 -> v6: the structure decides — a v5 file stamped 6 still gets the table; a v6 file stamped 5 is only re-stamped', function () {
+    $file = scratch_path();
+    $pdo = open_scratch_db($file);
+    seed_v5_db($pdo, $file);
+    $pdo->exec("UPDATE settings SET value = '6' WHERE key = 'schema_version'");
+    bt_create_or_migrate($pdo, $file);
+    assert_current_schema($pdo, 'v5 structure, stamp 6');
+
+    $pdo->exec("INSERT INTO spots (status, lat, lon, kinds, name, note, created_at) VALUES ('pending', 46.948, 7.4479, 'changing', 'WC', '', '2026-10-12')");
+    $content = db_content_dump($pdo);
+    $pdo->exec("UPDATE settings SET value = '5' WHERE key = 'schema_version'");
+    bt_create_or_migrate($pdo, $file);
+    assert_current_schema($pdo, 'v6 structure, stamp 5');
+    assert_eq(db_content_dump($pdo), $content, 'the report survives, nothing but the stamp moved');
+
+    // An older release (stamp check >= 5 and the feedback table) takes the v6
+    // file as up to date and never touches the table it does not know.
+    assert_true(bt_schema_version($pdo) >= 5 && table_exists($pdo, 'feedback'), 'a v5 release sees an up-to-date file');
+    assert_eq(db_columns($pdo, 'feedback'), V5_FEEDBACK_COLUMNS, 'the feedback table a v5 release reads is unchanged');
 });

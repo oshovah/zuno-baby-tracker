@@ -22,12 +22,22 @@
 // under Mehr › Einstellungen › Karte, which then wins over the last view —
 // and whether the strip of nearest places is folded away. The last view is
 // written to prefs on every move: the settings take it as the start view.
+//
+// Reported places (store.spots, src/spots.js): the approved list is laid
+// over the OSM file whenever the store says it moved (every sync notifies).
+// «Ort melden» puts the view into picking mode — a crosshair in the middle,
+// the strip replaced by a bar with «Hier melden» — and opens the form on
+// the map centre (spots-sheet.js). The operator's list can send the map
+// here with a view to open on (takeMapFocus, consumed once).
 
-import { prefs } from '../store.js';
+import { store, prefs } from '../store.js';
 import { t, getLocale, localeMeta } from '../i18n/index.js';
 import { escapeHtml, icon, toast } from '../ui.js';
 import { openSheet } from '../sheet.js';
 import { filterKind, nearest, distanceLabel, poiTitle, poiLines, pinKind, osmUrl, mapFlavor } from '../mapdata.js';
+import { loadJson, loadPois } from '../pois.js';
+import { withSpots, takeMapFocus, SPOT_PICK_MIN_ZOOM } from '../spots.js';
+import { openSpotForm } from '../spots-sheet.js';
 
 const FILTERS = ['all', 'changing', 'nursing'];
 const STRIP_ROWS = 3;
@@ -35,38 +45,12 @@ const LIST_ROWS = 10;
 
 const CHEVRON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>`;
 const LOCATE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="6.5" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /><path d="M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5" /></svg>`;
+const SUGGEST_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0c0 4.9-6.5 10.5-6.5 10.5z" /><path d="M12 8v6M9 11h6" /></svg>`;
 
-let poisPromise = null; // the places file, once per app session
 let indexPromise = null; // basemap/index.json, once (null = not set up on this server)
 let lastView = null; // {lon, lat, zoom} of the last visit
 let lastMe = null; // {lon, lat} of the last fix
 let filter = 'all';
-
-function loadJson(url) {
-  return fetch(url).then((res) => {
-    if (!res.ok) {
-      const err = new Error(`HTTP ${res.status}`);
-      err.status = res.status;
-      throw err;
-    }
-    return res.json();
-  });
-}
-
-function loadPois() {
-  if (!poisPromise) {
-    poisPromise = loadJson('map/pois.json')
-      .then((fc) => {
-        if (!fc || !Array.isArray(fc.features)) throw new Error('not a places file');
-        return fc;
-      })
-      .catch((err) => {
-        poisPromise = null; // try again on the next visit
-        throw err;
-      });
-  }
-  return poisPromise;
-}
 
 function loadBasemapIndex() {
   if (!indexPromise) {
@@ -116,7 +100,7 @@ function detailHtml(feature, me, withTitle) {
       ${lines.map((l) => `<li class="${l.kind === 'info' ? '' : 'kind'}">${l.kind === 'info' ? '' : `${kindIcon(l.kind)} `}${escapeHtml(l.text)}</li>`).join('')}
     </ul>
     ${dist !== null ? `<p class="hint">${escapeHtml(t('map.distance', { d: distanceLabel(dist) }))}</p>` : ''}
-    <p class="hint">${escapeHtml(t('map.missing.hint'))}</p>
+    ${p.src === 'app' ? '' : `<p class="hint">${escapeHtml(t(store.spots.on ? 'map.missing.hintSpots' : 'map.missing.hint'))}</p>`}
     <div class="poi-actions" data-lon="${c[0]}" data-lat="${c[1]}">
       <button type="button" class="btn small" data-show-on-map>${escapeHtml(t('map.showOnMap'))}</button>
       ${link ? `<a class="btn small" href="${escapeHtml(link)}" target="_blank" rel="noopener">${escapeHtml(t('map.osmLink'))}</a>` : ''}
@@ -139,6 +123,13 @@ export function renderMap(el) {
       </div>
       <div class="map-side">
         <button type="button" class="map-fab" data-locate aria-label="${escapeHtml(t('map.locate'))}">${LOCATE_SVG}</button>
+        <button type="button" class="map-fab" data-suggest aria-label="${escapeHtml(t('spots.fab'))}" hidden>${SUGGEST_SVG}</button>
+      </div>
+      <div class="map-cross" aria-hidden="true"></div>
+      <div class="map-pick" data-pick hidden>
+        <p data-pick-hint></p>
+        <button type="button" class="btn" data-pick-cancel>${escapeHtml(t('spots.pick.cancel'))}</button>
+        <button type="button" class="btn primary" data-pick-here>${escapeHtml(t('spots.pick.here'))}</button>
       </div>
       <p class="map-notice" data-notice>${escapeHtml(t('map.loading'))}</p>
       <p class="map-hint" data-hint hidden>${escapeHtml(t('map.zoomIn'))}</p>
@@ -162,10 +153,17 @@ export function renderMap(el) {
   const foldBtn = el.querySelector('[data-fold]');
   const dateEl = el.querySelector('[data-date]');
   const locateBtn = el.querySelector('[data-locate]');
+  const suggestBtn = el.querySelector('[data-suggest]');
+  const pickEl = el.querySelector('[data-pick]');
+  const pickHint = el.querySelector('[data-pick-hint]');
+  const hereBtn = el.querySelector('[data-pick-here]');
 
   let gone = false;
   let engine = null;
-  let all = []; // every place
+  let fc = null; // the places file, once loaded
+  let all = []; // every place: the file plus the approved reports
+  let spotsKey = null; // which list of reports `all` was built with
+  let picking = false; // «Ort melden»: the crosshair is up
   let me = lastMe;
   const darkMedia = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -203,6 +201,42 @@ export function renderMap(el) {
     });
     if (engine) engine.setPois(shown());
     renderStrip();
+  }
+
+  /** The places: the file plus the approved reports (store.spots), re-laid
+   *  when the list moved — every sync notifies, most say "same as before". */
+  function applySpots() {
+    if (!fc) return;
+    const key = store.spots.on ? `${store.spots.version}:${store.spots.items.length}` : 'off';
+    if (key === spotsKey) return;
+    spotsKey = key;
+    all = withSpots(fc.features, store.spots.on ? store.spots.items : []);
+    el.dataset.pois = String(all.length);
+    el.dataset.spots = String(all.length - fc.features.length);
+    if (engine) engine.setPois(shown());
+    renderStrip();
+    suggestBtn.hidden = !(store.spots.on && engine); // reporting needs the map (the crosshair)
+  }
+
+  // --- «Ort melden»: the crosshair marks the map centre; «Hier melden» needs
+  //     a close zoom, so the cross sits on a door, not on a block ---
+  function syncPick() {
+    if (!picking || !engine) return;
+    const ok = engine.getView().zoom >= SPOT_PICK_MIN_ZOOM;
+    hereBtn.disabled = !ok;
+    pickHint.textContent = t(ok ? 'spots.pick.hint' : 'spots.pick.zoom');
+  }
+  function enterPick() {
+    if (!engine || picking) return;
+    picking = true;
+    el.classList.add('picking');
+    pickEl.hidden = false;
+    syncPick();
+  }
+  function exitPick() {
+    picking = false;
+    el.classList.remove('picking');
+    pickEl.hidden = true;
   }
 
   /** Centre the map on a place (when there is a map). */
@@ -289,6 +323,13 @@ export function renderMap(el) {
   locateBtn.addEventListener('click', () => {
     locate();
   });
+  suggestBtn.addEventListener('click', enterPick);
+  el.querySelector('[data-pick-cancel]').addEventListener('click', exitPick);
+  hereBtn.addEventListener('click', () => {
+    if (!engine || !picking) return;
+    const v = engine.getView();
+    openSpotForm({ lon: v.lon, lat: v.lat, onSent: exitPick });
+  });
   el.querySelector('[data-nearby]').addEventListener('click', async () => {
     if (!all.length) return;
     if (!me && !(await locate())) return;
@@ -307,9 +348,11 @@ export function renderMap(el) {
     if (engine) engine.setFlavor(flavor());
   };
   if (darkMedia && darkMedia.addEventListener) darkMedia.addEventListener('change', onScheme);
+  const unsubscribe = store.subscribe(() => {
+    if (!gone) applySpots();
+  });
 
   (async () => {
-    let fc;
     try {
       fc = await loadPois();
     } catch {
@@ -317,11 +360,9 @@ export function renderMap(el) {
       return;
     }
     if (gone) return;
-    all = fc.features;
-    el.dataset.pois = String(all.length);
+    applySpots();
     if (fc.generated) dateEl.textContent = ` · ${t('map.data.date', { date: fmtDay(fc.generated) })}`;
     if (me) locateBtn.classList.add('on');
-    renderStrip();
 
     let index;
     try {
@@ -349,13 +390,14 @@ export function renderMap(el) {
         flavor: flavor(),
         lang: getLocale(),
         bounds: Array.isArray(index.bbox) && index.bbox.length === 4 ? index.bbox : fc.bbox,
-        view: prefs.mapStart || lastView, // the phone's start view wins; else where this visit left off
+        view: takeMapFocus() || prefs.mapStart || lastView, // «Auf der Karte zeigen» first, then the phone's start view, else where this visit left off
         reducedMotion,
         onMove: ({ pinsShown }) => {
           hintEl.hidden = pinsShown;
           if (engine) {
             lastView = engine.getView();
             prefs.mapView = lastView; // the settings offer it as the start view
+            if (picking) syncPick();
           }
         },
         onPoiTap: openPoi,
@@ -367,11 +409,14 @@ export function renderMap(el) {
     notice('');
     engine.setPois(shown());
     if (me) engine.setMe(me.lon, me.lat);
+    suggestBtn.hidden = !store.spots.on;
     el.dataset.mapState = 'ready';
   })();
 
   return () => {
     gone = true;
+    unsubscribe();
+    exitPick();
     if (darkMedia && darkMedia.removeEventListener) darkMedia.removeEventListener('change', onScheme);
     document.body.classList.remove('map-open');
     if (engine) {

@@ -15,6 +15,15 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-10-12-b',
+    de: [
+      'Neu auf der Karte: «Ort melden». Fehlt ein Wickeltisch oder ein Platz zum Stillen, schieb die Karte, bis das Kreuz auf dem Ort steht, und sag, was es dort gibt – ohne deinen Namen. Die Person, die Zuno betreibt, prüft die Meldung; danach sehen den Ort alle.',
+    ],
+    en: [
+      'New on the map: "Report a place". If a changing table or a place to nurse is missing, move the map until the cross sits on the place and say what is there – without your name. The person running Zuno checks the report; then everyone sees the place.',
+    ],
+  },
+  {
     id: '2026-10-12',
     de: [
       'Neu: der Tab «Karte» zeigt Wickeltische und Still-Orte in der Schweiz – aus OpenStreetMap, von unserem eigenen Server. «Mein Standort» holt die Position, darunter stehen die drei nächsten Orte, «In der Nähe» listet zehn; ein Tipp auf einen Punkt sagt, wo genau der Tisch ist und was es dort gibt.',

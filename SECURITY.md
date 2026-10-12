@@ -19,7 +19,8 @@ In scope:
 
 - the client crypto and key handling (`src/crypto.js`, `src/session.js`,
   `src/keys.js`, `src/store.js`)
-- the API: auth values, throttling, family isolation, the sync cursor (`api/`)
+- the API: auth values, throttling, family isolation, the sync cursor, the
+  operator-only routes (feedback inbox, usage counts, reported places) (`api/`)
 - the packaged security headers and the service worker
   (`scripts/package.mjs`, `public/sw.js`)
 

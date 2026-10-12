@@ -3201,6 +3201,160 @@ body.map-open {
   text-decoration: none; /* the link to OpenStreetMap dressed as a button */
 }
 
+/* «Ort melden» (views/map.js): the crosshair over the map centre while
+ * picking, the bar that replaces the strip; the strip, the side buttons and
+ * the zoom hint step out of the way meanwhile. */
+.map-cross {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.map-cross::before,
+.map-cross::after {
+  content: '';
+  position: absolute;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.map-cross::before {
+  left: 14px;
+  top: 0;
+  width: 2px;
+  height: 30px;
+}
+
+.map-cross::after {
+  top: 14px;
+  left: 0;
+  width: 30px;
+  height: 2px;
+}
+
+.map-view.picking .map-cross {
+  display: block;
+}
+
+.map-view.picking .map-strip,
+.map-view.picking .map-side,
+.map-view.picking .map-hint {
+  display: none;
+}
+
+.map-pick {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+}
+
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+  .map-pick {
+    background: var(--bg);
+  }
+}
+
+.map-pick[hidden] {
+  display: none;
+}
+
+.map-pick p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.map-pick .btn {
+  flex: 1;
+}
+
+/* The report form (spots-sheet.js): the kind chips in a row. */
+.spot-form .chip-row .chip {
+  display: inline-flex;
+  align-items: center;
+}
+
+.spot-form [data-count] {
+  float: right;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.spot-form [data-count].over {
+  color: var(--danger);
+}
+
+/* The operator's list of reported places (spots-sheet.js). */
+.spots-list .section-title {
+  margin-top: 14px;
+}
+
+.spots-list .section-title:first-child {
+  margin-top: 0;
+}
+
+.spot-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.spot-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.spot-kinds {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.spot-when {
+  margin-left: auto;
+}
+
+.spot-name {
+  margin: 0 0 4px;
+}
+
+.spot-noname {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.spot-note {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.spot-near {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
 /* «Startansicht: …» in the settings' «Karte» section */
 .setting-value {
   margin: 4px 2px 0;

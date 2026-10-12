@@ -19,7 +19,8 @@
  *                         <app root>/private-art (gitignored). Dev/tests:
  *                         BABY_ART_DIR.
  *   admin_username        string|null  the account that reads the parents'
- *                         feedback (lib/feedback.php); null = feedback off.
+ *                         feedback (lib/feedback.php) and curates the places
+ *                         they report on the map (lib/spots.php); null = both off.
  *                         Packaging takes it from ADMIN_USERNAME in .env; in
  *                         dev the BABY_ADMIN_USER environment variable sets it.
  *

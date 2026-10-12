@@ -9,7 +9,9 @@
 // (yes | room) for a place to nurse. Every string a parent reads goes
 // through t() at call time; the raw OSM values travel in the properties.
 // A few places OSM does not know (yet) come from scripts/map/extra-places.csv
-// (parseExtraRow, mergeExtras: matched against what OSM has at that spot).
+// (parseExtraRow, mergeExtras: matched against what OSM has at that spot),
+// and the ones parents report in the app (src/spots.js) carry `note` and
+// `src: 'app'` on top of the props below — poiLines words those too.
 
 import { t, hasKey, localeMeta } from './i18n/index.js';
 
@@ -206,10 +208,12 @@ export function poiLines(p) {
     lines.push({ kind: 'nursing', text: t(p.bf === 'room' ? 'map.nursing.room' : 'map.nursing.yes') });
     if (p.bff) lines.push({ kind: 'info', text: t('map.nursing.female') });
   }
+  if (p.note) lines.push({ kind: 'info', text: p.note }); // a reported place's «wo genau», whatever its kind
   if (p.oh) lines.push({ kind: 'info', text: t('map.opening', { hours: p.oh }) });
   if (p.acc === 'private' || p.acc === 'customers') lines.push({ kind: 'info', text: t(`map.access.${p.acc}`) });
   if (p.lvl) lines.push({ kind: 'info', text: /^-/.test(p.lvl) ? t('map.level.basement') : t('map.level', { n: p.lvl }) });
   if (p.addr) lines.push({ kind: 'info', text: p.addr });
+  if (p.src === 'app') lines.push({ kind: 'info', text: t('map.spot.source') });
   return lines;
 }
 

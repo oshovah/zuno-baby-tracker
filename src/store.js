@@ -60,6 +60,13 @@
 // every sync page and reads the inbox through store.feedback.inbox(), which
 // sets the inbox key up on first use (the private half sealed under the FDK).
 //
+// Reported map places (store.spots, src/spots.js): a report goes up at once
+// (never queued, like feedback). With an operator configured every sync
+// page carries the version of the approved list; the store fetches the
+// list on a change and keeps it in localStorage ('bt.spots') for the map's
+// first paint and for offline — the service worker never caches /api/. The
+// operator's pages also count what waits (spotsPending: the dot on Mehr).
+//
 // `createStore(deps)` builds an instance from injectable dependencies so the
 // sync/write logic runs under `node --test` with a fake api/db; the default
 // export is the real one.
@@ -115,6 +122,7 @@ import {
   DEFAULT_FAMILY_SETTINGS,
   FAMILY_SETTING_KEYS,
 } from './model.js';
+import { cleanSpot, spotDraftError, buildSpot, SPOT_NAME_MAX, SPOT_NOTE_MAX } from './spots.js';
 
 const STATE_KEY = 'bt.state';
 // Stamp of the cached snapshot's shape. A cache written by an older shell
@@ -125,6 +133,9 @@ const IDENTITY_KEY = 'bt.identity';
 // Feedback as the last sync page told it ({on, unread}), kept for the first
 // paint (the section under Anleitung, the operator's dot).
 const FB_KEY = 'bt.feedback';
+// The reported places as the last sync left them ({on, version, items,
+// pending}): the map paints the approved list from here, online or not.
+const SPOTS_KEY = 'bt.spots';
 const POLL_MS = 60000;
 export const STALE_AFTER_MS = 2 * 60000;
 
@@ -163,6 +174,27 @@ function loadFeedbackState(storage) {
     /* unreadable: as if nothing was kept */
   }
   return { on: false, unread: null };
+}
+
+function emptySpots() {
+  return { on: false, version: 0, items: [], pending: null };
+}
+
+function loadSpotsState(storage) {
+  try {
+    const kept = JSON.parse(storage.getItem(SPOTS_KEY) || 'null');
+    if (kept && typeof kept === 'object') {
+      return {
+        on: kept.on === true,
+        version: Number.isInteger(kept.version) && kept.version >= 0 ? kept.version : 0,
+        items: Array.isArray(kept.items) ? kept.items.map(cleanSpot).filter(Boolean) : [],
+        pending: Number.isInteger(kept.pending) && kept.pending >= 0 ? kept.pending : null,
+      };
+    }
+  } catch {
+    /* unreadable: as if nothing was kept */
+  }
+  return emptySpots();
 }
 
 function memoryStorage() {
@@ -551,6 +583,7 @@ export function createStore(deps) {
   let artKey = null; // … and the installation's capability key for the install icon (members only)
   let feedbackState = loadFeedbackState(storage); // {on: an inbox exists, unread: the operator's count | null}
   let inboxKey = null; // {sealed, privateKey, publicJwk}: the opened inbox key (operator only)
+  let spotsState = loadSpotsState(storage); // the reported places (src/spots.js): {on, version, items, pending}
 
   // The outbox (src/outbox.js): ops still to send, oldest first, `plain`
   // decrypted in memory. Bookkeeping for judging them against the confirmed
@@ -758,6 +791,7 @@ export function createStore(deps) {
     artKey = null;
     feedbackState = { on: false, unread: null };
     inboxKey = null;
+    spotsState = emptySpots();
     snapshot = null;
     lastSyncTs = 0;
     lastDataKey = null;
@@ -775,6 +809,7 @@ export function createStore(deps) {
       storage.removeItem(STATE_KEY);
       storage.removeItem(IDENTITY_KEY);
       storage.removeItem(FB_KEY);
+      storage.removeItem(SPOTS_KEY);
     } catch {
       /* ignore */
     }
@@ -1030,6 +1065,8 @@ export function createStore(deps) {
       let since = cursor;
       let resets = 0;
       let changed = false;
+      let spotsVersion = null; // the approved places' version the server holds (null: no operator → feature off)
+      let spotsPending = null; // what waits for the operator (this account's pages only)
       for (;;) {
         const page = await api.get(`api/sync?since=${since}&limit=${SYNC_LIMIT}`, {
           timeoutMs: SYNC_TIMEOUT_MS,
@@ -1048,6 +1085,8 @@ export function createStore(deps) {
         // Whether there is an inbox to write to; only the operator's pages
         // count its unread messages.
         setFeedbackState(page.feedback === true, page.feedbackUnread);
+        spotsVersion = Number.isInteger(page.spots) && page.spots >= 0 ? page.spots : null;
+        spotsPending = Number.isInteger(page.spotsPending) && page.spotsPending >= 0 ? page.spotsPending : null;
         const pageFeed = typeof page.feed === 'string' && page.feed !== '' ? page.feed : null;
         if (pageFeed && feed && pageFeed !== feed) {
           // Another database behind the same URL (restored backup, re-run
@@ -1099,6 +1138,21 @@ export function createStore(deps) {
         if (page.next == null) break;
         since = Number(page.next);
         if (!Number.isFinite(since)) throw fail(t('errors.store.badPage'), 502);
+      }
+      // Reported places: fetch the approved list when its version moved; a
+      // failed fetch is tried again on the next sync (the versions still differ).
+      if (spotsVersion === null) {
+        if (spotsState.on) setSpotsState(emptySpots());
+      } else {
+        setSpotsState({ ...spotsState, on: true, pending: spotsPending });
+        if (spotsVersion !== spotsState.version) {
+          try {
+            await refreshSpots();
+          } catch (err) {
+            if (gen !== generation) throw err;
+          }
+          assertCurrent();
+        }
       }
       lastSyncTs = Date.now();
       lastError = null;
@@ -1884,6 +1938,100 @@ export function createStore(deps) {
     },
   };
 
+  // --- reported map places (api/lib/spots.php, src/spots.js) ------------------
+
+  function setSpotsState(next) {
+    spotsState = next;
+    try {
+      storage.setItem(SPOTS_KEY, JSON.stringify(spotsState));
+    } catch {
+      /* best effort: the first paint and offline */
+    }
+  }
+
+  /** GET the approved list; the sync page's version decides when (runSync). */
+  async function refreshSpots() {
+    const res = await api.get('api/spots');
+    if (!res || typeof res !== 'object' || !Number.isInteger(res.version) || !Array.isArray(res.items)) {
+      throw fail(t('errors.store.badPage'), 502);
+    }
+    setSpotsState({ ...spotsState, on: true, version: res.version, items: res.items.map(cleanSpot).filter(Boolean) });
+  }
+
+  const spots = {
+    /** Reporting is on: an operator is configured (the last sync page said so). */
+    get on() {
+      return spotsState.on;
+    },
+
+    /** The version of the approved list this phone holds. */
+    get version() {
+      return spotsState.version;
+    },
+
+    /** The approved places, as the map lays them over the OpenStreetMap file. */
+    get items() {
+      return spotsState.items;
+    },
+
+    /** Reports waiting for a decision; null on every phone but the operator's. */
+    get pending() {
+      return spotsState.pending;
+    },
+
+    /** The operator curates: this account's sync pages count what waits. */
+    get isCurator() {
+      return spotsState.pending !== null;
+    },
+
+    /** A parent's report {lat, lon, kinds, name, note}: sent at once, never queued. */
+    async suggest(draft) {
+      const error = spotDraftError(draft);
+      if (error) throw fail(t(error, { max: error === 'spots.form.errorName' ? SPOT_NAME_MAX : SPOT_NOTE_MAX }));
+      await api.post('api/spots', buildSpot(draft));
+    },
+
+    /** Fetch the approved list now (the sync does it on a version change). */
+    async refresh() {
+      await refreshSpots();
+      notify(false);
+    },
+
+    /** The operator's open reports, oldest first. Rejects for everyone else (404). */
+    async pendingList() {
+      const res = await api.get('api/spots/pending');
+      if (!res || typeof res !== 'object' || !Array.isArray(res.items)) throw fail(t('errors.store.badPage'), 502);
+      const items = res.items.map(cleanSpot).filter(Boolean);
+      if (spotsState.pending !== null && spotsState.pending !== items.length) {
+        setSpotsState({ ...spotsState, pending: items.length });
+        notify(false);
+      }
+      return items;
+    },
+
+    /** Correct and/or approve a report: `patch` = {approve?: true, name?, note?, kinds?}. Returns the row as the server has it now. */
+    async save(item, patch) {
+      const spot = cleanSpot(await api.patch(`api/spots/${Number(item.id)}`, patch));
+      if (!spot) throw fail(t('errors.store.badPage'), 502);
+      if (spotsState.pending !== null && item.status !== 'approved' && spot.status === 'approved') {
+        setSpotsState({ ...spotsState, pending: Math.max(0, spotsState.pending - 1) });
+      }
+      if (spot.status === 'approved') await refreshSpots();
+      notify(false);
+      return spot;
+    },
+
+    /** Reject a pending report or withdraw an approved place (for good). */
+    async remove(item) {
+      await api.del(`api/spots/${Number(item.id)}`);
+      if (spotsState.pending !== null && item.status !== 'approved') {
+        setSpotsState({ ...spotsState, pending: Math.max(0, spotsState.pending - 1) });
+      }
+      if (item.status === 'approved') await refreshSpots();
+      notify(false);
+    },
+  };
+
   const settings = {
     /** The values that apply on this phone: family row over this device's
      *  older per-device values over the defaults. Works from the cached
@@ -2041,6 +2189,7 @@ export function createStore(deps) {
     entries,
 
     settings,
+    spots,
 
     feedback,
 

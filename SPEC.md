@@ -23,7 +23,8 @@ Built for cheap shared hosting — PHP and SQLite, no service to run:
   presentation, the drinking-target rule, reminders, validation, timezone,
   the ui helpers, store/sync, the chart figures and their SVG builders, the
   languages and API error codes, the release notes, private artwork, the
-  screenshot list, the offline export tool).
+  screenshot list, the offline export tool, the map's places and the
+  reported places).
 - Deploy: `scripts/package.mjs` + `scripts/deploy.mjs` (rsync/sftp/ftp,
   never touches remote `data/`).
 - Config/credentials via gitignored `.env` (see `.env.example`).
@@ -45,8 +46,9 @@ logged in for months), backed by revocable DB tokens bound to a user.
 Deliberately minimal: no registration gate, no admin panel, no e-mail —
 abuse is bounded instead: per-address and per-target attempt budgets, a
 per-address write budget and row caps per family and in total. The one
-account named in the config (`ADMIN_USERNAME`) reads the parents' feedback
-and a few usage counts, nothing more: it has no power over anybody's data.
+account named in the config (`ADMIN_USERNAME`) reads the parents' feedback,
+curates the places they report for the map and sees a few usage counts,
+nothing more: it has no power over anybody's data.
 
 **End-to-end encrypted.** The database alone reveals nothing usable: every
 entry (type, times, amounts, names) is one AES-GCM blob encrypted on the
@@ -55,8 +57,9 @@ under a key derived from the family password (so a new member can join) and
 under a key derived from each member's own password (so login on a new
 device unlocks the data). Passwords never reach the server — the client sends
 a derived auth value that is bcrypted there. The server stores usernames,
-family names, wrapped keys, salts and day-granular row dates; it computes
-nothing. The phone derives the home screen and history from its decrypted
+family names, wrapped keys, salts and day-granular row dates — and, in the
+clear, the map places parents report (public map data with no link to an
+account); it computes nothing. The phone derives the home screen and history from its decrypted
 local copy.
 
 Recovery is the user's job: forgot the own password → register a new
@@ -333,8 +336,16 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
     Karte (`prefs.mapStart`, taken from the last view `prefs.mapView`); a tap on a pin opens the place (where the table is, fee,
     wheelchair, hours, address, the link to OpenStreetMap). No third-party
     request: the CSP stays as it is. Pure: `src/mapdata.js`.
+    **Ort melden** (with an operator configured): a crosshair on the map
+    centre (from zoom 15), what is there, a name, where exactly — sent
+    without a name, stored pending in the clear (`spots`), curated by the
+    operator under Mehr › Anleitung («Gemeldete Orte»: approve, correct,
+    reject, withdraw; the nearest known place as a duplicate warning).
+    Approved places come with `GET /api/spots`, are laid over the OSM file on
+    every phone and kept in `localStorage` for offline; a version on the sync
+    page says when to refetch. Pure: `src/spots.js`.
 
-## Data model (schema v5)
+## Data model (schema v6)
 
 - `families` (id, name, name_key UNIQUE — case-folded, auth_hash = bcrypt of
   the family auth value, kdf_salt, kdf_iter, fdk_wrapped — the family data key
@@ -360,7 +371,7 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
   token every sync page carries as `feed`; a file created anew gets a new
   one, so phones drop a mirror that belongs to another file)
 - `login_attempts` (ip, fails, window_start) — every attempt budget: per
-  address (`<ip>`, `reg:<ip>`, `write:<ip>`, `fb:<ip>`) and per target
+  address (`<ip>`, `reg:<ip>`, `write:<ip>`, `fb:<ip>`, `spot:<ip>`) and per target
   (`user:<name>`, `family:<name key>`); the key prefix picks the budget
 - `feedback` (id, blob — a message sealed to the operator's inbox key,
   created_at DATE, read_at DATE) — no sender column; inside the blob `{v: 2,
@@ -368,6 +379,11 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
   | null, sentAt, app | null}`. The inbox key: `settings.feedback_pub` (the
   public JWK) and `settings.feedback_priv` (the private JWK sealed under the
   operator's family data key)
+- `spots` (id, status pending | approved, lat, lon, kinds — a comma list from
+  `changing, nursing` —, name, note, created_at DATE, decided_at DATE) — the
+  places parents report on the map, in the clear (public map data), no
+  sender column. `settings.spots_version` counts changes to the approved
+  rows and travels on the sync page
 
 One baby only — no `babies` table until reality demands it.
 
@@ -390,6 +406,13 @@ One baby only — no `babies` table until reality demands it.
   (once), `GET /feedback?before=`, `PATCH /feedback/:id {read}`, `DELETE
   /feedback/:id` (for good), `GET /stats` (usage counts). Sync pages carry
   `feedback: true` when an inbox exists and, for the operator, `feedbackUnread`
+- reported places: `POST /spots {lat, lon, kinds, name?, note?}` (pending, no
+  sender stored; `spot:<ip>` 10 / hour, 200 open / 5000 rows; 404 without an
+  operator), `GET /spots` → `{version, items}` (the approved places); the
+  operator only — everyone else the same 404 —: `GET /spots/pending`,
+  `PATCH /spots/:id {approve?, name?, note?, kinds?}`, `DELETE /spots/:id`
+  (reject or withdraw, for good). Sync pages carry `spots` (the version)
+  with an operator configured and, for the operator, `spotsPending`
 - `GET /art/<name>`: private artwork. The repo ships its own icon set
   (`public/img/`, drawn by `scripts/make-icons.mjs`); an installation may keep
   other pictures in the gitignored `private-art/` and name ONE family
@@ -411,7 +434,7 @@ One baby only — no `babies` table until reality demands it.
 - Push notifications (the reminders are in-app only: the home screen shows
   what is due, nothing rings)
 - Multiple babies, roles/permissions (every family member is equal; the
-  feedback operator only reads feedback), admin panel, e-mail / server-side password reset (impossible by design: the
+  operator only reads feedback and curates reported places), admin panel, e-mail / server-side password reset (impossible by design: the
   server holds no key)
 - Native app
 

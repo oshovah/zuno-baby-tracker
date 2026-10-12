@@ -55,8 +55,11 @@ export default {
   'showOnMap': 'Auf der Karte zeigen',
   'distance': '{d} von deinem Standort',
   'missing.hint': 'Die Orte kommen von OpenStreetMap. Fehlt einer oder stimmt etwas nicht? Dort eintragen – beim nächsten Update ist es dabei.',
+  'missing.hintSpots': 'Die Orte kommen von OpenStreetMap. Fehlt einer? Mit «Ort melden» auf der Karte – nach der Prüfung ist er für alle da.',
+  'spot.source': 'Von Eltern gemeldet, vom Betreiber geprüft',
   // what a nameless place is (its OSM amenity / shop / … value)
   'class.place': 'Ort',
+  'class.spot': 'Gemeldeter Ort',
   'class.toilets': 'Öffentliches WC',
   'class.restaurant': 'Restaurant',
   'class.cafe': 'Café',

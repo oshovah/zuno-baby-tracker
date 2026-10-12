@@ -55,23 +55,26 @@ labelShell();
 applyKeptArt();
 store.subscribe(() => syncArt(store.artVersion, store.artKey));
 
-// The operator's unread feedback: a dot on the «Mehr» tab (its «Anleitung»
-// sub tab carries one too, views/more.js).
-function syncFeedbackDot() {
+// The operator's unread feedback, or reported places waiting for a decision:
+// a dot on the «Mehr» tab (its «Anleitung» sub tab carries one too, views/more.js).
+function syncMoreDot() {
   const tab = tabbar.querySelector('a[data-tab="mehr"]');
   if (!tab) return;
-  const want = store.feedback.isInbox && store.feedback.unread > 0;
+  const unread = store.feedback.isInbox && store.feedback.unread > 0 ? store.feedback.unread : 0;
+  const pending = store.spots.isCurator && store.spots.pending > 0 ? store.spots.pending : 0;
+  const want = unread > 0 || pending > 0;
+  const label = unread > 0 ? t('feedback.section.unread', { n: unread }) : t('spots.section.pending', { n: pending });
   const dot = tab.querySelector('.tab-dot');
   if (want && !dot) {
-    tab.insertAdjacentHTML('beforeend', `<span class="tab-dot" aria-label="${escapeHtml(t('feedback.section.unread', { n: store.feedback.unread }))}"></span>`);
+    tab.insertAdjacentHTML('beforeend', `<span class="tab-dot" aria-label="${escapeHtml(label)}"></span>`);
   } else if (!want && dot) {
     dot.remove();
   } else if (want && dot) {
-    dot.setAttribute('aria-label', t('feedback.section.unread', { n: store.feedback.unread }));
+    dot.setAttribute('aria-label', label);
   }
 }
-syncFeedbackDot();
-store.subscribe(syncFeedbackDot);
+syncMoreDot();
+store.subscribe(syncMoreDot);
 
 let cleanup = null;
 let mode = 'boot'; // 'boot' | 'auth' | 'app'

@@ -2196,3 +2196,156 @@ test('feedback: the operator\'s first inbox sets it up; a parent seals named and
   // A parent's phone reaches no inbox route.
   await assert.rejects(parent.store.feedback.inbox(), (e) => e.status === 404);
 });
+
+// --- reported places (store.spots) -------------------------------------------------
+
+/** The spots routes of api/lib/spots.php over the entries fake; `admin` = this phone is the operator. */
+function spotsApi(server, sp, admin) {
+  const notFound = () => httpError(404, 'Nicht gefunden', 'request.notFound');
+  const off = () => httpError(404, 'Orte melden ist nicht eingerichtet', 'spots.unavailable');
+  const pub = (r) => ({ id: r.id, lat: r.lat, lon: r.lon, kinds: r.kinds, name: r.name, note: r.note });
+  const op = (r) => ({ ...pub(r), status: r.status, createdAt: TODAY, decidedAt: r.status === 'approved' ? TODAY : null });
+  const find = (path) => {
+    const m = /^api\/spots\/(\d+)$/.exec(path);
+    if (!m) return null;
+    if (!admin) throw notFound();
+    const row = sp.rows.find((r) => r.id === Number(m[1]));
+    if (!row) throw httpError(404, 'Ort nicht gefunden', 'spots.notFound');
+    return row;
+  };
+  return {
+    ...server.api,
+    async get(path, opts) {
+      if (path === 'api/spots') {
+        if (!sp.on) throw off();
+        sp.calls.push('GET api/spots');
+        return { version: sp.version, items: sp.rows.filter((r) => r.status === 'approved').map(pub) };
+      }
+      if (path === 'api/spots/pending') {
+        if (!admin) throw notFound();
+        return { items: sp.rows.filter((r) => r.status === 'pending').map(op) };
+      }
+      const page = await server.api.get(path, opts);
+      return {
+        ...page,
+        ...(sp.on ? { spots: sp.version } : {}),
+        ...(sp.on && admin ? { spotsPending: sp.rows.filter((r) => r.status === 'pending').length } : {}),
+      };
+    },
+    async post(path, body) {
+      if (path !== 'api/spots') return server.api.post(path, body);
+      if (!sp.on) throw off();
+      sp.sent.push(JSON.stringify(body));
+      sp.rows.push({ id: sp.rows.length + 1, status: 'pending', ...body });
+      return { ok: true };
+    },
+    async patch(path, body) {
+      const row = find(path);
+      if (!row) return server.api.patch(path, body);
+      const was = row.status;
+      for (const k of ['name', 'note', 'kinds']) if (k in body) row[k] = body[k];
+      if (body.approve === true) row.status = 'approved';
+      if ((was === 'approved' || row.status === 'approved') && (row.status !== was || 'name' in body || 'note' in body || 'kinds' in body)) sp.version += 1;
+      return op(row);
+    },
+    async del(path, body) {
+      const row = find(path);
+      if (!row) return server.api.del(path, body);
+      sp.rows = sp.rows.filter((r) => r !== row);
+      if (row.status === 'approved') sp.version += 1;
+      return { ok: true };
+    },
+  };
+}
+
+test('spots: a parent reports a place without a name on the wire; the operator counts, approves and withdraws; every phone fetches the list once per version and keeps it', async () => {
+  const server = fakeServer();
+  const sp = { on: true, version: 0, rows: [], calls: [], sent: [] };
+  const operator = await online(phone(server, { api: spotsApi(server, sp, true) }), await generateFdkRaw());
+  const parentStorage = memStorage();
+  const parent = await online(phone(server, { api: spotsApi(server, sp, false), username: 'papa', displayName: 'Papa', storage: parentStorage }), await generateFdkRaw());
+
+  assert.equal(parent.store.spots.on, true, 'the sync page said an operator is configured');
+  assert.equal(parent.store.spots.isCurator, false);
+  assert.equal(parent.store.spots.pending, null);
+  assert.deepEqual(parent.store.spots.items, []);
+  assert.deepEqual(sp.calls, [], 'version 0 on both sides: nothing to fetch');
+  assert.equal(operator.store.spots.isCurator, true);
+  assert.equal(operator.store.spots.pending, 0);
+
+  await parent.store.spots.suggest({ lat: 46.948, lon: 7.4479, kinds: ['nursing', 'changing'], name: ' WC  Test ', note: 'Im UG' });
+  assert.equal(sp.rows.length, 1);
+  assert.deepEqual(JSON.parse(sp.sent[0]), { lat: 46.948, lon: 7.4479, kinds: ['changing', 'nursing'], name: 'WC Test', note: 'Im UG' });
+  assert.equal(sp.sent[0].includes('papa'), false, 'nothing about the sender on the wire');
+  await rejects(parent.store.spots.suggest({ lat: 46.948, lon: 7.4479, kinds: [], name: '', note: '' }), 'Bitte wähle, was es dort gibt');
+  assert.equal(sp.rows.length, 1, 'an invalid draft never goes up');
+  assert.equal(parent.store.spots.items.length, 0, 'a pending report is on no map, not even the reporter\'s');
+
+  await operator.store.refresh();
+  assert.equal(operator.store.spots.pending, 1, 'the operator\'s sync pages count');
+  const pending = await operator.store.spots.pendingList();
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].status, 'pending');
+  assert.equal(pending[0].name, 'WC Test');
+  assert.deepEqual(pending[0].kinds, ['changing', 'nursing']);
+  await assert.rejects(parent.store.spots.pendingList(), (e) => e.status === 404, 'a parent reaches no curation route');
+
+  const saved = await operator.store.spots.save(pending[0], { approve: true, name: 'WC Zytglogge' });
+  assert.equal(saved.status, 'approved');
+  assert.equal(saved.name, 'WC Zytglogge');
+  assert.equal(operator.store.spots.pending, 0);
+  assert.equal(operator.store.spots.version, 1);
+  assert.equal(operator.store.spots.items.length, 1, 'the operator\'s own list is fresh at once');
+
+  // The parent's next sync sees version 1 and fetches the list exactly once.
+  const before = sp.calls.length;
+  await parent.store.refresh();
+  assert.equal(sp.calls.length - before, 1);
+  assert.equal(parent.store.spots.version, 1);
+  assert.deepEqual(parent.store.spots.items, [{ id: 1, lat: 46.948, lon: 7.4479, kinds: ['changing', 'nursing'], name: 'WC Zytglogge', note: 'Im UG' }]);
+  await parent.store.refresh();
+  assert.equal(sp.calls.length - before, 1, 'the same version again: no fetch');
+  const kept = JSON.parse(parentStorage.getItem('bt.spots'));
+  assert.equal(kept.version, 1);
+  assert.equal(kept.items.length, 1);
+  assert.equal(kept.pending, null);
+
+  // A new store over the same storage paints the list before any sync (the map's first paint, offline too).
+  const again = phone(server, { api: spotsApi(server, sp, false), username: 'papa', storage: parentStorage });
+  assert.equal(again.store.spots.on, true);
+  assert.equal(again.store.spots.items.length, 1);
+
+  // Withdrawn: version 2 — the operator's list empties now, the parent's on the next sync.
+  await operator.store.spots.remove(saved);
+  assert.equal(sp.rows.length, 0);
+  assert.equal(operator.store.spots.version, 2);
+  assert.deepEqual(operator.store.spots.items, []);
+  await parent.store.refresh();
+  assert.equal(parent.store.spots.version, 2);
+  assert.deepEqual(parent.store.spots.items, []);
+
+  // A pending report rejected: the count moves, the version does not.
+  await parent.store.spots.suggest({ lat: 47, lon: 8, kinds: ['changing'], name: '', note: '' });
+  await operator.store.refresh();
+  assert.equal(operator.store.spots.pending, 1);
+  const [open] = await operator.store.spots.pendingList();
+  await operator.store.spots.remove(open);
+  assert.equal(operator.store.spots.pending, 0);
+  assert.equal(sp.version, 2);
+
+  // No operator any more: the next page carries no spots field and the phone forgets the list.
+  sp.on = false;
+  await parent.store.refresh();
+  assert.equal(parent.store.spots.on, false);
+  assert.equal(parent.store.spots.version, 0);
+  assert.equal(JSON.parse(parentStorage.getItem('bt.spots')).on, false);
+  await rejects(parent.store.spots.suggest({ lat: 47, lon: 8, kinds: ['changing'], name: '', note: '' }), 'Orte melden ist nicht eingerichtet', 404);
+
+  // Another account on this phone: the identity wipe forgets the kept list too.
+  sp.on = true;
+  await parent.store.refresh();
+  assert.equal(parent.store.spots.version, 2);
+  await parent.store.setIdentity({ ...parent.prefs.user, username: 'mama' });
+  assert.equal(parentStorage.getItem('bt.spots'), null);
+  assert.equal(parent.store.spots.version, 0);
+});

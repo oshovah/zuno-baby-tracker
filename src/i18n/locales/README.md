@@ -17,6 +17,9 @@ file per **namespace** — the screen or module the strings belong to:
 | `forms.js`    | the bottom-sheet forms: entries, reminders, the to-do checklist          |
 | `errors.js`   | error messages the phone produces itself                                 |
 | `api.js`      | error messages the server answers with (by code)                         |
+| `feedback.js` | feedback to the operator: the section, the form, the inbox, the usage numbers |
+| `map.js`      | the «Karte / Map» tab: filters, the strip, a place's lines, the OSM classes |
+| `spots.js`    | «Ort melden / Report a place»: the picking bar, the form, the operator's list |
 
 Each file exports a flat object: `'key': 'text'`. The namespace is added
 by the loader, so `home.js` → `'hero.since'` is read as `t('home.hero.since')`.
@@ -67,6 +70,7 @@ list first so the same thing reads the same on every screen.
 | ----------------------------- | ----------------------- |
 | Jetzt · Nachtragen · Verlauf · Karte · Mehr | Now · Log · History · Map · More |
 | Wickeltisch · Still-Ort · In der Nähe · Mein Standort | Changing table · nursing place · Nearby · My location |
+| Ort melden · Gemeldeter Ort · Betreiber | Report a place · Reported place · operator |
 | Erinnerungen · Einstellungen · Konto · Anleitung | Reminders · Settings · Account · Guide |
 | Familie · Familien-Passwort   | Family · Family password |
 | Stillen (links/rechts)        | Nursing (left/right)     |

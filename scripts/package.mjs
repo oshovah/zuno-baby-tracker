@@ -10,7 +10,7 @@
  *                                       part of deploy/, see scripts/map-basemap.mjs)
  *      api/*   -> deploy/api/        (PHP backend, minus tests/ and the dev config.php)
  *   3. generate deploy/api/config.php   (db_path from DEPLOY_DB_PATH, the private-art family,
- *                                        the feedback operator from ADMIN_USERNAME)
+ *                                        the operator — feedback, reported places — from ADMIN_USERNAME)
  *   4. generate deploy/.htaccess        (api rewrite, FilesMatch denials, caching)
  *   5. generate deploy/data/.htaccess   (deny-all stub — the SQLite db must never be served)
  *   5b. private-art/ -> deploy/private-art/ when PRIVATE_ART_FAMILY is set (deny-all stub;
@@ -199,15 +199,16 @@ if (env.PRIVATE_ART_FAMILY && env.PRIVATE_ART_FAMILY.trim() !== '') {
 }
 
 // ADMIN_USERNAME — the one account that reads the parents' feedback (the foot
-// of Mehr › Anleitung shows it the inbox instead of the form; api/lib/feedback.php).
-// Unset = feedback is off. Never printed: the log only says whether it is set.
+// of Mehr › Anleitung shows it the inbox instead of the form; api/lib/feedback.php)
+// and curates the places they report on the map (api/lib/spots.php). Unset =
+// both are off. Never printed: the log only says whether it is set.
 let adminUsername = null;
 if (env.ADMIN_USERNAME && env.ADMIN_USERNAME.trim() !== '') {
   adminUsername = env.ADMIN_USERNAME.trim().toLowerCase();
   if (/[\r\n\0]/.test(adminUsername)) fail('ADMIN_USERNAME contains a line break or NUL');
-  log('ADMIN_USERNAME set: feedback is on, that account reads it');
+  log('ADMIN_USERNAME set: that account reads the feedback and curates the reported places');
 } else {
-  log('no ADMIN_USERNAME in .env: feedback is off');
+  log('no ADMIN_USERNAME in .env: no operator — feedback and «Ort melden» are off');
 }
 
 // ---------------------------------------------------------------------------
@@ -359,8 +360,9 @@ return [
     // (PRIVATE_ART_FAMILY in .env at packaging time), or null: nobody does.
     'private_art_family' => ${privateArtFamily === null ? 'null' : phpSingleQuoted(privateArtFamily)},
     'private_art_dir' => null,
-    // Username of the account that reads the feedback (ADMIN_USERNAME in
-    // .env at packaging time), or null: feedback is off.
+    // Username of the account that reads the feedback and curates the
+    // reported places (ADMIN_USERNAME in .env at packaging time), or null:
+    // both are off.
     'admin_username' => ${adminUsername === null ? 'null' : phpSingleQuoted(adminUsername)},
 ];
 `;

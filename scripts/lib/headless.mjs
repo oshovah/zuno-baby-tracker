@@ -33,11 +33,12 @@ export function freePort() {
   });
 }
 
-export async function startApi(dbPath) {
+/** The scratch PHP API; `env` adds to its environment (BABY_ADMIN_USER makes an operator). */
+export async function startApi(dbPath, env = {}) {
   const port = await freePort();
   const proc = spawn('php', ['-S', `127.0.0.1:${port}`, path.join('scripts', 'dev-router.php')], {
     cwd: root,
-    env: { ...process.env, BABY_DB_PATH: dbPath, BABY_BCRYPT_COST: '4' },
+    env: { ...process.env, BABY_DB_PATH: dbPath, BABY_BCRYPT_COST: '4', ...env },
     stdio: 'ignore',
   });
   proc.on('error', () => fail('could not start php — is it on the PATH?'));

@@ -55,8 +55,11 @@ export default {
   'showOnMap': 'Show on the map',
   'distance': '{d} from your location',
   'missing.hint': 'The places come from OpenStreetMap. One missing or wrong? Add it there – the next update brings it along.',
+  'missing.hintSpots': 'The places come from OpenStreetMap. One missing? Use "Report a place" on the map – once checked, everyone sees it.',
+  'spot.source': 'Reported by parents, checked by the operator',
   // what a nameless place is (its OSM amenity / shop / … value)
   'class.place': 'Place',
+  'class.spot': 'Reported place',
   'class.toilets': 'Public toilet',
   'class.restaurant': 'Restaurant',
   'class.cafe': 'Café',

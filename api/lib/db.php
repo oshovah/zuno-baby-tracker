@@ -3,7 +3,7 @@
  * Database setup: opens data/baby.db (WAL when the host allows it), creates
  * the schema and migrates an older file in place.
  *
- * Schema v5 — nothing here describes the baby:
+ * Schema v6 — nothing here describes the baby:
  *   families, users  bcrypt of client-derived auth values, the KDF parameters
  *                and the wrapped Family Data Key (plus a recovery hash per
  *                family and an encrypted profile per user).
@@ -21,6 +21,12 @@
  *                blob sealed on the phone to the operator's inbox key, a
  *                day-granular date and a read mark. No column for the
  *                sender, their user or their family — on purpose.
+ *   spots        map places reported by parents in the app and curated by
+ *                the operator (lib/spots.php): a position, the kind of
+ *                place, a name and a note in the clear — public map data,
+ *                nothing about a baby — plus pending/approved and two
+ *                day-granular dates. No column for who reported it — on
+ *                purpose, like feedback.
  * One open timer per type is a client rule: no partial unique index.
  *
  * Migration (bt_create_or_migrate): the version is detected STRUCTURALLY,
@@ -36,15 +42,16 @@
  * no public release can read it. Up-to-date databases take a fast path of two
  * reads and never write per request.
  *
- * v4 -> v5 only adds the feedback table (bt_migrate_v4_to_v5, CREATE IF NOT
- * EXISTS): a v4 file is detected by that table missing, in the fast path's
- * check as in the re-check under the lock. An older release opens a v5 file
- * unchanged (its stamp check passes, it never reads the table).
+ * v4 -> v5 only added the feedback table, v5 -> v6 only the spots table
+ * (bt_migrate_v4_to_v5, bt_migrate_v5_to_v6: CREATE IF NOT EXISTS): an older
+ * file is detected by that table missing, in the fast path's check as in
+ * the re-check under the lock. An older release opens a newer file unchanged
+ * (its stamp check passes, it never reads the table it does not know).
  *
- * Future DDL changes (v6): bump BT_SCHEMA_VERSION, add a bt_migrate_v5_to_v6()
- * with idempotent steps, detect v5 structurally (a column or table that v6
+ * Future DDL changes (v7): bump BT_SCHEMA_VERSION, add a bt_migrate_v6_to_v7()
+ * with idempotent steps, detect v6 structurally (a column or table that v7
  * introduces) in BOTH the pre-check and the re-check under the lock in
- * bt_create_or_migrate, and call it after bt_migrate_v4_to_v5, before
+ * bt_create_or_migrate, and call it after bt_migrate_v5_to_v6, before
  * bt_create_schema.
  *
  * The db path defaults to <app root>/data/baby.db (app root = parent of api/)
@@ -58,7 +65,7 @@
 
 require_once __DIR__ . '/http.php';
 
-const BT_SCHEMA_VERSION = 5;
+const BT_SCHEMA_VERSION = 6;
 
 /** App root = parent directory of api/. */
 function bt_app_root(): string
@@ -173,7 +180,7 @@ function bt_schema_version(PDO $pdo): int
 }
 
 /**
- * Ensure the v5 schema exists, migrating a v3 or v4 database in place first.
+ * Ensure the v6 schema exists, migrating a v3, v4 or v5 database in place first.
  * Up-to-date databases return after three cheap reads (no write per request).
  */
 function bt_create_or_migrate(PDO $pdo, string $dbPath): void
@@ -182,7 +189,7 @@ function bt_create_or_migrate(PDO $pdo, string $dbPath): void
     $columns = bt_entries_columns($pdo);
     bt_assert_not_pre_v3($columns);
     $isV3 = bt_entries_is_v3($columns);
-    if ($columns !== [] && !$isV3 && bt_schema_version($pdo) >= BT_SCHEMA_VERSION && bt_table_exists($pdo, 'feedback')) {
+    if ($columns !== [] && !$isV3 && bt_schema_version($pdo) >= BT_SCHEMA_VERSION && bt_table_exists($pdo, 'feedback') && bt_table_exists($pdo, 'spots')) {
         return;
     }
     if ($isV3) {
@@ -200,6 +207,9 @@ function bt_create_or_migrate(PDO $pdo, string $dbPath): void
         }
         if ($columns !== [] && !bt_table_exists($pdo, 'feedback')) {
             bt_migrate_v4_to_v5($pdo);
+        }
+        if ($columns !== [] && !bt_table_exists($pdo, 'spots')) {
+            bt_migrate_v5_to_v6($pdo);
         }
         bt_create_schema($pdo);
         $pdo->exec('COMMIT');
@@ -384,6 +394,39 @@ SQL);
 }
 
 /**
+ * v5 -> v6: the spots table. Idempotent, runs inside the caller's BEGIN
+ * IMMEDIATE; bt_create_schema creates the same table on a fresh file.
+ */
+function bt_migrate_v5_to_v6(PDO $pdo): void
+{
+    bt_create_spots_table($pdo);
+    error_log('[baby-tracker] schema v5 -> v6: spots table added');
+}
+
+/**
+ * Map places reported in the app (lib/spots.php): the position, the kinds
+ * (a comma list), a name and a note in the clear, 'pending' until the
+ * operator approves. Dates are 'YYYY-MM-DD'. No column for who reported
+ * it. No index: the caps keep the table small.
+ */
+function bt_create_spots_table(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS spots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  status TEXT NOT NULL,
+  lat REAL NOT NULL,
+  lon REAL NOT NULL,
+  kinds TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  decided_at TEXT
+)
+SQL);
+}
+
+/**
  * The schema (CREATE IF NOT EXISTS — also fills in the index on a migrated
  * DB), the per-install settings rows (INSERT OR IGNORE) and the version
  * stamp. Runs inside the caller's transaction.
@@ -434,6 +477,7 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('salt_secret', lower(hex(ran
 INSERT OR IGNORE INTO settings (key, value) VALUES ('feed_id', lower(hex(randomblob(16))));
 SQL);
     bt_create_feedback_table($pdo);
+    bt_create_spots_table($pdo);
     $pdo->prepare(
         "INSERT INTO settings (key, value) VALUES ('schema_version', ?)
            ON CONFLICT(key) DO UPDATE SET value = excluded.value"

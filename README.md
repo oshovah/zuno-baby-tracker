@@ -2,15 +2,16 @@
 
 A small, self-hosted newborn tracker for two parents — nursing, bottles,
 diapers, sleep, measurements and daily reminders, shared between both phones
-and **end-to-end encrypted**: the server stores ciphertext only and never
-sees a password.
+and **end-to-end encrypted**: everything about the baby reaches the server
+as ciphertext, and it never sees a password.
 
 No e-mail address, no tracking, no third-party requests, no app store. The
 client is a vanilla-JS PWA (Vite; its only runtime dependencies are the
 map's — Leaflet, protomaps-leaflet and pmtiles, bundled from npm, nothing
 from a CDN), the server a tiny PHP 7.4+ API over SQLite that runs on cheap
 shared hosting. The «Karte» tab shows changing tables and nursing places
-from OpenStreetMap on a map this server hosts itself (see «Karte» below). The UI ships
+from OpenStreetMap — and the places parents report in the app, checked by
+the operator — on a map this server hosts itself (see «Karte» below). The UI ships
 in German (Swiss flavour, the source language) and English.
 
 This repository is public so that anyone can check the privacy claims the app
@@ -30,9 +31,10 @@ and computes nothing.
 | The family's data key only *wrapped* (AES-KW) under keys derived from passwords | The family data key itself: it is generated on the phone and only ever leaves it wrapped |
 | Display names and family settings as encrypted blobs | |
 | SHA-256 hashes of the session tokens (HttpOnly, SameSite cookie) | |
-| Throttle counters keyed by the client's address (failed logins, registrations, entry writes, feedback messages) — rows older than a day are pruned at the next login or registration | |
+| Throttle counters keyed by the client's address (failed logins, registrations, entry writes, feedback messages, reported places) — rows older than a day are pruned at the next login or registration | |
 | Which parts of the self-hosted map a phone asks for while the «Karte» tab is open (byte ranges of one archive — ordinary access-log material) | Where the phone is: the position stays on the phone, and the map never comes from a map provider |
 | Feedback messages to the operator (optional, see «Feedback»): per message ONE blob sealed on the phone to the operator's inbox key, a day-granular date and a read mark — no column for the sender | What a message says and who wrote it: a named message carries the name inside the blob, an anonymous one nowhere |
+| Map places reported by parents (optional, see «Feedback»): the position, the kind of place, a name and a note in plaintext — public map data, nothing about a baby —, pending or approved, two day-granular dates — no column for who reported it | Who reported a place: the row has no user or family column, and the request is throttled per address like a feedback message |
 
 What a server still learns, like any server: that a family exists, how many
 rows it has and roughly when a phone writes (request times, web-server logs),
@@ -163,8 +165,8 @@ manifest by itself after a few days.
 Optional: the parents can write to whoever runs the installation — a wish,
 a bug report, anything — under «Mehr › Anleitung», by name or anonymously.
 Name your own account in `.env` (`ADMIN_USERNAME`) and package; that one
-account sees an inbox there instead of the form. Unset, the section does
-not appear.
+account sees an inbox there instead of the form — and the places parents
+report for the map (below). Unset, the section does not appear.
 
 The messages are end-to-end encrypted like everything else
 ([`api/lib/feedback.php`](api/lib/feedback.php),
@@ -193,6 +195,21 @@ are stored and how many families logged something in the last 7 / 30 days
 the database does not show whoever runs it anyway, and `GET /api/stats` is
 the same 404 for everyone else.
 
+**Reported places.** With an operator configured, the «Karte» tab also
+offers «Ort melden»: a parent moves the map until the crosshair sits on the
+place, says what is there (a changing table, a place to nurse), a name and
+where exactly, and sends it. Unlike everything else this is stored in the
+clear ([`api/lib/spots.php`](api/lib/spots.php), table `spots`): a
+position, a kind, a name and a note are public map data, not family data —
+and the row has no user or family column, the request is throttled per
+address only (10 an hour), so a report is anonymous by construction. The
+operator's account sees the open reports under «Mehr › Anleitung»
+(«Gemeldete Orte»), approves them as they are or with corrections, or
+rejects them; approved places are served by `GET /api/spots` to every
+member's phone, which lays them over the OpenStreetMap file and keeps the
+list for offline. Rejecting and withdrawing delete the row for good. The
+caps: 200 open reports, 5000 rows.
+
 ## Licence
 
 [GNU Affero General Public License v3.0](LICENSE). In short: use it, host it,
@@ -206,6 +223,8 @@ places and tiles (`public/map/pois.json` and `basemap/`, both generated — see
 «Karte») are OpenStreetMap data under the
 [Open Database License](https://www.openstreetmap.org/copyright): the map
 shows the attribution, and `basemap/LICENSE.txt` travels with the archive.
+The places parents report in the app are the installation's own data, not
+OpenStreetMap's.
 
 ---
 
@@ -230,7 +249,9 @@ SQLite auf Shared Hosting (cyon). Produktentscheide stehen in
 - **Ende-zu-Ende verschlüsselt:** Jeder Eintrag (Art, Zeiten, Mengen, Namen)
   wird auf dem Handy mit einem zufälligen Familienschlüssel verschlüsselt.
   Der Server speichert nur Benutzernamen, Familiennamen, verpackte Schlüssel
-  und die verschlüsselten Datensätze — und kann nichts davon lesen. Passwörter
+  und die verschlüsselten Datensätze — und kann nichts davon lesen. Einzig
+  die Orte, die Eltern auf der Karte melden, liegen im Klartext: öffentliche
+  Kartendaten ohne Bezug zu einem Konto (siehe «Karte»). Passwörter
   verlassen das Handy nie (der Server sieht nur einen abgeleiteten Wert).
   Deshalb gibt es kein «Passwort zurücksetzen» durch den Betreiber; siehe
   «Schlüssel und Wiederherstellung».
@@ -317,7 +338,8 @@ node scripts/export-plain.mjs data/baby.db --recovery-code > export.json
 
 Kein Admin-Panel, kein E-Mail: Der Betreiber kann in der Datenbank Konten
 löschen, aber keine Passwörter setzen und keine Einträge lesen (siehe
-«Konten von Hand verwalten»).
+«Konten von Hand verwalten»). In der App prüft das Betreiber-Konto nur, was
+Eltern ihm schicken: Feedback und gemeldete Orte für die Karte.
 
 ## Deployment (cyon)
 
@@ -407,6 +429,16 @@ braucht keine Sicherungskopie; kein Handy synchronisiert neu. Ein älterer
 Stand öffnet eine v5-Datei unverändert (er kennt die Tabelle nicht und liest
 sie nie).
 
+## Schema v5 → v6
+
+v6 fügt nur die Tabelle `spots` hinzu (id, status, lat, lon, kinds, name,
+note, created_at und decided_at als Datum) — die Orte, die Eltern auf der
+Karte melden, ohne Spalte für Absender, Konto oder Familie; dazu, erst beim
+ersten Freigeben, der Zähler `settings.spots_version`. Die Migration läuft
+bei der ersten Anfrage nach dem Deploy, fasst keine andere Tabelle an und
+braucht keine Sicherungskopie; kein Handy synchronisiert neu. Ein älterer
+Stand öffnet eine v6-Datei unverändert.
+
 ## Konten von Hand verwalten
 
 Direkt in der SQLite-Datei (`sqlite3 data/baby.db`, auf dem Server per SSH).
@@ -453,7 +485,8 @@ Adressen aus (20 / Stunde). Schreibzugriffe auf Einträge sind pro IP auf 300 /
 bzw. 400 000 insgesamt (507; gelöschte Einträge zählen mit, sie bleiben als
 Tombstones) — die Registrierung ist offen, ohne diese Grenzen könnte ein
 Fremdkonto die Disk füllen. Feedback-Nachrichten haben ein eigenes Budget
-(10 / Stunde pro IP) und eine eigene Grenze (2000). «Betreiber» = das Konto aus
+(10 / Stunde pro IP) und eine eigene Grenze (2000), gemeldete Orte ebenso
+(10 / Stunde pro IP; 200 offene, 5000 Zeilen). «Betreiber» = das Konto aus
 `ADMIN_USERNAME`; alle anderen bekommen auf diesen Routen dasselbe 404.
 Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 `authKey` (PBKDF2 + HKDF); Schlüssel und Datensätze sind base64url-Blobs.
@@ -471,7 +504,7 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `PATCH /api/me` | ✓ | `{profileBlob}` (verschlüsselter Anzeigename) |
 | `PATCH /api/me/password` | ✓ | `{currentAuthKey, authKey, kdf, fdkWrappedUser}` — meldet andere Geräte ab |
 | `PATCH /api/families/password` | ✓ | `{currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily}` |
-| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an. Dazu `feedback: true`, wenn es ein Feedback-Postfach gibt, und nur für das Betreiber-Konto `feedbackUnread` |
+| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an. Dazu `feedback: true`, wenn es ein Feedback-Postfach gibt, und nur für das Betreiber-Konto `feedbackUnread`; mit eingerichtetem Betreiber `spots` (die Version der freigegebenen Orte) und nur für das Betreiber-Konto `spotsPending` |
 | `POST /api/entries` | ✓ | `{eid, blob}` → Datensatz (507 an der Zeilengrenze der Familie bzw. der Datenbank) |
 | `PATCH /api/entries/:eid` | ✓ | `{blob, ifSeq}` → Datensatz (409, wenn ein anderes Gerät dazwischenkam) |
 | `DELETE /api/entries/:eid` | ✓ | Soft-Delete; optionaler JSON-Body `{ifSeq}` macht ihn bedingt (409, wenn ein anderes Gerät dazwischenkam) |
@@ -482,6 +515,10 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `GET /api/feedback?before=` | Betreiber | `{publicKey, privateSealed, items, next, unread}` — neueste zuerst, 100 pro Seite |
 | `PATCH /api/feedback/:id` · `DELETE /api/feedback/:id` | Betreiber | `{read}` gelesen/ungelesen · endgültig löschen |
 | `GET /api/stats` | Betreiber | Nutzungszahlen: `{asOf, families, familiesActive7, familiesActive30, accounts, accountsNew30, entries, entriesNew7}` — nur Zahlen |
+| `POST /api/spots` | ✓ | `{lat, lon, kinds, name?, note?}` → 201 — ein gemeldeter Ort, offen bis zur Prüfung; gespeichert ohne Absender (400 ungültig, 429 nach 10 / Stunde pro Adresse, 507 bei 200 offenen oder 5000 Zeilen; 404, solange kein Betreiber eingerichtet ist) |
+| `GET /api/spots` | ✓ | `{version, items}` — die freigegebenen Orte, die jedes Handy über seine Karte legt |
+| `GET /api/spots/pending` | Betreiber | `{items}` — die offenen Meldungen, älteste zuerst |
+| `PATCH /api/spots/:id` · `DELETE /api/spots/:id` | Betreiber | `{approve?, name?, note?, kinds?}` korrigieren und/oder freigeben · ablehnen oder zurückziehen (endgültig) |
 | `GET /api/art/k/<key>/<name>` | – | Dieselben Bilder und `manifest.webmanifest` über den zufälligen Schlüssel der Installation (nur die Mitglieder jener Familie erhalten ihn, als `artKey` im Sync) — für das, was der Browser ohne Sitzung lädt: das Installations-Symbol. Falscher Schlüssel, unbekannter Name, Funktion aus: dasselbe 404 |
 | `GET /api/art/<name>` | (✓) | Privates Bildmaterial (`image/png`) für die Mitglieder der in `PRIVATE_ART_FAMILY` genannten Familie — für alle anderen, auch ohne Anmeldung, dasselbe 404 (siehe «Private artwork») |
 
@@ -586,6 +623,20 @@ auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
   Institution offenstehen, gehören nicht hinein. Der bessere Ort für jede
   Zeile ist OpenStreetMap selbst – dort eingetragen, wird sie beim nächsten
   Lauf «covered».
+- **Gemeldete Orte**: mit eingerichtetem Betreiber (`ADMIN_USERNAME`) zeigt
+  die Karte «Ort melden»: die Karte schieben, bis das Kreuz auf dem Ort
+  steht (ab Zoom 15), sagen, was es dort gibt, Name und «Wo genau?», melden.
+  Die Meldung geht ohne Namen an den Server (`api/lib/spots.php`, Tabelle
+  `spots`: Position, Art, Name, Notiz im Klartext – öffentliche Kartendaten,
+  keine Spalte für Konto oder Familie, Drossel nur pro Adresse). Das
+  Betreiber-Konto prüft sie unter Mehr › Anleitung («Gemeldete Orte»:
+  freigeben, korrigieren, ablehnen, später zurückziehen – mit dem nächsten
+  bekannten Ort als Warnung vor Doppelten). Freigegebene Orte liefert
+  `GET /api/spots`; jedes Handy legt sie über die OSM-Datei (`src/spots.js`,
+  `store.spots`), lädt die Liste nur, wenn ihre Version auf der Sync-Seite
+  gestiegen ist, und behält sie in `localStorage` (`bt.spots`) für den
+  ersten Aufbau und offline. Im Sheet steht ein solcher Ort als «Von Eltern
+  gemeldet, vom Betreiber geprüft», ohne OSM-Link.
 - **Hintergrundkarte**: `npm run map:basemap -- --build YYYYMMDD` schneidet mit
   der `pmtiles`-CLI (`brew install pmtiles`) aus dem täglichen Protomaps-
   Planet-Build ein Archiv für dieselbe Box (Zoom 0–14, ~570 MB; `--maxzoom 15`
@@ -610,7 +661,8 @@ auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
   gecacht.
 - **Was der Server erfährt**: welche Byte-Bereiche des Archivs ein Handy
   liest, während die Karte offen ist (normales Access-Log) – nicht den
-  Standort.
+  Standort. Wer einen Ort meldet, schickt dessen Position, Art, Name und
+  Notiz (ohne Konto; die Drossel zählt pro Adresse).
 - **Lizenz**: Daten © OpenStreetMap-Mitwirkende, ODbL; die Karte zeigt die
   Attribution, `basemap/LICENSE.txt` liegt beim Archiv. Still-Orte sind in
   OpenStreetMap noch dünn erfasst (Oktober 2026: 15 in der Box, dazu 800
@@ -630,14 +682,17 @@ src/            Frontend: main.js Shell, views/, store.js (lokales Modell +
                 README dort), whats-new.js (die Notizen fürs Update-Sheet),
                 feedback.js + feedback-sheet.js (Feedback an den Betreiber),
                 mapdata.js (die Orte der Karte, pur) + map-engine.js (Leaflet,
-                lazy) + views/map.js (der Tab «Karte»)
+                lazy) + views/map.js (der Tab «Karte»), spots.js +
+                spots-sheet.js (gemeldete Orte: melden, prüfen) + pois.js
+                (die Ortsdatei, einmal geladen)
 public/         Manifest, Service Worker, Icons; map/pois.json (generiert, gitignored)
 basemap/        das Kartenarchiv + index.json (generiert, gitignored, eigener Upload)
 scripts/        dev-router, preview-router, package.mjs, deploy.mjs,
                 export-plain.mjs (Offline-Entschlüsselung), make-icons.mjs
                 (zeichnet das Icon-Set nach public/img/), make-screenshots.mjs
                 (die Bildschirmfotos der Anmeldeseite), map-data.mjs +
-                map-basemap.mjs (die Karte: Orte und Archiv), lib/map-config.mjs
-                (die Box), lib/map-assets-plugin.mjs (Ranges im Dev-Server)
+                map-basemap.mjs (die Karte: Orte und Archiv), map/extra-places.csv
+                (die Ergänzungen), lib/map-config.mjs (die Box),
+                lib/map-assets-plugin.mjs (Ranges im Dev-Server), lib/csv.mjs
 data/           lokale SQLite-DB (gitignored, nie deployt)
 ```

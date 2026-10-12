@@ -210,6 +210,12 @@ test('English after setLocale("en"): titles, lines and the distance separator', 
     { kind: 'info', text: 'Fee' },
   ]);
   assert.equal(poiLines({ n: 1, bf: 'room' })[0].text, 'Own nursing room');
+  assert.deepEqual(
+    poiLines({ n: 1, bf: 'yes', note: 'Behind the counter', src: 'app' }).map((l) => l.text),
+    ['A place to nurse', 'Behind the counter', 'Reported by parents, checked by the operator'],
+    'a reported place: the note for any kind, the source last'
+  );
+  assert.equal(poiTitle({ cls: 'spot' }), 'Reported place');
   assert.equal(distanceLabel(1440), '1.4 km');
   setLocale('de');
   assert.equal(distanceLabel(1440), '1,4 km');

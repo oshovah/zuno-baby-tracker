@@ -943,7 +943,9 @@ bt_test('throttle budgets by key prefix: targets 20 / hour, writes 300 / 15 min,
     assert_eq(bt_throttle_budget('user:mama'), [BT_TARGET_MAX_FAILS, BT_TARGET_WINDOW_SECONDS]);
     assert_eq(bt_throttle_budget('family:testfamilie'), [BT_TARGET_MAX_FAILS, BT_TARGET_WINDOW_SECONDS]);
     assert_eq(bt_throttle_budget('write:203.0.113.7'), [BT_WRITE_MAX_PER_WINDOW, BT_WRITE_WINDOW_SECONDS]);
+    assert_eq(bt_throttle_budget('spot:203.0.113.7'), [BT_SPOT_MAX_PER_WINDOW, BT_SPOT_WINDOW_SECONDS]);
     assert_eq([BT_TARGET_MAX_FAILS, BT_TARGET_WINDOW_SECONDS, BT_WRITE_MAX_PER_WINDOW, BT_WRITE_WINDOW_SECONDS], [20, 3600, 300, 900]);
+    assert_eq([BT_SPOT_MAX_PER_WINDOW, BT_SPOT_WINDOW_SECONDS], [10, 3600]);
 
     assert_eq(bt_user_throttle_key(' MAMA '), 'user:mama', 'folded like the login');
     assert_eq(strlen(bt_user_throttle_key(str_repeat('x', 500))), strlen('user:') + 64, 'junk names are capped');
@@ -986,6 +988,16 @@ bt_test('throttle budgets by key prefix: targets 20 / hour, writes 300 / 15 min,
     $pdo->prepare("UPDATE login_attempts SET window_start = datetime('now', '-16 minutes') WHERE ip = ?")->execute(['write:' . $ip]);
     bt_charge_write($pdo, $ip);
     assert_eq((int) $pdo->query("SELECT fails FROM login_attempts WHERE ip = 'write:$ip'")->fetchColumn(), 1);
+
+    // Reported places: 10 an hour per address, own text, a refused one is not counted.
+    $ip = '203.0.113.11';
+    for ($i = 0; $i < BT_SPOT_MAX_PER_WINDOW; $i++) {
+        bt_charge_spot($pdo, $ip);
+    }
+    auth_assert_error(function () use ($pdo, $ip) {
+        bt_charge_spot($pdo, $ip);
+    }, 429, 'Zu viele Meldungen in kurzer Zeit – bitte später nochmals versuchen');
+    assert_eq((int) $pdo->query("SELECT fails FROM login_attempts WHERE ip = 'spot:$ip'")->fetchColumn(), BT_SPOT_MAX_PER_WINDOW, 'a refused report is not counted');
 
     // Day-old rows of every kind are garbage-collected together.
     $pdo->exec("UPDATE login_attempts SET window_start = datetime('now', '-2 days')");
