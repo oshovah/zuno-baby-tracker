@@ -92,7 +92,7 @@ export default {
   'error.sessionGone': 'Session expired – please sign in again',
   'error.familyCheck': 'The family name could not be checked – please try again',
 
-  // The pitch under the login form: six features, the CTA
+  // The pitch under the login form: seven features, the CTA
   'pitch.title': 'Built for two phones',
   'pitch.lead': 'One baby, two parents, one shared picture – and nobody looking over your shoulder.',
   'pitch.sync.title': 'Start on one phone, stop on the other.',
@@ -105,6 +105,8 @@ export default {
   'pitch.midwife.body': 'Awake for how long, when the last meal was, how many wet and soiled diapers today – all at a glance. Plus History, Log and an export.',
   'pitch.reminders.title': 'Reminders both of you see.',
   'pitch.reminders.body': 'Vitamin D at six, Mom\'s pill in the morning: set it up once, and "Now" shows what is still open today. One tap ticks it off – on the other phone it is done too.',
+  'pitch.map.title': 'The nearest changing table – with no map provider.',
+  'pitch.map.body': 'The map shows changing tables and nursing places nearby – from OpenStreetMap, served by our own server. No map provider, no third-party service: your location stays on the phone, nothing goes out. A place missing? Add it – once checked, everyone sees it.',
   'pitch.noStore.title': 'No app store.',
   'pitch.noStore.body': 'Open it in the browser, "Add to Home Screen" – runs on iPhone and Android like an app.',
   'pitch.cta': 'Create account',

@@ -3,7 +3,7 @@
 // inside the strings, the icon() pictograms stay in code.
 export default {
   // The lead paragraph
-  'lead': 'Zuno hält fest, wann das Baby getrunken hat, was in der Windel war und wie lange es geschlafen hat – auf beiden Handys derselbe Stand. Das Wichtigste geht mit einem Fingertipp, auch um drei Uhr nachts.',
+  'lead': 'Zuno hält fest, wann das Baby getrunken hat, was in der Windel war und wie lange es geschlafen hat – auf beiden Handys derselbe Stand – und zeigt unterwegs den nächsten Wickeltisch. Das Wichtigste geht mit einem Fingertipp, auch um drei Uhr nachts.',
   // «Die fünf Tabs»: one item per tab
   'tabs.title': 'Die fünf Tabs',
   'tabs.now': '<strong>Jetzt</strong> – der Stand: seit wann keine Mahlzeit, der Tag bisher (Mahlzeiten und nasse Windeln gegen das Ziel), der Schlaf oder die nächste Erinnerung. Darunter die Knöpfe zum Erfassen.',
@@ -50,7 +50,7 @@ export default {
   'twoPhones.body': 'Beide Handys zeigen dieselben Einträge: Die App holt jede Minute und bei jedem Öffnen den neusten Stand. Ein Timer, der auf dem einen Handy gestartet wurde, lässt sich auf dem anderen beenden. Wer etwas erfasst, steht mit dem Anzeigenamen am Eintrag. Ohne Netz zeigt «Jetzt» den letzten Stand («Stand 14:32» oben rechts) – erfassen geht trotzdem: Der Eintrag wird auf dem Handy gespeichert («wartet auf Netz») und gesendet, sobald Zuno offen ist und wieder Netz hat; oben rechts steht, wie viele noch warten, ein Tipp darauf zeigt sie. Hat das andere Handy denselben Eintrag inzwischen beendet, geändert oder gelöscht, gilt dessen Stand, und dieses Handy sagt es.',
   // «Einstellungen» — family vs. this phone
   'settings.title': 'Einstellungen',
-  'settings.body': '<strong>«Für die Familie»</strong> gilt auf beiden Handys: die Trinkmenge (Geburtsdatum und Mahlzeiten pro Tag für das berechnete Ziel), die empfohlene Menge, die stattdessen gilt, je drei Schoppen-Mengen für Muttermilch und Milch, ob gestillt wird und wie viel das Baby dabei ungefähr trinkt, der Abstand ab Beginn der Mahlzeit. <strong>«Nur dieses Handy»</strong>: was «Jetzt» im vierten Feld zeigt (Schlaf, Erinnerungen, beides oder nichts), ob der Bildschirm beim Stillen anbleibt, das Design, hell oder dunkel.',
+  'settings.body': '<strong>«Für die Familie»</strong> gilt auf beiden Handys: die Trinkmenge (Geburtsdatum und Mahlzeiten pro Tag für das berechnete Ziel), die empfohlene Menge, die stattdessen gilt, je drei Schoppen-Mengen für Muttermilch und Milch, ob gestillt wird und wie viel das Baby dabei ungefähr trinkt, der Abstand ab Beginn der Mahlzeit. <strong>«Nur dieses Handy»</strong>: was «Jetzt» im vierten Feld zeigt (Schlaf, Erinnerungen, beides oder nichts), ob der Bildschirm beim Stillen anbleibt, das Design, hell oder dunkel – und wo die Karte beim Öffnen steht.',
   // «Konto und Familie» + the encryption paragraph
   'account.title': 'Konto und Familie',
   'account.body': 'Unter <strong>Mehr › Konto</strong>: Anzeigename und eigenes Passwort ändern, abmelden (entfernt Schlüssel und Einträge von diesem Handy). Darunter die Familie: das Familien-Passwort (braucht nur, wer beitritt – es gilt für einen Beitritt und verfällt danach; zum Einladen hier ein neues setzen), der Wiederherstellungscode (nach Eingabe deines Passworts – aufschreiben!) und der Export aller Einträge. Ein zweites Elternteil registriert sich mit dem Familiennamen und dem Familien-Passwort und sieht dann dieselben Einträge.',

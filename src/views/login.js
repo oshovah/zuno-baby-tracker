@@ -64,14 +64,16 @@ function logoHtml() {
 // The pitch under the login form — what whoever got the link is looking at.
 // The form stays on top so a returning parent logs in without scrolling;
 // the two selling points lead: one shared state across both phones, and
-// end-to-end encryption; the hosting panel (hostingHtml) closes the list
-// before the CTA. [hue, icon, key under login.pitch.*]
+// end-to-end encryption; the map's feature says the one thing a parent
+// would ask of a map (no map provider); the hosting panel (hostingHtml)
+// closes the list before the CTA. [hue, icon, key under login.pitch.*]
 const PITCH_FEATURES = [
   ['milk', 'sync', 'sync'],
   ['sleep', 'lock', 'e2ee'],
   ['milk', 'bolt', 'oneTap'],
   ['diaper', 'care', 'midwife'],
   ['sleep', 'reminder', 'reminders'],
+  ['diaper', 'map', 'map'],
   ['measure', 'phone', 'noStore'],
 ];
 

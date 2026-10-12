@@ -4,7 +4,7 @@
 // here are the ones the English views show — keep them in step.
 export default {
   // The lead paragraph
-  'lead': 'Zuno keeps track of when the baby fed, what was in the diaper and how long it slept – the same on both phones. The essentials take one tap, even at three in the morning.',
+  'lead': 'Zuno keeps track of when the baby fed, what was in the diaper and how long it slept – the same on both phones – and shows the nearest changing table when you are out. The essentials take one tap, even at three in the morning.',
   // "The five tabs": one item per tab
   'tabs.title': 'The five tabs',
   'tabs.now': '<strong>Now</strong> – where things stand: how long since the last meal, the day so far (meals and wet diapers against the target), sleep or the next reminder. Below that, the buttons for logging.',
@@ -51,7 +51,7 @@ export default {
   'twoPhones.body': 'Both phones show the same entries: the app fetches the latest state every minute and every time it opens. A timer started on one phone can be stopped on the other. Whoever logs something is named on the entry by their display name. Without a connection, "Now" shows the last known state ("As of 14:32" at the top right) – logging still works: the entry is saved on the phone ("waiting for network") and sent as soon as Zuno is open and online again; the top right says how many are still waiting, a tap shows them. If the other phone has ended, changed or deleted the same entry meanwhile, its version stands, and this phone says so.',
   // "Settings" — family vs. this phone
   'settings.title': 'Settings',
-  'settings.body': '<strong>"For the family"</strong> applies on both phones: the feeding amount (birth date and meals per day for the calculated target), the recommended amount that applies instead, three bottle amounts each for breast milk and formula, whether the baby is nursed and roughly how much it drinks then, whether to count from the start of the meal. <strong>"This phone only"</strong>: what "Now" shows in the fourth slot (sleep, reminders, both or nothing), whether the screen stays on while nursing, the design, light or dark.',
+  'settings.body': '<strong>"For the family"</strong> applies on both phones: the feeding amount (birth date and meals per day for the calculated target), the recommended amount that applies instead, three bottle amounts each for breast milk and formula, whether the baby is nursed and roughly how much it drinks then, whether to count from the start of the meal. <strong>"This phone only"</strong>: what "Now" shows in the fourth slot (sleep, reminders, both or nothing), whether the screen stays on while nursing, the design, light or dark – and where the map opens.',
   // "Account and family" + the encryption paragraph
   'account.title': 'Account and family',
   'account.body': 'Under <strong>More › Account</strong>: change your display name and your own password, sign out (removes the keys and entries from this phone). Below that, the family: the family password (only needed by whoever joins – it is good for one join and expires after that; to invite someone, set a new one here), the recovery code (after entering your password – write it down!) and the export of all entries. A second parent registers with the family name and the family password and then sees the same entries.',
