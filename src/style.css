@@ -3006,7 +3006,7 @@ body.map-open {
   display: none;
 }
 
-/* The bar over the bottom edge: «Orte in der Nähe» · «Info» · «Ort hinzufügen». */
+/* The bar over the bottom edge: «Info» · «Ort hinzufügen» · «Orte in der Nähe». */
 .map-bar {
   position: absolute;
   left: 0;

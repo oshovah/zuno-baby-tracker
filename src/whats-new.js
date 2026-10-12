@@ -18,11 +18,11 @@ export const WHATS_NEW = [
     id: '2026-10-12-b',
     de: [
       'Neu auf der Karte: «Ort hinzufügen». Fehlt ein Wickeltisch oder ein Platz zum Stillen, schieb die Karte, bis das Kreuz auf dem Ort steht, und sag, was es dort gibt – ohne deinen Namen. Die Person, die Zuno betreibt, prüft die Meldung; danach sehen den Ort alle.',
-      'Unten auf der Karte stehen jetzt drei Knöpfe: «Orte in der Nähe» listet die zehn nächsten, «Info» sagt, woher die Daten stammen, «Ort hinzufügen» meldet einen neuen.',
+      'Unten auf der Karte stehen jetzt drei Knöpfe: «Info» sagt, woher die Daten stammen, «Ort hinzufügen» meldet einen neuen, «Orte in der Nähe» listet die zehn nächsten.',
     ],
     en: [
       'New on the map: "Add a place". If a changing table or a place to nurse is missing, move the map until the cross sits on the place and say what is there – without your name. The person running Zuno checks the report; then everyone sees the place.',
-      'The map now has three buttons at the bottom: "Places nearby" lists the ten closest, "Info" says where the data comes from, "Add a place" reports a new one.',
+      'The map now has three buttons at the bottom: "Info" says where the data comes from, "Add a place" reports a new one, "Places nearby" lists the ten closest.',
     ],
   },
   {

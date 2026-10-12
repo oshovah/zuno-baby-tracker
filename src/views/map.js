@@ -6,9 +6,9 @@
 //
 // The screen is a full-bleed stage (style.css .map-stage) with the filter
 // floating at the top, «Mein Standort» at the side and a bar of three
-// buttons at the bottom: «Orte in der Nähe» (the ten nearest in the bottom
-// sheet, once the phone has a fix), «Info» (where the data comes from, its
-// date, the attribution) and «Ort hinzufügen» (below); a small attribution
+// buttons at the bottom: «Info» (where the data comes from, its date, the
+// attribution), «Ort hinzufügen» (below) and «Orte in der Nähe» (the ten
+// nearest in the bottom sheet, once the phone has a fix); a small attribution
 // link sits over the map's corner. A tap on a pin opens the place in the
 // sheet. The engine
 // (map-engine.js, Leaflet + the pins) is loaded with import() on the first
@@ -136,9 +136,9 @@ export function renderMap(el) {
       <p class="map-hint" data-hint hidden>${escapeHtml(t('map.zoomIn'))}</p>
       <p class="map-attrib"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">${escapeHtml(t('map.attribution'))}</a></p>
       <div class="map-bar" data-bar>
-        <button type="button" class="map-bar-btn" data-nearby>${NEARBY_SVG}<span>${escapeHtml(t('map.nearby.button'))}</span></button>
         <button type="button" class="map-bar-btn" data-info>${INFO_SVG}<span>${escapeHtml(t('map.info.button'))}</span></button>
         <button type="button" class="map-bar-btn" data-add hidden>${SUGGEST_SVG}<span>${escapeHtml(t('spots.fab'))}</span></button>
+        <button type="button" class="map-bar-btn" data-nearby>${NEARBY_SVG}<span>${escapeHtml(t('map.nearby.button'))}</span></button>
       </div>
     </div>`;
   document.body.classList.add('map-open');
