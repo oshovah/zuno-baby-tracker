@@ -196,7 +196,7 @@ the database does not show whoever runs it anyway, and `GET /api/stats` is
 the same 404 for everyone else.
 
 **Reported places.** With an operator configured, the «Karte» tab also
-offers «Ort melden»: a parent moves the map until the crosshair sits on the
+offers «Ort hinzufügen»: a parent moves the map until the crosshair sits on the
 place, says what is there (a changing table, a place to nurse), a name and
 where exactly, and sends it. Unlike everything else this is stored in the
 clear ([`api/lib/spots.php`](api/lib/spots.php), table `spots`): a
@@ -624,7 +624,7 @@ auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
   Zeile ist OpenStreetMap selbst – dort eingetragen, wird sie beim nächsten
   Lauf «covered».
 - **Gemeldete Orte**: mit eingerichtetem Betreiber (`ADMIN_USERNAME`) zeigt
-  die Karte «Ort melden»: die Karte schieben, bis das Kreuz auf dem Ort
+  die Karte «Ort hinzufügen»: die Karte schieben, bis das Kreuz auf dem Ort
   steht (ab Zoom 15), sagen, was es dort gibt, Name und «Wo genau?», melden.
   Die Meldung geht ohne Namen an den Server (`api/lib/spots.php`, Tabelle
   `spots`: Position, Art, Name, Notiz im Klartext – öffentliche Kartendaten,
@@ -652,9 +652,11 @@ auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
   Canvas (`src/map-engine.js`, erst beim Öffnen des Tabs geladen; kein
   Worker, keine Schriftdateien, keine Sprites); die Pins sind DOM-Elemente in
   den Farben des Designs, ab Zoom 11. «Mein Standort» nur auf Tipp
-  (Geolocation; die Position verlässt das Handy nicht), die drei nächsten
-  Orte in der Leiste (zuklappbar), «In der Nähe» zehn im Sheet – beides
-  funktioniert auch ohne Karte (kein Netz, kein Archiv auf dem Server). Wo
+  (Geolocation; die Position verlässt das Handy nicht). Unten drei Knöpfe:
+  «Orte in der Nähe» (die zehn nächsten im Sheet – geht auch ohne Karte,
+  ohne Netz, ohne Archiv auf dem Server), «Info» (woher die Daten stammen,
+  ihr Stand, die Attribution; eine kleine Attribution steht zudem über der
+  Kartenecke) und «Ort hinzufügen». Wo
   die Karte beim Öffnen steht, legt jedes Handy unter Mehr › Einstellungen ›
   Karte fest (`prefs.mapStart`, aus dem zuletzt gezeigten Ausschnitt). Der Service Worker
   lässt Range-Anfragen und `basemap/` am Cache vorbei, `map/pois.json` bleibt

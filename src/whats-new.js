@@ -17,21 +17,23 @@ export const WHATS_NEW = [
   {
     id: '2026-10-12-b',
     de: [
-      'Neu auf der Karte: «Ort melden». Fehlt ein Wickeltisch oder ein Platz zum Stillen, schieb die Karte, bis das Kreuz auf dem Ort steht, und sag, was es dort gibt – ohne deinen Namen. Die Person, die Zuno betreibt, prüft die Meldung; danach sehen den Ort alle.',
+      'Neu auf der Karte: «Ort hinzufügen». Fehlt ein Wickeltisch oder ein Platz zum Stillen, schieb die Karte, bis das Kreuz auf dem Ort steht, und sag, was es dort gibt – ohne deinen Namen. Die Person, die Zuno betreibt, prüft die Meldung; danach sehen den Ort alle.',
+      'Unten auf der Karte stehen jetzt drei Knöpfe: «Orte in der Nähe» listet die zehn nächsten, «Info» sagt, woher die Daten stammen, «Ort hinzufügen» meldet einen neuen.',
     ],
     en: [
-      'New on the map: "Report a place". If a changing table or a place to nurse is missing, move the map until the cross sits on the place and say what is there – without your name. The person running Zuno checks the report; then everyone sees the place.',
+      'New on the map: "Add a place". If a changing table or a place to nurse is missing, move the map until the cross sits on the place and say what is there – without your name. The person running Zuno checks the report; then everyone sees the place.',
+      'The map now has three buttons at the bottom: "Places nearby" lists the ten closest, "Info" says where the data comes from, "Add a place" reports a new one.',
     ],
   },
   {
     id: '2026-10-12',
     de: [
-      'Neu: der Tab «Karte» zeigt Wickeltische und Still-Orte in der Schweiz – aus OpenStreetMap, von unserem eigenen Server. «Mein Standort» holt die Position, darunter stehen die drei nächsten Orte, «In der Nähe» listet zehn; ein Tipp auf einen Punkt sagt, wo genau der Tisch ist und was es dort gibt.',
-      'Unter Mehr › Einstellungen › Karte legst du fest, wo die Karte beim Öffnen steht; die Leiste mit den nächsten Orten klappt mit einem Tipp zu.',
+      'Neu: der Tab «Karte» zeigt Wickeltische und Still-Orte in der Schweiz – aus OpenStreetMap, von unserem eigenen Server. «Mein Standort» holt die Position, «Orte in der Nähe» listet die zehn nächsten; ein Tipp auf einen Punkt sagt, wo genau der Tisch ist und was es dort gibt.',
+      'Unter Mehr › Einstellungen › Karte legst du fest, wo die Karte beim Öffnen steht.',
     ],
     en: [
-      'New: the "Map" tab shows changing tables and nursing places in Switzerland – from OpenStreetMap, served by our own server. "My location" gets your position, the three closest places sit below it, "Nearby" lists ten; a tap on a dot says where exactly the table is and what is there.',
-      'Under More › Settings › Map you set where the map stands when it opens; the strip of nearest places folds away with a tap.',
+      'New: the "Map" tab shows changing tables and nursing places in Switzerland – from OpenStreetMap, served by our own server. "My location" gets your position, "Places nearby" lists the ten closest; a tap on a dot says where exactly the table is and what is there.',
+      'Under More › Settings › Map you set where the map stands when it opens.',
     ],
   },
   {

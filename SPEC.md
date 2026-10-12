@@ -329,14 +329,16 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
     the local servers let ranges through). Leaflet + protomaps-leaflet on
     canvas, loaded on the first visit; DOM pins in the design's hues from
     zoom 11; a filter (all · changing table · nursing); «Mein Standort» on
-    tap only (the position never leaves the phone); the three nearest places
-    in a strip (foldable, `prefs.mapStripFolded`), ten under «In der Nähe» in
-    the sheet — both work without the basemap; the map opens on the whole
+    tap only (the position never leaves the phone); a bar of three buttons
+    at the bottom — «Orte in der Nähe» (the ten nearest in the sheet, works
+    without the basemap), «Info» (where the data comes from, its date, the
+    attribution; a small attribution link sits over the map's corner too)
+    and «Ort hinzufügen» —; the map opens on the whole
     box or on the per-device start view set under Mehr › Einstellungen ›
     Karte (`prefs.mapStart`, taken from the last view `prefs.mapView`); a tap on a pin opens the place (where the table is, fee,
     wheelchair, hours, address, the link to OpenStreetMap). No third-party
     request: the CSP stays as it is. Pure: `src/mapdata.js`.
-    **Ort melden** (with an operator configured): a crosshair on the map
+    **Ort hinzufügen** (with an operator configured): a crosshair on the map
     centre (from zoom 15), what is there, a name, where exactly — sent
     without a name, stored pending in the clear (`spots`), curated by the
     operator under Mehr › Anleitung («Gemeldete Orte»: approve, correct,

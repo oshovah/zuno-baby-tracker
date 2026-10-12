@@ -5,28 +5,30 @@
 // page promises that, the CSP enforces it.
 //
 // The screen is a full-bleed stage (style.css .map-stage) with the filter
-// floating at the top, «Mein Standort» at the side and a strip at the
-// bottom: the three nearest places once the phone has a fix, «In der Nähe»
-// for the list of ten in the bottom sheet, the attribution and the data's
-// date. A tap on a pin opens the place in the sheet. The engine
+// floating at the top, «Mein Standort» at the side and a bar of three
+// buttons at the bottom: «Orte in der Nähe» (the ten nearest in the bottom
+// sheet, once the phone has a fix), «Info» (where the data comes from, its
+// date, the attribution) and «Ort hinzufügen» (below); a small attribution
+// link sits over the map's corner. A tap on a pin opens the place in the
+// sheet. The engine
 // (map-engine.js, Leaflet + the pins) is loaded with import() on the first
-// visit; without it — no basemap on this server, no network — the strip and
-// the sheet still work from the places file, which the service worker
-// keeps. Everything a parent reads goes through t() (namespace `map`); the
+// visit; without it — no basemap on this server, no network — the nearest
+// list in the sheet still works from the places file, which the service
+// worker keeps. Everything a parent reads goes through t() (namespace `map`); the
 // wording and the distances are pure in mapdata.js.
 //
 // Module state survives a re-mount (every tab switch and a language switch
 // re-render the view): the places and the basemap index are fetched once,
-// the viewport, the filter and the last fix carry over. Two things are per
+// the viewport, the filter and the last fix carry over. One thing is per
 // device (prefs): where the map starts — the whole box, or the view set
-// under Mehr › Einstellungen › Karte, which then wins over the last view —
-// and whether the strip of nearest places is folded away. The last view is
-// written to prefs on every move: the settings take it as the start view.
+// under Mehr › Einstellungen › Karte, which then wins over the last view.
+// The last view is written to prefs on every move: the settings take it as
+// the start view.
 //
 // Reported places (store.spots, src/spots.js): the approved list is laid
 // over the OSM file whenever the store says it moved (every sync notifies).
-// «Ort melden» puts the view into picking mode — a crosshair in the middle,
-// the strip replaced by a bar with «Hier melden» — and opens the form on
+// «Ort hinzufügen» puts the view into picking mode — a crosshair in the
+// middle, the button bar replaced by one with «Hier melden» — and opens the form on
 // the map centre (spots-sheet.js). The operator's list can send the map
 // here with a view to open on (takeMapFocus, consumed once).
 
@@ -40,12 +42,12 @@ import { withSpots, takeMapFocus, SPOT_PICK_MIN_ZOOM } from '../spots.js';
 import { openSpotForm } from '../spots-sheet.js';
 
 const FILTERS = ['all', 'changing', 'nursing'];
-const STRIP_ROWS = 3;
 const LIST_ROWS = 10;
 
-const CHEVRON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>`;
 const LOCATE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="6.5" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /><path d="M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5" /></svg>`;
 const SUGGEST_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0c0 4.9-6.5 10.5-6.5 10.5z" /><path d="M12 8v6M9 11h6" /></svg>`;
+const NEARBY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0c0 4.9-6.5 10.5-6.5 10.5z" /><circle cx="12" cy="11" r="2.4" /></svg>`;
+const INFO_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5" /><circle cx="12" cy="7.6" r="0.9" fill="currentColor" stroke="none" /></svg>`;
 
 let indexPromise = null; // basemap/index.json, once (null = not set up on this server)
 let lastView = null; // {lon, lat, zoom} of the last visit
@@ -76,7 +78,7 @@ function kindIcon(kind) {
   return icon(kind === 'nursing' ? 'breastfeed' : 'diaper');
 }
 
-/** One row of the nearest list / the strip (a button: tap = go there). */
+/** One row of the nearest list (a button: tap = open the place). */
 function rowHtml(feature, meters) {
   const p = feature.properties;
   const lines = poiLines(p);
@@ -133,14 +135,11 @@ export function renderMap(el) {
       </div>
       <p class="map-notice" data-notice>${escapeHtml(t('map.loading'))}</p>
       <p class="map-hint" data-hint hidden>${escapeHtml(t('map.zoomIn'))}</p>
-      <div class="map-strip" data-strip>
-        <div class="map-strip-head">
-          <button type="button" class="map-strip-toggle" data-fold aria-expanded="${prefs.mapStripFolded ? 'false' : 'true'}" hidden>${CHEVRON_SVG}${escapeHtml(t('map.strip.title'))}</button>
-          <span data-strip-hint>${escapeHtml(t('map.strip.hint'))}</span>
-          <button type="button" class="btn small" data-nearby>${escapeHtml(t('map.nearby.button'))}</button>
-        </div>
-        <div data-strip-rows ${prefs.mapStripFolded ? 'hidden' : ''}></div>
-        <p class="map-attrib"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">${escapeHtml(t('map.attribution'))}</a><span data-date></span></p>
+      <p class="map-attrib"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">${escapeHtml(t('map.attribution'))}</a></p>
+      <div class="map-bar" data-bar>
+        <button type="button" class="map-bar-btn" data-nearby>${NEARBY_SVG}<span>${escapeHtml(t('map.nearby.button'))}</span></button>
+        <button type="button" class="map-bar-btn" data-info>${INFO_SVG}<span>${escapeHtml(t('map.info.button'))}</span></button>
+        <button type="button" class="map-bar-btn" data-add hidden>${SUGGEST_SVG}<span>${escapeHtml(t('spots.fab'))}</span></button>
       </div>
     </div>`;
   document.body.classList.add('map-open');
@@ -148,12 +147,10 @@ export function renderMap(el) {
   const canvas = el.querySelector('[data-map-canvas]');
   const noticeEl = el.querySelector('[data-notice]');
   const hintEl = el.querySelector('[data-hint]');
-  const stripHint = el.querySelector('[data-strip-hint]');
-  const stripRows = el.querySelector('[data-strip-rows]');
-  const foldBtn = el.querySelector('[data-fold]');
-  const dateEl = el.querySelector('[data-date]');
   const locateBtn = el.querySelector('[data-locate]');
-  const suggestBtn = el.querySelector('[data-suggest]');
+  const nearbyBtn = el.querySelector('[data-nearby]');
+  const infoBtn = el.querySelector('[data-info]');
+  const addBtn = el.querySelector('[data-add]');
   const pickEl = el.querySelector('[data-pick]');
   const pickHint = el.querySelector('[data-pick-hint]');
   const hereBtn = el.querySelector('[data-pick-here]');
@@ -163,7 +160,7 @@ export function renderMap(el) {
   let fc = null; // the places file, once loaded
   let all = []; // every place: the file plus the approved reports
   let spotsKey = null; // which list of reports `all` was built with
-  let picking = false; // «Ort melden»: the crosshair is up
+  let picking = false; // «Ort hinzufügen»: the crosshair is up
   let me = lastMe;
   const darkMedia = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -176,22 +173,6 @@ export function renderMap(el) {
   const shown = () => filterKind(all, filter);
   const byId = (id) => all.find((f) => f.properties.id === id) || null;
 
-  /** The strip: the nearest three of the filter (folded away when the
-   *  phone says so), or the hint to get a fix. */
-  function renderStrip() {
-    const rows = me && all.length ? nearest(shown(), me.lon, me.lat, STRIP_ROWS) : [];
-    const folded = prefs.mapStripFolded;
-    stripHint.hidden = rows.length > 0;
-    foldBtn.hidden = rows.length === 0;
-    foldBtn.setAttribute('aria-expanded', folded ? 'false' : 'true');
-    stripRows.hidden = folded;
-    stripRows.innerHTML = rows.length ? rows.map(({ feature, meters }) => rowHtml(feature, meters)).join('') : '';
-  }
-  foldBtn.addEventListener('click', () => {
-    prefs.mapStripFolded = !prefs.mapStripFolded;
-    renderStrip();
-  });
-
   function applyFilter(next) {
     filter = next;
     el.querySelectorAll('[data-filter]').forEach((b) => {
@@ -200,7 +181,6 @@ export function renderMap(el) {
       b.setAttribute('aria-checked', String(on));
     });
     if (engine) engine.setPois(shown());
-    renderStrip();
   }
 
   /** The places: the file plus the approved reports (store.spots), re-laid
@@ -214,11 +194,10 @@ export function renderMap(el) {
     el.dataset.pois = String(all.length);
     el.dataset.spots = String(all.length - fc.features.length);
     if (engine) engine.setPois(shown());
-    renderStrip();
-    suggestBtn.hidden = !(store.spots.on && engine); // reporting needs the map (the crosshair)
+    addBtn.hidden = !(store.spots.on && engine); // reporting needs the map (the crosshair)
   }
 
-  // --- «Ort melden»: the crosshair marks the map centre; «Hier melden» needs
+  // --- «Ort hinzufügen»: the crosshair marks the map centre; «Hier melden» needs
   //     a close zoom, so the cross sits on a door, not on a block ---
   function syncPick() {
     if (!picking || !engine) return;
@@ -253,7 +232,7 @@ export function renderMap(el) {
     });
   }
 
-  /** A pin or a strip row: the place in the sheet. */
+  /** A pin: the place in the sheet. */
   function openPoi(feature) {
     openSheet(poiTitle(feature.properties), (body, close) => {
       body.innerHTML = detailHtml(feature, me, false);
@@ -261,7 +240,7 @@ export function renderMap(el) {
     });
   }
 
-  /** «In der Nähe»: ONE sheet whose body swaps between the list and a place
+  /** «Orte in der Nähe»: ONE sheet whose body swaps between the list and a place
    *  (a second openSheet right after close() would race the history pop). */
   function openNearby() {
     openSheet(t('map.nearby.title'), (body, close) => {
@@ -287,6 +266,20 @@ export function renderMap(el) {
     });
   }
 
+  /** «Info»: where the places and the map come from, their date, the attribution. */
+  function openInfo() {
+    openSheet(t('map.info.title'), (body) => {
+      const date = fc && fc.generated ? fmtDay(fc.generated) : null;
+      body.innerHTML = `
+        <p>${escapeHtml(t('map.info.places'))}${date ? ` ${escapeHtml(t('map.info.date', { date }))}` : ''}</p>
+        <p>${escapeHtml(t('map.info.tiles'))}</p>
+        ${store.spots.on ? `<p>${escapeHtml(t('map.info.spots'))}</p>` : ''}
+        <p>${escapeHtml(t('map.info.location'))}</p>
+        <p>${escapeHtml(t('map.info.missing'))}</p>
+        <p class="hint">${escapeHtml(t('map.info.license'))} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">openstreetmap.org/copyright</a></p>`;
+    });
+  }
+
   /** The phone's position, on a tap only; never leaves the device. */
   function locate() {
     return new Promise((resolve) => {
@@ -306,7 +299,6 @@ export function renderMap(el) {
             engine.setMe(me.lon, me.lat);
             engine.flyTo(me.lon, me.lat, 15);
           }
-          renderStrip();
           resolve(me);
         },
         (err) => {
@@ -323,25 +315,18 @@ export function renderMap(el) {
   locateBtn.addEventListener('click', () => {
     locate();
   });
-  suggestBtn.addEventListener('click', enterPick);
+  addBtn.addEventListener('click', enterPick);
+  infoBtn.addEventListener('click', openInfo);
   el.querySelector('[data-pick-cancel]').addEventListener('click', exitPick);
   hereBtn.addEventListener('click', () => {
     if (!engine || !picking) return;
     const v = engine.getView();
     openSpotForm({ lon: v.lon, lat: v.lat, onSent: exitPick });
   });
-  el.querySelector('[data-nearby]').addEventListener('click', async () => {
+  nearbyBtn.addEventListener('click', async () => {
     if (!all.length) return;
     if (!me && !(await locate())) return;
     if (!gone) openNearby();
-  });
-  stripRows.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-poi]');
-    if (!btn) return;
-    const f = byId(btn.dataset.poi);
-    if (!f) return;
-    goTo(f);
-    openPoi(f);
   });
 
   const onScheme = () => {
@@ -361,7 +346,6 @@ export function renderMap(el) {
     }
     if (gone) return;
     applySpots();
-    if (fc.generated) dateEl.textContent = ` · ${t('map.data.date', { date: fmtDay(fc.generated) })}`;
     if (me) locateBtn.classList.add('on');
 
     let index;
@@ -409,7 +393,7 @@ export function renderMap(el) {
     notice('');
     engine.setPois(shown());
     if (me) engine.setMe(me.lon, me.lat);
-    suggestBtn.hidden = !store.spots.on;
+    addBtn.hidden = !store.spots.on;
     el.dataset.mapState = 'ready';
   })();
 

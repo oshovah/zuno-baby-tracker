@@ -1,15 +1,15 @@
-// «Ort melden»: the button on the map, the picking bar and the form
+// «Ort hinzufügen»: the button on the map, the picking bar and the form
 // (views/map.js, src/spots-sheet.js), the section under Mehr › Anleitung
 // and the operator's list of reported places. «Die Person, die Zuno
 // betreibt» like the feedback copy: it fits every installation.
 export default {
-  'fab': 'Ort melden',
+  'fab': 'Ort hinzufügen',
   'pick.hint': 'Schieb die Karte, bis das Kreuz auf dem Ort steht.',
   'pick.zoom': 'Näher heranzoomen, um einen Ort zu melden.',
   'pick.cancel': 'Abbrechen',
   'pick.here': 'Hier melden',
   // the form
-  'form.title': 'Ort melden',
+  'form.title': 'Ort hinzufügen',
   'form.intro': 'Ein Wickeltisch oder ein Platz zum Stillen, den die Karte noch nicht kennt? Die Position ist das Kreuz auf der Karte.',
   'form.kindLabel': 'Was gibt es dort?',
   'form.nameLabel': 'Name des Orts',
@@ -18,7 +18,7 @@ export default {
   'form.notePlaceholder': 'z. B. im Rollstuhl-WC, 1. Stock',
   'form.count': '{n}/{max}',
   'form.privacy': 'Die Meldung geht ohne deinen Namen an die Person, die Zuno betreibt, und wird ohne Bezug zu deinem Konto gespeichert. Nach der Prüfung sehen den Ort alle.',
-  'form.send': 'Melden',
+  'form.send': 'Senden',
   'form.sending': 'Wird gesendet …',
   'form.sent': 'Danke – der Ort wird geprüft',
   'form.unavailable': 'Orte melden ist hier nicht eingerichtet.',

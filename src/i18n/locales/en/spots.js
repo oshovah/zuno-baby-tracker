@@ -1,14 +1,14 @@
-// "Report a place": the button on the map, the picking bar and the form
+// "Add a place": the button on the map, the picking bar and the form
 // (views/map.js, src/spots-sheet.js), the section under More › Guide and
 // the operator's list of reported places.
 export default {
-  'fab': 'Report a place',
+  'fab': 'Add a place',
   'pick.hint': 'Move the map until the cross sits on the place.',
   'pick.zoom': 'Zoom in closer to report a place.',
   'pick.cancel': 'Cancel',
   'pick.here': 'Report here',
   // the form
-  'form.title': 'Report a place',
+  'form.title': 'Add a place',
   'form.intro': 'A changing table or a place to nurse the map does not know yet? The position is the cross on the map.',
   'form.kindLabel': 'What is there?',
   'form.nameLabel': 'Name of the place',
@@ -17,7 +17,7 @@ export default {
   'form.notePlaceholder': 'e.g. in the accessible toilet, 1st floor',
   'form.count': '{n}/{max}',
   'form.privacy': 'The report goes to the person running Zuno without your name and is stored with no link to your account. Once checked, everyone sees the place.',
-  'form.send': 'Report',
+  'form.send': 'Send',
   'form.sending': 'Sending …',
   'form.sent': 'Thanks – the place will be checked',
   'form.unavailable': 'Reporting places is not set up here.',

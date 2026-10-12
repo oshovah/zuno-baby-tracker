@@ -1147,12 +1147,6 @@ test('createPrefs: user/authed/bottle prefs round-trip and validate', () => {
   assert.equal(prefs.mapView, null);
   prefs.mapView = { lon: 7.4474, lat: 46.948, zoom: 14 };
   assert.deepEqual(prefs.mapView, { lon: 7.4474, lat: 46.948, zoom: 14 });
-  assert.equal(prefs.mapStripFolded, false);
-  prefs.mapStripFolded = true;
-  assert.equal(prefs.mapStripFolded, true);
-  assert.equal(storage.getItem('bt.mapStripFolded'), '1');
-  prefs.mapStripFolded = false;
-  assert.equal(storage.getItem('bt.mapStripFolded'), null);
   prefs.hiddenCharts = [];
   assert.equal(storage.getItem('bt.hiddenCharts'), null);
   assert.equal(prefs.keepAwake, true);

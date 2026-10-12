@@ -237,7 +237,6 @@ const WHATS_NEW_SEEN_KEY = 'bt.whatsNewSeen';
 const HIDDEN_CHARTS_KEY = 'bt.hiddenCharts';
 const MAP_START_KEY = 'bt.mapStart';
 const MAP_VIEW_KEY = 'bt.mapView';
-const MAP_STRIP_FOLDED_KEY = 'bt.mapStripFolded';
 
 /** A map view {lon, lat, zoom} that is on this planet and at a zoom the map
  *  has (views/map.js, the engine's min/max), rounded — or null. */
@@ -477,13 +476,6 @@ export function createPrefs(storage) {
     set mapView(v) {
       const c = cleanMapView(v);
       write(MAP_VIEW_KEY, c ? JSON.stringify(c) : null);
-    },
-    /** The map's strip of nearest places folded away (true); open by default. */
-    get mapStripFolded() {
-      return read(MAP_STRIP_FOLDED_KEY) === '1';
-    },
-    set mapStripFolded(v) {
-      write(MAP_STRIP_FOLDED_KEY, v ? '1' : null);
     },
     /** The family settings this device stored per device before they were
      *  synced — only the keys it actually set. They stand in until the
