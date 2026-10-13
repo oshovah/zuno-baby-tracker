@@ -48,6 +48,8 @@ const LOCATE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const SUGGEST_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0c0 4.9-6.5 10.5-6.5 10.5z" /><path d="M12 8v6M9 11h6" /></svg>`;
 const NEARBY_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0c0 4.9-6.5 10.5-6.5 10.5z" /><circle cx="12" cy="11" r="2.4" /></svg>`;
 const INFO_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5" /><circle cx="12" cy="7.6" r="0.9" fill="currentColor" stroke="none" /></svg>`;
+// a three-quarter ring; style.css turns it (.map-bar-btn svg.spin)
+const SPIN_SVG = `<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg>`;
 
 let indexPromise = null; // basemap/index.json, once (null = not set up on this server)
 let lastView = null; // {lon, lat, zoom} of the last visit
@@ -274,6 +276,7 @@ export function renderMap(el) {
         <p>${escapeHtml(t('map.info.tiles'))}</p>
         ${store.spots.on ? `<p>${escapeHtml(t('map.info.spots'))}</p>` : ''}
         <p>${escapeHtml(t('map.info.location'))}</p>
+        <p>${escapeHtml(t('map.info.start'))}</p>
         <p>${escapeHtml(t('map.info.missing'))}</p>
         <p class="hint">${escapeHtml(t('map.info.license'))} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">openstreetmap.org/copyright</a></p>`;
     });
@@ -322,9 +325,22 @@ export function renderMap(el) {
     const v = engine.getView();
     openSpotForm({ lon: v.lon, lat: v.lat, onSent: exitPick });
   });
+  // Without a fix the tap first asks the phone for one — that takes a second
+  // or two, so the button itself says so meanwhile: the ring and «Suche
+  // Standort …» replace its icon and label until the answer is in.
+  const nearbyHtml = nearbyBtn.innerHTML;
   nearbyBtn.addEventListener('click', async () => {
-    if (!all.length) return;
-    if (!me && !(await locate())) return;
+    if (!all.length || nearbyBtn.disabled) return;
+    if (!me) {
+      nearbyBtn.disabled = true;
+      nearbyBtn.setAttribute('aria-busy', 'true');
+      nearbyBtn.innerHTML = `${SPIN_SVG}<span>${escapeHtml(t('map.nearby.locating'))}</span>`;
+      const fix = await locate();
+      nearbyBtn.innerHTML = nearbyHtml;
+      nearbyBtn.removeAttribute('aria-busy');
+      nearbyBtn.disabled = false;
+      if (!fix) return;
+    }
     if (!gone) openNearby();
   });
 

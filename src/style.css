@@ -3066,6 +3066,13 @@ body.map-open {
 .map-bar-btn[hidden] {
   display: none;
 }
+/* the ring in «Orte in der Nähe» while the phone looks for its position */
+.map-bar-btn svg.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .map-bar-btn:disabled {
   opacity: 0.55;
