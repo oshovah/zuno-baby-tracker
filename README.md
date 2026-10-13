@@ -611,8 +611,9 @@ auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
   schreibt `public/map/pois.json` (~160 KB, gitignored; fährt mit jedem Build
   mit, die Karte zeigt das Datum). `scripts/map-data.mjs`; die Normalisierung
   und die Wortwahl sind pur in `src/mapdata.js` (node-getestet).
-- **Ergänzungen**: `scripts/map/extra-places.csv` hält die wenigen Orte, die
-  OpenStreetMap (noch) nicht kennt – eine Zeile je Ort, die Spalten sind
+- **Ergänzungen**: `scripts/map/extra-places.csv` hält Orte, die
+  OpenStreetMap (noch) nicht kennt, und Angaben zu Orten, bei denen dort der
+  Wickeltisch noch nicht eingetragen ist – eine Zeile je Ort, die Spalten sind
   OSM-Schlüssel (`changing_table`, `baby_feeding`, `level` …) plus `use`
   (yes/no), Quelle, Prüfdatum und Notiz. `npm run map:data` fragt Overpass,
   was an der Stelle schon steht (ein Objekt derselben Art, 30 m bei einem
