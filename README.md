@@ -225,6 +225,11 @@ places and tiles (`public/map/pois.json` and `basemap/`, both generated — see
 shows the attribution, and `basemap/LICENSE.txt` travels with the archive.
 The places parents report in the app are the installation's own data, not
 OpenStreetMap's.
+The hand-kept additions in
+[`scripts/map/extra-places.csv`](scripts/map/extra-places.csv) are dedicated
+to the public domain ([CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/))
+so that anyone may carry them into OpenStreetMap; a row that takes its point
+or tags from an OSM object says so in its note, and that part stays OSM's.
 
 ---
 
@@ -667,9 +672,12 @@ auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
   Standort. Wer einen Ort meldet, schickt dessen Position, Art, Name und
   Notiz (ohne Konto; die Drossel zählt pro Adresse).
 - **Lizenz**: Daten © OpenStreetMap-Mitwirkende, ODbL; die Karte zeigt die
-  Attribution, `basemap/LICENSE.txt` liegt beim Archiv. Still-Orte sind in
-  OpenStreetMap noch dünn erfasst (Oktober 2026: 15 in der Box, dazu 800
-  Wickeltische) – mehr gibt es nur über Einträge dort.
+  Attribution, `basemap/LICENSE.txt` liegt beim Archiv. Die Ergänzungen in
+  `scripts/map/extra-places.csv` sind gemeinfrei (CC0 1.0), damit sie jemand
+  nach OpenStreetMap übertragen kann; nimmt eine Zeile ihren Punkt oder ihre
+  Tags von einem OSM-Objekt, sagt es die Notiz – der Teil bleibt ODbL.
+  Still-Orte sind in OpenStreetMap noch dünn erfasst (Oktober 2026: 15 in der
+  Box, dazu 800 Wickeltische) – mehr gibt es nur über Einträge dort.
 - **Anderes Gebiet**: die Box in `scripts/lib/map-config.mjs` ändern und
   beide Scripts erneut laufen lassen.
 

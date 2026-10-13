@@ -12,6 +12,11 @@
 # entered there, the row turns «covered» on the next run.
 # Texts a parent reads (name, changing_table:description) are German like the OSM data
 # around them; lat/lon are WGS 84; `checked` is the day the row was last verified.
+# Licence: what this file adds — the places, addresses, descriptions and notes
+# entered here — is dedicated to the public domain (CC0 1.0,
+# https://creativecommons.org/publicdomain/zero/1.0/) so that anyone may carry it
+# into OpenStreetMap. Where a row takes its point or tags from an OSM object (the
+# note names it), that part is © OpenStreetMap contributors, ODbL.
 id,use,name,feature,lat,lon,changing_table,changing_table:location,changing_table:fee,changing_table:description,baby_feeding,level,access,opening_hours,addr:street,addr:housenumber,addr:postcode,addr:city,source,checked,note
 bern-wc-kramgasse,yes,WC Kramgasse,amenity=toilets,46.94809,7.45070,yes,,no,Möglicherweise in der Eurokey-Kabine – dann nur mit Eurokey-Schlüssel zugänglich,,,,,Kramgasse,30,3011,Bern,city free-toilet list 2026-02,2026-10-12,"Free city toilet two minutes from the Zytglogge; the point is the address. No toilet in OSM within 60 m. Whether the table sits behind the Eurokey door is unconfirmed – check on site."
 bern-wc-allmendstrasse,yes,WC Allmendstrasse,amenity=toilets,46.95932,7.45158,yes,,no,Möglicherweise in der Eurokey-Kabine – dann nur mit Eurokey-Schlüssel zugänglich,,,,,Allmendstrasse,45,3014,Bern,city free-toilet list 2026-02,2026-10-12,"The point is the pair of OSM toilets on the street (n5189421706, n8654495585, both changing_table=yes); the address geocodes to no. 1. Expected: covered."
