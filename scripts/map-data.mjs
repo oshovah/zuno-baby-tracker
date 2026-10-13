@@ -4,14 +4,15 @@
  * (`changing_table=*`, not `no`) and every place to nurse (`baby_feeding=*`,
  * not `no`) OpenStreetMap knows inside the box of scripts/lib/map-config.mjs,
  * fetched from Overpass, plus the few places of scripts/map/extra-places.csv
- * that OSM does not know (yet) — written as compact GeoJSON to
+ * that OSM does not know (yet), or lacks the table at — written as compact
+ * GeoJSON to
  *
  *   public/map/pois.json       (gitignored; Vite ships it with every build)
  *
  * so the app never asks a third party at run time — the login page promises
  * that, and the packaged CSP enforces it. Run it before a deploy whenever the
- * places should be fresher (the map shows the file's date); packaging
- * refuses without the file (scripts/package.mjs).
+ * places should be fresher (the map shows the day the OSM data is from);
+ * packaging refuses without the file (scripts/package.mjs).
  *
  *   npm run map:data
  *
@@ -52,28 +53,46 @@ out tags center;`;
 // Overpass asks for a User-Agent that says who is calling.
 const USER_AGENT = 'zuno-baby-tracker map-data (+https://github.com/oshovah/zuno-baby-tracker)';
 
+/** The answer of the first instance that gives one — they all hold the same
+ *  data (map-config.mjs), so which one it was does not matter. A 504 under
+ *  load or an HTML error page instead of JSON is common and passes: the
+ *  list is tried twice, with a pause before the second round. */
 async function fetchOverpass(query) {
   let lastErr = null;
-  for (const url of OVERPASS_ENDPOINTS) {
-    log(`asking ${url} …`);
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
-        body: new URLSearchParams({ data: query }),
-        signal: AbortSignal.timeout(240000),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!json || !Array.isArray(json.elements)) throw new Error('no elements in the answer');
-      if (json.remark && /timed out|runtime error/i.test(json.remark)) throw new Error(json.remark);
-      return json;
-    } catch (err) {
-      lastErr = err;
-      log(`  ${url}: ${err.message}`);
+  for (let round = 1; round <= 2; round++) {
+    if (round > 1) {
+      log('every instance failed once — once more in 15 s …');
+      await new Promise((f) => setTimeout(f, 15000));
+    }
+    for (const url of OVERPASS_ENDPOINTS) {
+      log(`asking ${url} …`);
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
+          body: new URLSearchParams({ data: query }),
+          signal: AbortSignal.timeout(240000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json || !Array.isArray(json.elements)) throw new Error('no elements in the answer');
+        if (json.remark && /timed out|runtime error/i.test(json.remark)) throw new Error(json.remark);
+        log(`  answered: ${json.elements.length} elements, data of ${dataStamp(json) || 'an unknown day'}`);
+        return json;
+      } catch (err) {
+        lastErr = err;
+        log(`  ${url}: ${err.message}`);
+      }
     }
   }
   throw new Error(`no Overpass instance answered (${lastErr ? lastErr.message : 'unknown'})`);
+}
+
+/** When the answer's data is from: the instance's database timestamp
+ *  (`osm3s.timestamp_osm_base`, ISO), or null when the answer has none. */
+function dataStamp(json) {
+  const ts = json && json.osm3s && json.osm3s.timestamp_osm_base;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(String(ts || '')) ? String(ts) : null;
 }
 
 /** The rows of the extras file, checked — a bad row stops the run: a typo
@@ -102,7 +121,9 @@ function readExtras() {
 
 const extras = readExtras();
 const json = await fetchOverpass(placesQuery);
-const generated = new Date().toISOString().slice(0, 10);
+// the day the data is from — the map shows it as «Stand der Orte»; the day of
+// the run only when the answer carries no timestamp
+const generated = (dataStamp(json) || new Date().toISOString()).slice(0, 10);
 const fc = normalizeOverpass(json, { generated, bbox: [BBOX.west, BBOX.south, BBOX.east, BBOX.north] });
 
 const osmChanging = fc.features.filter((f) => f.properties.w).length;

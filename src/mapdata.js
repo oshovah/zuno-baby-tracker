@@ -127,7 +127,7 @@ const byId = (a, b) => (a.properties.id < b.properties.id ? -1 : a.properties.id
  * The Overpass answer (`out tags center`) as a FeatureCollection of points:
  * one feature per object that has a changing table or a place to nurse,
  * with ONLY the properties the app reads. Ways and relations use their
- * `center`. `generated` is the day the data was fetched (shown on the
+ * `center`. `generated` is the day the OSM data is from (shown on the
  * map), `bbox` the box it covers.
  */
 export function normalizeOverpass(json, { generated, bbox }) {

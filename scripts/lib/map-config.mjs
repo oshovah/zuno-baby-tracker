@@ -14,8 +14,17 @@ export const overpassBbox = (b = BBOX) => `${b.south},${b.west},${b.north},${b.e
 /** … `pmtiles extract --bbox` wants west,south,east,north. */
 export const pmtilesBbox = (b = BBOX) => `${b.west},${b.south},${b.east},${b.north}`;
 
-/** In this order: the Swiss instance first (it covers the margin), the main one as the fallback. */
-export const OVERPASS_ENDPOINTS = ['https://overpass.osm.ch/api/interpreter', 'https://overpass-api.de/api/interpreter'];
+/** Instances that hold the WHOLE planet, so the file is the same whichever
+ *  answers: the main one, then the two backends it balances between (one of
+ *  them usually answers while the front door says 504 under load). The Swiss
+ *  instance (overpass.osm.ch) is faster, but its extract ends short of the
+ *  box's margin — a quarter of the places would be missing whenever it was
+ *  the one that answered. */
+export const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+];
 
 /** The daily planet build the basemap is cut from (YYYYMMDD). */
 export const protomapsBuildUrl = (build) => `https://build.protomaps.com/${build}.pmtiles`;
