@@ -15,6 +15,13 @@ export function lastDays(last, n) {
   return out;
 }
 
+/** Every local date from `first` to `last` (both in), oldest first — none when `last` lies before `first`. */
+export function daysBetween(first, last) {
+  const out = [];
+  for (let d = first; d <= last; d = shiftDate(d, 1)) out.push(d);
+  return out;
+}
+
 const emptyDay = (day) => ({
   day,
   meals: 0,

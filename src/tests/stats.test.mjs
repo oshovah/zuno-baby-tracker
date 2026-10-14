@@ -2,7 +2,7 @@
 // (src/stats.js), over entries built like the meals tests build them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lastDays, dailyStats, measurementSeries, avgPerDay } from '../stats.js';
+import { lastDays, daysBetween, dailyStats, measurementSeries, avgPerDay } from '../stats.js';
 import { localDateOf, shiftDate } from '../ui.js';
 
 const NOW = '2026-09-02T10:00:00Z';
@@ -27,6 +27,12 @@ test('lastDays: n dates ending on the last one, oldest first', () => {
   assert.deepEqual(lastDays('2026-09-02', 3), ['2026-08-31', '2026-09-01', '2026-09-02']);
   assert.deepEqual(lastDays('2026-09-02', 1), ['2026-09-02']);
   assert.deepEqual(lastDays('2026-09-02', 0), []);
+});
+
+test('daysBetween: every date from the first to the last, across a month end, none for a reversed pair', () => {
+  assert.deepEqual(daysBetween('2026-08-30', '2026-09-02'), ['2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02']);
+  assert.deepEqual(daysBetween('2026-09-02', '2026-09-02'), ['2026-09-02']);
+  assert.deepEqual(daysBetween('2026-09-03', '2026-09-02'), []);
 });
 
 test('dailyStats: meals like the day chips, diapers, sleep, nursing minutes per side, bottle ml', () => {

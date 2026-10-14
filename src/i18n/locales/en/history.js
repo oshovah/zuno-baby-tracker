@@ -19,9 +19,11 @@ export default {
   'empty.meals': 'No meals in this period.',
   'view.charts': 'Charts',
   'empty.charts': 'No data for a chart yet.',
-  // The range chips of "Charts"
+  // The range chips of "Charts": "7 d" (short, four chips share the row)
+  // and "∞" — the chip shows the sign, this is its name for a screen reader
   'range.label': 'Range',
-  'range.days': '{n} days',
+  'range.days': '{n} d',
+  'range.all': 'Everything since the birth',
   // The charts: titles, the day number on the axis, the guide lines
   'empty.filtered': 'All charts hidden – show them again via the filter button.',
   'filter.label': 'Show or hide charts',

@@ -1,6 +1,6 @@
 // The SVG behind «Verlauf › Grafik»: a bar chart per day (stacked or
-// grouped, with an optional guide line) and a line chart over time (weight,
-// temperature). Pure string builders — geometry in a fixed viewBox that the
+// grouped, with an optional guide line), the same figures as lines per day
+// (the «∞» range) and a line chart over time (weight, temperature). Pure string builders — geometry in a fixed viewBox that the
 // stylesheet scales to the card's width; every colour is a class the
 // stylesheet maps to a design token (.milk, .diaper, .sleep, .measure,
 // .second). Node-tested in tests/charts.test.mjs.
@@ -154,6 +154,40 @@ export function barChart({ days, series, mode = 'stacked', guide = null, yFormat
     .join('');
   return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" role="img" aria-label="${escapeHtml(title)}">` +
     gridHtml(p, scaleY, ticks, yFormat) + guideHtml(p, scaleY, guide) + bars.join('') + valueLabels.join('') + labels + '</svg>';
+}
+
+/**
+ * The bar chart's figures as lines — the «∞» range, everything since the
+ * birth, where a bar a day would be a hair's breadth: one polyline per
+ * series through the days' slot centres (the same x as the bars), the axis
+ * from 0 like theirs, the guide as a dashed line, every k-th day labelled so
+ * about five fit (`xLabel` gives a short date there: the span crosses
+ * months). No numbers and no dots — over a hundred days they would be
+ * noise; a single day gets a dot, a path of one point draws nothing.
+ */
+export function dayLineChart({ days, series, guide = null, yFormat = fmt, xLabel = (d) => d, title = '', minStep = 0 }) {
+  const n = days.length;
+  const dataMax = Math.max(0, ...series.flatMap((sr) => days.map((_, i) => sr.values[i] || 0)), guide && guide.v > 0 ? guide.v : 0);
+  const { max, step } = niceScale(dataMax, 4, minStep);
+  const ticks = tickValues(0, max, step);
+  const p = plot(ticks.map(yFormat));
+  const scaleY = (v) => p.y + p.h - (v / max) * p.h;
+  const slot = p.w / Math.max(n, 1);
+  const scaleX = (i) => p.x + i * slot + slot / 2;
+  const lines = series
+    .map((sr) => {
+      const cls = escapeHtml(sr.cls || '');
+      if (n < 2) return `<circle class="chart-point ${cls}" cx="${fmt(scaleX(0))}" cy="${fmt(scaleY(sr.values[0] || 0))}" r="3"><title>${escapeHtml(sr.label)}</title></circle>`;
+      const d = days.map((_, i) => `${i ? 'L' : 'M'}${fmt(scaleX(i))} ${fmt(scaleY(sr.values[i] || 0))}`).join(' ');
+      return `<path class="chart-line ${cls}" d="${d}"><title>${escapeHtml(sr.label)}</title></path>`;
+    })
+    .join('');
+  const every = Math.ceil(n / 5);
+  const labels = days
+    .map((day, i) => (i % every === 0 ? `<text class="chart-axis" x="${fmt(scaleX(i))}" y="${CHART_H - 6}" text-anchor="middle">${escapeHtml(xLabel(day))}</text>` : ''))
+    .join('');
+  return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" role="img" aria-label="${escapeHtml(title)}">` +
+    gridHtml(p, scaleY, ticks, yFormat) + guideHtml(p, scaleY, guide) + lines + labels + '</svg>';
 }
 
 /**

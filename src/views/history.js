@@ -11,8 +11,11 @@
 //                 meal — its total, its parts and its span — that a tap
 //                 unfolds into the sides (each still tappable to edit); a
 //                 week per page, the open meals survive a re-render
-//   «Grafik»      charts over the last 7, 14 or 28 days (chips in place of
-//                 the paging button): weight since the first reading, meals
+//   «Grafik»      charts over the last 7, 14 or 28 days — or, «∞», over
+//                 everything since the birth date (the oldest entry when it
+//                 lies earlier or there is no date): bars per day on the
+//                 short ranges, lines without numbers on «∞» (chips in place
+//                 of the paging button): weight since the first reading, meals
 //                 against the family's meals a day, nursing minutes per
 //                 side, bottle ml (breast milk beside formula), diapers against the ~6
 //                 guide, sleep hours, temperature — each only when there is
@@ -36,8 +39,8 @@ import { store, prefs } from '../store.js';
 import { t, tn } from '../i18n/index.js';
 import { openSheet } from '../sheet.js';
 import { historyItems, mealSummary, mealPartsLabel, mealClockRange, dayCounts, dayMilk, dayMilkParts, wetCountLabel, WET_PER_DAY_GUIDE } from '../meals.js';
-import { lastDays, dailyStats, measurementSeries, avgPerDay } from '../stats.js';
-import { barChart, lineChart, soloSeries, toggleSolo } from '../charts.js';
+import { lastDays, daysBetween, dailyStats, measurementSeries, avgPerDay } from '../stats.js';
+import { barChart, dayLineChart, lineChart, soloSeries, toggleSolo } from '../charts.js';
 import { doseFor, lastWeight, dayTargetMl } from '../dose.js';
 import { openEntryForm } from '../entry-form.js';
 import {
@@ -67,8 +70,11 @@ const HISTORY_VIEWS = ['entries', 'days', 'meals', 'charts'];
 /** Days per page: a week of rows, four weeks of folded days, a week of
  *  meals; the charts' range is the view's own choice (CHART_RANGES). */
 const PAGE_DAYS = { entries: 7, days: 28, meals: 7 };
-const CHART_RANGES = [7, 14, 28];
-const DEFAULT_CHART_DAYS = 14;
+/** The «∞» chip: everything since the birth — lines instead of bars. */
+const ALL_RANGE = 'all';
+const ALL_RANGE_SIGN = '∞';
+const CHART_RANGES = [7, 14, 28, ALL_RANGE];
+const DEFAULT_CHART_RANGE = 14;
 /** The charts in their order; the filter sheet lists them, prefs.hiddenCharts names the hidden ones. */
 const CHART_KEYS = ['weight', 'meals', 'nursing', 'bottleMl', 'diapers', 'sleep', 'temperature'];
 /** The filter button's pictogram: three sliders (inline, like the tab bar's icons). */
@@ -138,9 +144,10 @@ function countLabel(n) {
 
 export function renderHistory(el) {
   let view = 'entries';
-  let chartDays = DEFAULT_CHART_DAYS;
-  const pageDays = (v) => (v === 'charts' ? chartDays : PAGE_DAYS[v]);
-  let fromDate = firstDayFor(pageDays(view));
+  let chartRange = DEFAULT_CHART_RANGE;
+  /** The earliest day a fresh page of view `v` shows. */
+  const firstDayOf = (v) => (v === 'charts' ? chartFirstDay() : firstDayFor(PAGE_DAYS[v]));
+  let fromDate = firstDayOf(view);
   let entries = null;
   let loading = false;
   let lastJson = null;
@@ -166,12 +173,14 @@ export function renderHistory(el) {
   async function load(opts = {}) {
     if (loading) return;
     loading = true;
-    const from = opts.from || fromDate;
     try {
       // No key on this device: main.js swaps in the unlock screen; the
       // notification after unlocking runs load() again.
       if (store.keyState === 'locked') return;
       await store.ready;
+      // «∞» follows the data: an entry older than the first day may have
+      // arrived (the partner's, or one re-dated) since the chip was tapped.
+      const from = opts.from || (view === 'charts' && chartRange === ALL_RANGE ? chartFirstDay() : fromDate);
       // One day more than shown, so a meal that began the evening before the
       // first day is grouped with its later sides instead of showing them as
       // a meal of their own; meals.historyItems drops that day again.
@@ -204,12 +213,33 @@ export function renderHistory(el) {
     }
   }
 
-  /** The head's switch: widen the range when the new view's page is longer. */
+  /**
+   * The first day the charts show: the range's own, or — «∞» — the birth
+   * date, pulled back to the oldest entry when one lies before it; without
+   * a birth date the oldest entry's day, without any today.
+   */
+  function chartFirstDay() {
+    if (chartRange !== ALL_RANGE) return firstDayFor(chartRange);
+    const today = localToday();
+    let first = today;
+    const birth = store.settings.current.birthDate;
+    if (birth && birth < first) first = birth;
+    for (const e of store.entries.range('2000-01-01', today)) {
+      const d = localDateOf(e.startedAt);
+      if (d < first) first = d;
+    }
+    return first;
+  }
+
+  /** The head's switch: widen the range when the new view's page is longer —
+   *  except after the charts' «∞»: a list goes back to its own page, not
+   *  every day since the birth unfolded. */
   async function switchView(next) {
     if (!HISTORY_VIEWS.includes(next) || next === view) return;
+    const fromAll = view === 'charts' && chartRange === ALL_RANGE;
     view = next;
-    const first = firstDayFor(pageDays(next));
-    if (first < fromDate) await load({ from: first, forceRender: true, userInitiated: true });
+    const first = firstDayOf(next);
+    if (first < fromDate || fromAll) await load({ from: first, forceRender: true, userInitiated: true });
     else render();
   }
 
@@ -219,10 +249,19 @@ export function renderHistory(el) {
    */
   function chartsHtml() {
     const today = localToday();
-    const days = lastDays(today, chartDays);
+    const all = chartRange === ALL_RANGE;
+    // «∞»: every day from the first one load() settled on (chartFirstDay).
+    const days = all ? daysBetween(fromDate, today) : lastDays(today, chartRange);
     const stats = dailyStats(entries, days, isoNow());
     const fam = store.settings.current;
-    const dayNum = (d) => t('history.chart.dayLabel', { n: Number(d.slice(8)) });
+    // The day number alone on a week or a month; «∞» crosses months, so its
+    // axis says «16.9.» like the weight chart's.
+    const dayNum = all ? shortDate : (d) => t('history.chart.dayLabel', { n: Number(d.slice(8)) });
+    // Bars per day on the short ranges; on «∞» a bar a day would be a hair's
+    // breadth, so the same figures go as lines without numbers (the
+    // options a line has no use for — the grouping, the value format — it
+    // ignores).
+    const bars = all ? dayLineChart : barChart;
     const has = (pick) => stats.some((r) => pick(r) > 0);
     // «Ø 5,3 pro Tag» over the days that have the figure — without today,
     // which is not over yet (stats.avgPerDay).
@@ -260,10 +299,12 @@ export function renderHistory(el) {
         ${legend ? legendHtml(legend) : ''}
         <div class="chart">${svg}</div>
       </section>`;
-    // Every k-th day labelled on a bar chart's axis, the same days as the
-    // temperature chart's ticks.
-    const every = Math.ceil(days.length / 7);
-    const dayTicks = days.filter((_, i) => i % every === 0 || i === days.length - 1).map((d) => ({ ms: dayStartMs(d) + 43200000, label: dayNum(d) }));
+    // The temperature chart's ticks on the same days as the bar charts'
+    // labels: every k-th day so about seven fit, and the last; the lines'
+    // short dates are wider — about five, without the last (it could sit on
+    // the one before).
+    const every = Math.ceil(days.length / (all ? 5 : 7));
+    const dayTicks = days.filter((_, i) => i % every === 0 || (!all && i === days.length - 1)).map((d) => ({ ms: dayStartMs(d) + 43200000, label: dayNum(d) }));
     const cards = []; // [key, html]
 
     // Weight: every reading there is, from the first one's day to today.
@@ -290,7 +331,7 @@ export function renderHistory(el) {
     const title = (key) => t(`history.chart.${key}`);
     if (has((r) => r.meals)) {
       const guide = fam.mealsPerDay ? { v: fam.mealsPerDay, label: t('history.chart.target', { n: fam.mealsPerDay }) } : null;
-      cards.push(['meals', card(title('meals'), barChart({ days, series: [{ label: title('meals'), values: stats.map((r) => r.meals), cls: 'milk' }], guide, xLabel: dayNum, title: title('meals'), minStep: 1 }), { sub: avgSub((r) => r.meals) })]);
+      cards.push(['meals', card(title('meals'), bars({ days, series: [{ label: title('meals'), values: stats.map((r) => r.meals), cls: 'milk' }], guide, xLabel: dayNum, title: title('meals'), minStep: 1 }), { sub: avgSub((r) => r.meals) })]);
     }
     if (has((r) => r.nursingMin.L + r.nursingMin.R)) {
       const unit = (v) => `${v} ${t('common.unit.min')}`;
@@ -302,7 +343,7 @@ export function renderHistory(el) {
         'nursing',
         card(
           title('nursing'),
-          barChart({ days, series: two.series, xLabel: dayNum, yFormat: unit, valueFormat: unit, title: title('nursing'), minStep: 1 }),
+          bars({ days, series: two.series, xLabel: dayNum, yFormat: unit, valueFormat: unit, title: title('nursing'), minStep: 1 }),
           { legend: two.legend, sub: avgSub(two.pick, t('common.unit.min'), 0) }
         ),
       ]);
@@ -317,7 +358,7 @@ export function renderHistory(el) {
         'bottleMl',
         card(
           title('bottleMl'),
-          barChart({
+          bars({
             days,
             // Stacked in two colours: the split shows in the bar, the number
             // above it is the day's total — three digits fit a 14-day slot,
@@ -343,7 +384,7 @@ export function renderHistory(el) {
         'diapers',
         card(
           title('diapers'),
-          barChart({
+          bars({
             days,
             series: two.series,
             mode: 'grouped',
@@ -363,7 +404,7 @@ export function renderHistory(el) {
         'sleep',
         card(
           title('sleep'),
-          barChart({
+          bars({
             days,
             series: [{ label: title('sleep'), values: stats.map((r) => Math.round((r.sleepMin / 60) * 10) / 10), cls: 'sleep' }],
             xLabel: dayNum,
@@ -403,8 +444,10 @@ export function renderHistory(el) {
     // This phone's filter: the hidden ones stay out (the button looks the same either way).
     const hidden = new Set(prefs.hiddenCharts);
     const shown = cards.filter(([key]) => !hidden.has(key)).map(([, html]) => html);
+    // «∞» shows the sign and carries its name for a screen reader.
     const chips = `<div class="range-chips" role="radiogroup" aria-label="${escapeHtml(t('history.range.label'))}">${CHART_RANGES.map(
-      (n) => `<button type="button" class="chip${n === chartDays ? ' active' : ''}" role="radio" aria-checked="${n === chartDays}" data-range="${n}">${escapeHtml(t('history.range.days', { n }))}</button>`
+      (r) =>
+        `<button type="button" class="chip${r === chartRange ? ' active' : ''}" role="radio" aria-checked="${r === chartRange}" data-range="${r}"${r === ALL_RANGE ? ` aria-label="${escapeHtml(t('history.range.all'))}"` : ''}>${r === ALL_RANGE ? ALL_RANGE_SIGN : escapeHtml(t('history.range.days', { n: r }))}</button>`
     ).join('')}<button type="button" class="chart-filter" data-chart-filter aria-label="${escapeHtml(t('history.filter.label'))}">${FILTER_ICON}</button></div>`;
     const empty = cards.length ? (hidden.size ? t('history.empty.filtered') : '') : EMPTY_LABELS.charts;
     return chips + (shown.join('') || `<div class="empty"><p>${escapeHtml(empty)}</p></div>`);
@@ -603,10 +646,10 @@ export function renderHistory(el) {
     // «Grafik»: the range chips re-read the list for the new span.
     el.querySelectorAll('[data-range]').forEach((btn) =>
       btn.addEventListener('click', () => {
-        const n = Number(btn.dataset.range);
-        if (!CHART_RANGES.includes(n) || n === chartDays) return;
-        chartDays = n;
-        load({ from: firstDayFor(n), forceRender: true, userInitiated: true }).catch(() => {});
+        const r = btn.dataset.range === ALL_RANGE ? ALL_RANGE : Number(btn.dataset.range);
+        if (!CHART_RANGES.includes(r) || r === chartRange) return;
+        chartRange = r;
+        load({ from: chartFirstDay(), forceRender: true, userInitiated: true }).catch(() => {});
       })
     );
     // «Grafik»: a legend item draws its series alone, the same item again both.
@@ -661,7 +704,7 @@ export function renderHistory(el) {
       const btn = e.currentTarget;
       btn.disabled = true;
       btn.textContent = t('history.loading');
-      await load({ from: shiftDate(fromDate, -pageDays(view)), userInitiated: true, forceRender: true });
+      await load({ from: shiftDate(fromDate, -PAGE_DAYS[view]), userInitiated: true, forceRender: true });
       // On success render() replaced the button; after a failure restore this one.
       const cur = el.querySelector('[data-more]');
       if (cur && cur.disabled) {

@@ -289,9 +289,12 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
    head one folded row per meal (its total, parts and span) that a tap
    unfolds into its sides, a week per page; «Grafik» draws one card per
    figure that has data — weight, meals, nursing minutes, bottle amounts,
-   diapers, sleep, temperature — per day over 7, 14 or 28 days (range chips
-   instead of paging; the figures in `src/stats.js`, pure SVG builders in
-   `src/charts.js`), and its filter button hides charts per device. A
+   diapers, sleep, temperature — per day over 7, 14 or 28 days, or («∞»)
+   over everything since the birth date (the oldest entry when it lies
+   earlier or there is no date), lines without numbers instead of bars then
+   (range chips instead of paging; the figures in `src/stats.js`, pure SVG
+   builders in `src/charts.js`), and its filter button hides charts per
+   device. A
    meal of several feeds is one card — a head with the total («Mahlzeit ·
    20 Min.», «Links 12 · Rechts 8 · 13:02–13:31») and the sides indented
    below it, placed under the day the meal STARTED; every side stays its

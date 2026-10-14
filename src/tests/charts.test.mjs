@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { niceStep, niceScale, niceRange, barChart, lineChart, soloSeries, toggleSolo, CHART_W, CHART_H } from '../charts.js';
+import { niceStep, niceScale, niceRange, barChart, dayLineChart, lineChart, soloSeries, toggleSolo, CHART_W, CHART_H } from '../charts.js';
 
 const count = (s, re) => (s.match(re) || []).length;
 
@@ -95,6 +95,48 @@ test('barChart: grouped bars sit side by side, nothing for zero, labels escaped'
   });
   assert.equal(count(svg, /<rect/g), 1);
   assert.ok(svg.includes('a&lt;b&gt;') && svg.includes('aria-label="x &amp; y"'));
+});
+
+test('dayLineChart: one line per series over the days, no numbers, no dots, the axis from zero, about five labels', () => {
+  const days = (n) => Array.from({ length: n }, (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`);
+  const svg = dayLineChart({
+    days: days(14),
+    series: [
+      { label: 'Links', values: days(14).map((_, i) => 10 + i), cls: 'milk' },
+      { label: 'Rechts', values: days(14).map(() => 5), cls: 'milk second' },
+    ],
+    guide: { v: 30, label: 'Ziel 30' },
+    xLabel: (d) => `${Number(d.slice(8))}.9.`,
+    yFormat: (v) => `${v} Min.`,
+    title: 'Stillen',
+    minStep: 1,
+  });
+  assert.ok(svg.startsWith(`<svg viewBox="0 0 ${CHART_W} ${CHART_H}"`) && svg.includes('aria-label="Stillen"'));
+  assert.equal(count(svg, /<path class="chart-line milk"/g), 1);
+  assert.equal(count(svg, /<path class="chart-line milk second"/g), 1);
+  assert.equal(count(svg, /<rect/g), 0);
+  assert.equal(count(svg, /<circle/g), 0);
+  assert.ok(!svg.includes('chart-bar-value') && !svg.includes('chart-value'), 'no numbers');
+  assert.ok(svg.includes('class="chart-guide"') && svg.includes('Ziel 30'));
+  // The axis starts at 0 and never below whole minutes.
+  assert.ok(svg.includes('>0 Min.</text>') && !svg.includes('>0.5 Min.</text>'));
+  // Fourteen days: every third labelled — 1., 4., 7., 10., 13. — not the last.
+  const labels = [...svg.matchAll(/<text class="chart-axis" x="[\d.]+" y="\d+" text-anchor="middle">([^<]*)<\/text>/g)].map((m) => m[1]);
+  assert.deepEqual(labels, ['1.9.', '4.9.', '7.9.', '10.9.', '13.9.']);
+  // The path runs through one point per day, left to right, the flat series at one height.
+  const flat = svg.match(/<path class="chart-line milk second" d="([^"]*)"/)[1];
+  const ys = [...new Set(flat.split(' ').filter((_, i) => i % 2 === 1))];
+  assert.equal(flat.split(' ').length, 28);
+  assert.equal(ys.length, 1);
+  // A hundred days: still one path, labels every twentieth day.
+  const long = dayLineChart({ days: days(100).map((d, i) => `2027-01-${String(i + 1).padStart(3, '0')}`), series: [{ label: 'm', values: days(100).map(() => 6), cls: 'milk' }] });
+  assert.equal(count(long, /<path class="chart-line/g), 1);
+  assert.equal(count(long, /class="chart-axis" x="[\d.]+" y="\d+"/g), 5);
+  // One day only: a dot, no path (a path of one point draws nothing).
+  const one = dayLineChart({ days: ['2026-09-01'], series: [{ label: 'a<b>', values: [3], cls: 'diaper' }], title: 'x & y' });
+  assert.equal(count(one, /<circle class="chart-point diaper"/g), 1);
+  assert.equal(count(one, /<path/g), 0);
+  assert.ok(one.includes('a&lt;b&gt;') && one.includes('aria-label="x &amp; y"'));
 });
 
 test('lineChart: a path through the points, a dot each, the last value labelled, x ticks', () => {

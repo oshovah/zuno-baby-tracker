@@ -19,9 +19,11 @@ export default {
   'empty.meals': 'Keine Mahlzeiten in diesem Zeitraum.',
   'view.charts': 'Grafik',
   'empty.charts': 'Noch keine Daten für eine Grafik.',
-  // The range chips of «Grafik»
+  // The range chips of «Grafik»: «7 Tg» (short, four chips share the row)
+  // and «∞» — the chip shows the sign, this is its name for a screen reader
   'range.label': 'Zeitraum',
-  'range.days': '{n} Tage',
+  'range.days': '{n} Tg',
+  'range.all': 'Alles seit der Geburt',
   // The charts: titles, the day number on the axis, the guide lines
   'empty.filtered': 'Alle Grafiken ausgeblendet – über das Filter-Symbol wieder einblenden.',
   'filter.label': 'Grafiken ein- oder ausblenden',

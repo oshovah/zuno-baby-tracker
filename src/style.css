@@ -1812,8 +1812,14 @@ input[type='datetime-local'] {
   margin: 0 0 14px;
 }
 
+/* Four chips («7 Tg» … «∞») and the filter button share a 320 px row:
+ * narrow sides, and a label never breaks into two lines. */
 .range-chips .chip {
   flex: 1;
+  min-width: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+  white-space: nowrap;
   text-align: center;
 }
 
@@ -1956,13 +1962,16 @@ input[type='datetime-local'] {
 .chart .chart-line.milk { stroke: var(--milk); }
 .chart .diaper,
 .chart-legend i.diaper { fill: var(--diaper); background: var(--diaper); }
+.chart .chart-line.diaper { stroke: var(--diaper); }
 .chart .sleep,
 .chart-legend i.sleep { fill: var(--sleep); background: var(--sleep); }
+.chart .chart-line.sleep { stroke: var(--sleep); }
 .chart .measure,
 .chart .formula,
 .chart-legend i.measure,
 .chart-legend i.formula { fill: var(--measure); background: var(--measure); }
-.chart .chart-line.measure { stroke: var(--measure); }
+.chart .chart-line.measure,
+.chart .chart-line.formula { stroke: var(--measure); }
 .chart .second,
 .chart-legend i.second { opacity: 0.45; }
 

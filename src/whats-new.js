@@ -15,6 +15,11 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-10-14',
+    de: ['Grafik: Neben 7, 14 und 28 Tagen – jetzt kurz «7 Tg» – zeigt ein ∞ alles seit der Geburt (oder seit dem ersten Eintrag): als Linien statt Balken, ohne Zahlen.'],
+    en: ['Charts: beside 7, 14 and 28 days – now short "7 d" – an ∞ shows everything since the birth (or since the first entry): as lines instead of bars, without numbers.'],
+  },
+  {
     id: '2026-10-02',
     de: ['Stillen und Schlaf bearbeiten: Neben «Ende» leert ein ✕ die Zeit wieder – der Timer läuft dann weiter. Auf dem iPhone liess sich ein einmal angetipptes «Ende» nicht mehr leeren; wer nur den Start korrigieren wollte, stoppte so den Timer.'],
     en: ['Editing nursing and sleep: next to "End" a ✕ empties the time again – the timer then keeps running. On an iPhone an "End" that was touched once could not be emptied again; correcting just the start stopped the timer that way.'],
