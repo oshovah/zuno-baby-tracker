@@ -611,8 +611,9 @@ in der Schweiz und im Grenzgebiet kennt (`changing_table=*`,
 Das Login-Versprechen («nichts ausserhalb des Hostings») und die CSP gelten
 auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
 
-- **Orte**: `npm run map:data` fragt Overpass (zuerst die Schweizer Instanz,
-  dann die Hauptinstanz) nach der Box in `scripts/lib/map-config.mjs` und
+- **Orte**: `npm run map:data` fragt Overpass (die Hauptinstanz und ihre
+  zwei Spiegel, die den ganzen Planeten halten; bei einem Fehler eine zweite
+  Runde) nach der Box in `scripts/lib/map-config.mjs` und
   schreibt `public/map/pois.json` (~160 KB, gitignored; fährt mit jedem Build
   mit, die Karte zeigt das Datum). `scripts/map-data.mjs`; die Normalisierung
   und die Wortwahl sind pur in `src/mapdata.js` (node-getestet).

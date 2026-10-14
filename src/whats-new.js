@@ -15,7 +15,7 @@
 
 export const WHATS_NEW = [
   {
-    id: '2026-10-12-b',
+    id: '2026-10-14-c',
     de: [
       'Neu auf der Karte: «Ort hinzufügen». Fehlt ein Wickeltisch oder ein Platz zum Stillen, schieb die Karte, bis das Kreuz auf dem Ort steht, und sag, was es dort gibt – ohne deinen Namen. Die Person, die Zuno betreibt, prüft die Meldung; danach sehen den Ort alle.',
       'Unten auf der Karte stehen jetzt drei Knöpfe: «Info» sagt, woher die Daten stammen, «Ort hinzufügen» meldet einen neuen, «Orte in der Nähe» listet die zehn nächsten.',
@@ -26,7 +26,7 @@ export const WHATS_NEW = [
     ],
   },
   {
-    id: '2026-10-12',
+    id: '2026-10-14-b',
     de: [
       'Neu: der Tab «Karte» zeigt Wickeltische und Still-Orte in der Schweiz – aus OpenStreetMap, von unserem eigenen Server. «Mein Standort» holt die Position, «Orte in der Nähe» listet die zehn nächsten; ein Tipp auf einen Punkt sagt, wo genau der Tisch ist und was es dort gibt.',
       'Unter Mehr › Einstellungen › Karte legst du fest, wo die Karte beim Öffnen steht.',
