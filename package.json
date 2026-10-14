@@ -12,12 +12,22 @@
     "test": "php api/tests/run.php && node --test src/tests/*.test.mjs",
     "package": "node scripts/package.mjs",
     "deploy": "node scripts/deploy.mjs",
+    "deploy:beta": "node scripts/deploy.mjs --env .env.beta",
+    "deploy:basemap": "node scripts/deploy.mjs --basemap",
+    "deploy:basemap:beta": "node scripts/deploy.mjs --basemap --env .env.beta",
     "preview": "php -S 127.0.0.1:8081 scripts/preview-router.php",
     "screenshots": "node scripts/make-screenshots.mjs",
-    "e2e:offline": "node scripts/e2e-offline.mjs"
+    "e2e:offline": "node scripts/e2e-offline.mjs",
+    "map:data": "node scripts/map-data.mjs",
+    "map:basemap": "node scripts/map-basemap.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
     "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "pmtiles": "^4.5.0",
+    "protomaps-leaflet": "^5.1.0"
   }
 }

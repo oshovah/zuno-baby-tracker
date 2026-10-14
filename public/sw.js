@@ -5,6 +5,10 @@
  *
  * Strategy:
  *   - /api/*            -> network only, never cached
+ *   - /basemap/* and any request with a Range header -> network only: the
+ *                          map's archive is read in byte ranges (a cached
+ *                          whole file would answer every range, and the
+ *                          Cache API refuses a 206 anyway)
  *   - everything else   -> install-time precache of the shell + stale-while-
  *                          revalidate. Precaching means the FIRST offline
  *                          launch after an install (or after iOS evicts Cache
@@ -73,6 +77,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== location.origin) return;
   if (url.pathname.includes('/api/') || url.pathname.endsWith('/api')) return;
+  // The map's basemap archive, byte range by byte range — never through
+  // this cache. The places file (map/pois.json) stays in: «In der Nähe»
+  // then works without network too.
+  if (request.headers.has('range') || url.pathname.includes('/basemap/')) return;
   event.respondWith(staleWhileRevalidate(request));
 });
 
@@ -84,7 +92,7 @@ async function staleWhileRevalidate(request) {
 
   const refresh = fetch(request)
     .then((response) => {
-      if (response && response.ok) cache.put(request, response.clone());
+      if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
       return response;
     })
     .catch(() => null);

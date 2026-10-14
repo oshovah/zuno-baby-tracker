@@ -4,6 +4,7 @@ export default {
   'tab.now': 'Jetzt',
   'tab.backfill': 'Nachtragen',
   'tab.history': 'Verlauf',
+  'tab.map': 'Karte',
   'tab.more': 'Mehr',
   'meta.description': 'Stillen, Schoppen, Windeln und Schlaf festhalten – Ende-zu-Ende verschlüsselt',
   'nav.label': 'Hauptnavigation',

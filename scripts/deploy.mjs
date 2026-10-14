@@ -11,6 +11,14 @@
  *          truncated index.html or PHP file.
  *   local  plain copy to DEPLOY_PATH on this machine (pipeline testing)
  *
+ * --basemap uploads NOT deploy/ but basemap/ — the map's archive, its
+ * index.json and LICENSE.txt (scripts/map-basemap.mjs) — to
+ * <DEPLOY_PATH>/basemap/: once per build, never with the app (~600 MB).
+ * index.json goes last, so the pointer flips only once the archive is
+ * complete; the health check then reads the first bytes of the archive and
+ * expects 206 (the map reads it in byte ranges). An app deploy with
+ * rsync --delete leaves the remote basemap/ alone (excluded).
+ *
  * Guarantees:
  *   - Runs `node scripts/package.mjs` first unless --no-package.
  *   - NEVER touches remote data/ or any *.db file: uploads exclude everything under
@@ -23,7 +31,7 @@
  *   - --dry-run prints the upload list and the exact commands (secrets masked)
  *     without connecting anywhere.
  *
- * Usage: node scripts/deploy.mjs [--dry-run] [--no-package] [--env <file>] [--root <dir>]
+ * Usage: node scripts/deploy.mjs [--dry-run] [--no-package] [--basemap] [--env <file>] [--root <dir>]
  *
  * Zero npm dependencies (Node 18+).
  */
@@ -40,18 +48,19 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 // CLI args
 // ---------------------------------------------------------------------------
 
-const flags = { dryRun: false, noPackage: false, env: null, root: null };
+const flags = { dryRun: false, noPackage: false, basemap: false, env: null, root: null };
 {
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') flags.dryRun = true;
     else if (a === '--no-package') flags.noPackage = true;
+    else if (a === '--basemap') flags.basemap = true;
     else if (a === '--env') flags.env = argv[++i];
     else if (a === '--root') flags.root = argv[++i];
     else if (a === '--help' || a === '-h') {
       console.log(
-        'Usage: node scripts/deploy.mjs [--dry-run] [--no-package] [--env <file>] [--root <dir>]'
+        'Usage: node scripts/deploy.mjs [--dry-run] [--no-package] [--basemap] [--env <file>] [--root <dir>]'
       );
       process.exit(0);
     } else {
@@ -64,6 +73,9 @@ const flags = { dryRun: false, noPackage: false, env: null, root: null };
 const root = flags.root ? path.resolve(flags.root) : path.resolve(scriptDir, '..');
 const deployDir = path.join(root, 'deploy');
 const envFile = flags.env ? path.resolve(flags.env) : path.join(root, '.env');
+// What goes up: the packaged app, or (--basemap) the map's archive folder.
+const mode = flags.basemap ? 'basemap' : 'app';
+const srcDir = mode === 'basemap' ? path.join(root, 'basemap') : deployDir;
 
 function log(msg) {
   console.log(`[deploy] ${msg}`);
@@ -236,6 +248,7 @@ async function main() {
   };
 
   const remotePath = need('DEPLOY_PATH').replace(/\/+$/, '');
+  const remoteRoot = mode === 'basemap' ? `${remotePath}/basemap` : remotePath;
   let host = '';
   let user = '';
   if (method !== 'local') {
@@ -261,12 +274,14 @@ async function main() {
     log(`      ssh-keygen -t ed25519 && ssh-copy-id ${user ? `${user}@${host}` : 'user@host'}`);
   }
 
-  log(`method: ${method}${flags.dryRun ? '  (DRY RUN — nothing will be uploaded)' : ''}`);
-  if (method !== 'local') log(`target: ${user}@${host}:${port} -> ${remotePath}`);
-  else log(`target: ${remotePath} (this machine)`);
+  log(`method: ${method}${flags.dryRun ? '  (DRY RUN — nothing will be uploaded)' : ''}${mode === 'basemap' ? '  [basemap/ only]' : ''}`);
+  if (method !== 'local') log(`target: ${user}@${host}:${port} -> ${remoteRoot}`);
+  else log(`target: ${remoteRoot} (this machine)`);
 
   // ---- package first ---------------------------------------------------------
-  if (!flags.noPackage) {
+  if (mode === 'basemap') {
+    log('basemap set: no packaging (the archive is cut by "npm run map:basemap")');
+  } else if (!flags.noPackage) {
     const args = [path.join(scriptDir, 'package.mjs'), '--root', root, '--env', envFile];
     log(`$ ${printable(process.execPath, args)}`);
     const res = spawnSync(process.execPath, args, { stdio: 'inherit' });
@@ -278,24 +293,45 @@ async function main() {
   // Completeness check: a mid-package failure can leave a half-built deploy/
   // (frontend + api copied, generated files missing) — require every artifact
   // packaging generates, not just the copied trees.
-  const requiredArtifacts = ['index.html', 'api/index.php', 'api/config.php', '.htaccess', 'data/.htaccess'];
-  const missingArtifacts = requiredArtifacts.filter(
-    (f) => !fs.existsSync(path.join(deployDir, ...f.split('/')))
-  );
-  if (missingArtifacts.length > 0) {
-    fail(`${deployDir} is missing or incomplete (no ${missingArtifacts.join(', ')}) — run "npm run package" (or drop --no-package)`);
+  let basemapIndex = null;
+  if (mode === 'app') {
+    const requiredArtifacts = ['index.html', 'api/index.php', 'api/config.php', '.htaccess', 'data/.htaccess'];
+    const missingArtifacts = requiredArtifacts.filter(
+      (f) => !fs.existsSync(path.join(deployDir, ...f.split('/')))
+    );
+    if (missingArtifacts.length > 0) {
+      fail(`${deployDir} is missing or incomplete (no ${missingArtifacts.join(', ')}) — run "npm run package" (or drop --no-package)`);
+    }
+  } else {
+    const indexFile = path.join(srcDir, 'index.json');
+    if (!fs.existsSync(indexFile)) fail(`no ${indexFile} — run "npm run map:basemap -- --build YYYYMMDD" first`);
+    try {
+      basemapIndex = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+    } catch {
+      basemapIndex = null;
+    }
+    if (!basemapIndex || typeof basemapIndex.file !== 'string' || !/^[\w.-]+\.pmtiles$/.test(basemapIndex.file)) {
+      fail('basemap/index.json does not name an archive — run "npm run map:basemap" again');
+    }
+    if (!fs.existsSync(path.join(srcDir, basemapIndex.file))) fail(`basemap/index.json names ${basemapIndex.file}, which is not there`);
   }
 
   // ---- upload list -----------------------------------------------------------
-  const files = collectFiles(deployDir);
-  if (files.length === 0) fail('nothing to upload — deploy/ is empty');
+  let files = collectFiles(srcDir);
+  if (mode === 'basemap') {
+    // the current archive and its licence, then the index LAST: the pointer
+    // flips only once the archive is complete (older archives stay local)
+    files = [basemapIndex.file, 'LICENSE.txt'].filter((f) => files.includes(f)).concat(['index.json']);
+  }
+  if (files.length === 0) fail(`nothing to upload — ${path.basename(srcDir)}/ is empty`);
   let totalBytes = 0;
-  for (const f of files) totalBytes += fs.statSync(path.join(deployDir, f)).size;
-  log(`upload set: ${files.length} files, ${human(totalBytes)} (data/ ships only data/.htaccess; *.db never uploaded)`);
+  for (const f of files) totalBytes += fs.statSync(path.join(srcDir, f)).size;
+  if (mode === 'app') log(`upload set: ${files.length} files, ${human(totalBytes)} (data/ ships only data/.htaccess; *.db never uploaded)`);
+  else log(`upload set: ${files.length} files, ${human(totalBytes)} (the archive first, index.json last)`);
 
   if (flags.dryRun) {
     for (const f of files) {
-      console.log(`  ${f.padEnd(48)} ${human(fs.statSync(path.join(deployDir, f)).size).padStart(9)}`);
+      console.log(`  ${f.padEnd(48)} ${human(fs.statSync(path.join(srcDir, f)).size).padStart(9)}`);
     }
   }
 
@@ -306,23 +342,29 @@ async function main() {
     // database copy left in deploy/data/ by a preview rehearsal (baby.db,
     // -wal/-shm, a migration's .bak) never ships, whatever its name. The *.db patterns
     // after that are belt and braces for the rest of the tree.
-    const args = [
-      '-avz',
-      '--include=data/',
-      '--include=data/.htaccess',
-      '--exclude=data/*',
-      '--exclude=*.db',
-      '--exclude=*.sqlite',
-      '--exclude=*.sqlite3',
-      '--exclude=*.db-wal',
-      '--exclude=*.db-shm',
-      '--exclude=*.db-journal',
-    ];
-    // --delete must never reach into the remote data/: with the excludes
-    // above rsync does not delete excluded files there (no --delete-excluded).
-    if (doDelete) args.push('--delete');
+    const args =
+      mode === 'basemap'
+        ? ['-av', '--partial', '--skip-compress=pmtiles'] // compressed tiles: -z would only cost time
+        : [
+            '-avz',
+            '--include=data/',
+            '--include=data/.htaccess',
+            '--exclude=data/*',
+            '--exclude=*.db',
+            '--exclude=*.sqlite',
+            '--exclude=*.sqlite3',
+            '--exclude=*.db-wal',
+            '--exclude=*.db-shm',
+            '--exclude=*.db-journal',
+            '--exclude=basemap/', // the map's archive goes up on its own (--basemap); an app deploy never touches it
+          ];
+    // --delete must never reach into the remote data/ (or basemap/): with the
+    // excludes above rsync does not delete excluded files there (no
+    // --delete-excluded). The basemap set never deletes: an older archive
+    // may stay until every phone has the new index.
+    if (doDelete && mode === 'app') args.push('--delete');
     if (port !== 22) args.push('-e', `ssh -p ${port}`);
-    args.push(deployDir + '/', `${user}@${host}:${remotePath}/`);
+    args.push(srcDir + '/', `${user}@${host}:${remoteRoot}/`);
 
     if (flags.dryRun) {
       log(`would run: ${printable('rsync', args)}`);
@@ -338,18 +380,18 @@ async function main() {
     // batch file: "-mkdir" ("-" = ignore errors for already-existing dirs), then puts
     const batchLines = [];
     const q = (s) => '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
-    const rootSegs = remotePath.split('/').filter((s) => s !== '');
-    const absolute = remotePath.startsWith('/');
+    const rootSegs = remoteRoot.split('/').filter((s) => s !== '');
+    const absolute = remoteRoot.startsWith('/');
     let prefix = absolute ? '' : '.';
     const mkdirs = [];
     for (const seg of rootSegs) {
       prefix = prefix === '' ? `/${seg}` : `${prefix}/${seg}`;
       mkdirs.push(prefix);
     }
-    for (const d of collectDirs(files)) mkdirs.push(`${remotePath}/${d}`);
+    for (const d of collectDirs(files)) mkdirs.push(`${remoteRoot}/${d}`);
     for (const d of mkdirs) batchLines.push(`-mkdir ${q(d)}`);
     for (const f of files) {
-      batchLines.push(`put ${q(path.join(deployDir, f))} ${q(`${remotePath}/${f}`)}`);
+      batchLines.push(`put ${q(path.join(srcDir, f))} ${q(`${remoteRoot}/${f}`)}`);
     }
     const batchContent = batchLines.join('\n') + '\n';
     const sftpArgs = ['-b', '<batchfile>', '-P', String(port), `${user}@${host}`];
@@ -387,7 +429,7 @@ async function main() {
     // don't resume the control-channel session ("451 Transfer aborted" after
     // the first 16 KiB); TLS 1.2 session IDs resume fine.
     if (!ftpInsecure) baseArgs.push('--ssl-reqd', '--tls-max', '1.2');
-    const urlBase = `ftp://${host}:${port}/${encodeUrlPath(remotePath)}`;
+    const urlBase = `ftp://${host}:${port}/${encodeUrlPath(remoteRoot)}`;
     const configContent = `user = ${curlConfigValue(`${user}:${password}`)}\n`;
 
     // Upload to "<name>.tmp~", then rename into place with post-transfer quote
@@ -398,7 +440,7 @@ async function main() {
       const base = rel.split('/').pop();
       return [
         ...baseArgs,
-        '-T', path.join(deployDir, rel),
+        '-T', path.join(srcDir, rel),
         `${urlBase}/${encodeUrlPath(rel)}.tmp~`,
         '-Q', `-RNFR ${base}.tmp~`,
         '-Q', `-RNTO ${base}`,
@@ -453,7 +495,7 @@ async function main() {
       }
     }
   } else if (method === 'local') {
-    const target = path.isAbsolute(remotePath) ? remotePath : path.resolve(root, remotePath);
+    const target = path.isAbsolute(remoteRoot) ? remoteRoot : path.resolve(root, remoteRoot);
     // Guard rails: the copy must never land on or around the project itself —
     // copying deploy/ over the source tree would overwrite e.g. the source
     // index.html and api/config.php with their built/generated versions.
@@ -482,7 +524,7 @@ async function main() {
       for (const f of files) {
         const dest = path.join(target, f);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
-        fs.copyFileSync(path.join(deployDir, f), dest);
+        fs.copyFileSync(path.join(srcDir, f), dest);
       }
       log(`copied ${files.length} files to ${target}`);
     }
@@ -496,7 +538,29 @@ async function main() {
   // (the file is copied to data/baby.db.<version>.bak first). 200 = migration
   // committed (or nothing to migrate); 500 = rolled back or refused, the DB
   // is untouched and the PHP error log says why.
-  if (deployUrl !== '') {
+  if (deployUrl !== '' && mode === 'basemap') {
+    // The archive must come back in byte ranges (206): that is how the map
+    // reads it — a 200 with the whole file means a compression filter or a
+    // server without Accept-Ranges, and the map would stay blank.
+    const fileUrl = `${deployUrl}/basemap/${encodeURIComponent(basemapIndex.file)}`;
+    const probe = ['-sS', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '20', '-r', '0-15', fileUrl];
+    if (flags.dryRun) {
+      log(`would check byte serving: ${printable('curl', probe)}`);
+    } else {
+      log(`health check: GET ${fileUrl} (bytes 0-15)`);
+      const res = spawnSync('curl', probe, { encoding: 'utf8' });
+      if (res.error) fail(`could not run curl for the health check: ${res.error.message}`);
+      const code = (res.stdout || '').trim();
+      if (res.status !== 0) fail(`health check could not connect (${(res.stderr || '').trim() || `curl exit ${res.status}`}) — check DEPLOY_URL`);
+      else if (code === '206') log('health check OK: the archive is served in byte ranges (206)');
+      else if (code === '200') fail('health check: the server answered a byte-range request with the WHOLE file (200) — the map cannot read it that way (Accept-Ranges? a compression filter on .pmtiles?)');
+      else fail(`health check got HTTP ${code} from ${fileUrl}`);
+      const idx = spawnSync('curl', ['-sS', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '20', `${deployUrl}/basemap/index.json`], { encoding: 'utf8' });
+      const idxCode = (idx.stdout || '').trim();
+      if (idxCode !== '200') fail(`health check: basemap/index.json answered HTTP ${idxCode || '?'}`);
+      log('health check OK: basemap/index.json is live');
+    }
+  } else if (deployUrl !== '') {
     const checkUrl = `${deployUrl}/api/me`;
     const curlArgs = ['-sS', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '20'];
 

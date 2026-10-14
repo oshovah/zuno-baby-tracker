@@ -3,12 +3,19 @@
  * preview-router.php — router script for previewing the PACKAGED app locally.
  *
  *   php -S 127.0.0.1:8081 scripts/preview-router.php
+ *   PHP_CLI_SERVER_WORKERS=8 npm run preview   (the map: pmtiles asks for
+ *                                               several byte ranges at once;
+ *                                               php -S is single-threaded)
  *
  * Serves ../deploy (the output of `npm run package`) the way Apache on shared
  * hosting would, BOTH at "/" and under a simulated "/baby/" subdirectory:
  *   - /api/*  and  /baby/api/*   -> deploy/api/index.php (mimics the
  *     .htaccess rewrite; index.php parses REQUEST_URI itself, subdir-safe)
- *   - static files with correct MIME types (html, js, css, json, svg, ...)
+ *   - static files with correct MIME types (html, js, css, json, svg, ...),
+ *     byte ranges included (Range → 206, like Apache: the map's basemap
+ *     archive is read that way by pmtiles, which gives up on a 200)
+ *   - /basemap/*  -> ../basemap (the archive is uploaded on its own with
+ *     `npm run deploy:basemap` and never part of deploy/)
  *   - 403 for deploy/data/*, deploy/private-art/*, .ht*, *.db/*.sqlite, config.php (mimics the
  *     .htaccess deny rules)
  *   - 404 for everything else
@@ -97,12 +104,86 @@ function bt_mime($file)
         'txt'   => 'text/plain; charset=utf-8',
         'woff'  => 'font/woff',
         'woff2' => 'font/woff2',
+        'pmtiles' => 'application/octet-stream',
     );
     return isset($map[$ext]) ? $map[$ext] : 'application/octet-stream';
 }
 
+/**
+ * Sends a file like Apache would, byte ranges included: a `Range: bytes=…`
+ * header gets 206 + Content-Range (an unsatisfiable one 416), anything else
+ * the whole file with 200. The same rule as scripts/lib/range.mjs (the dev
+ * server); pmtiles reads the basemap archive this way and refuses a 200.
+ * Streams in 64 KB pieces — never readfile() on a 600 MB archive.
+ */
+function bt_send_file($real, $mime)
+{
+    $size = filesize($real);
+    header('Accept-Ranges: bytes');
+    header('Content-Type: ' . $mime);
+    $start = 0;
+    $end = $size - 1;
+    $status = 200;
+    $range = isset($_SERVER['HTTP_RANGE']) ? trim($_SERVER['HTTP_RANGE']) : '';
+    if ($range !== '' && preg_match('/^bytes=(\d*)-(\d*)$/', $range, $m) && ($m[1] !== '' || $m[2] !== '')) {
+        $bad = $size <= 0;
+        if (!$bad) {
+            if ($m[1] === '') { // suffix range: the last n bytes
+                $n = (int) $m[2];
+                if ($n === 0) {
+                    $bad = true;
+                } else {
+                    $start = max(0, $size - $n);
+                }
+            } else {
+                $start = (int) $m[1];
+                if ($m[2] !== '') {
+                    $end = min((int) $m[2], $size - 1);
+                }
+            }
+        }
+        if ($bad || $start >= $size || $start > $end) {
+            http_response_code(416);
+            header('Content-Range: bytes */' . $size);
+            return;
+        }
+        $status = 206;
+        header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+    }
+    http_response_code($status);
+    header('Content-Length: ' . (string) ($end - $start + 1));
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'HEAD') {
+        return;
+    }
+    $fh = fopen($real, 'rb');
+    if ($fh === false) {
+        return;
+    }
+    fseek($fh, $start);
+    $left = $end - $start + 1;
+    while ($left > 0 && !feof($fh)) {
+        $chunk = fread($fh, (int) min(65536, $left));
+        if ($chunk === false || $chunk === '') {
+            break;
+        }
+        echo $chunk;
+        $left -= strlen($chunk);
+    }
+    fclose($fh);
+}
+
+$baseDir = $deployDir;
 $target = $rel === '' ? 'index.html' : $rel;
-$full = $deployDir . '/' . $target;
+// The basemap archive lives outside deploy/ (basemap/ at the project root,
+// uploaded on its own): serve it from there, like the Vite plugin does.
+if (strpos($rel, 'basemap/') === 0) {
+    $basemapDir = realpath(__DIR__ . '/../basemap');
+    if ($basemapDir !== false && is_dir($basemapDir)) {
+        $baseDir = $basemapDir;
+        $target = substr($rel, strlen('basemap/'));
+    }
+}
+$full = $baseDir . '/' . $target;
 if (is_dir($full)) {
     $full .= '/index.html';
 }
@@ -110,11 +191,9 @@ $real = realpath($full);
 if (
     $real !== false
     && is_file($real)
-    && strpos($real, $deployDir . DIRECTORY_SEPARATOR) === 0 // no ../ escapes
+    && strpos($real, $baseDir . DIRECTORY_SEPARATOR) === 0 // no ../ escapes
 ) {
-    header('Content-Type: ' . bt_mime($real));
-    header('Content-Length: ' . (string) filesize($real));
-    readfile($real);
+    bt_send_file($real, bt_mime($real));
     return true;
 }
 

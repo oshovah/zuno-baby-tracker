@@ -1,7 +1,8 @@
 // "Mehr" — the family's reminders, per-device and family settings, the
 // account (display name, own password, logout) with the family below it
 // (password, recovery code, export, encryption status), and the how-to with
-// the feedback section at its foot (the form, or the operator's inbox).
+// the feedback section at its foot (the form, or the operator's inbox) and,
+// for the operator, the list of places parents reported on the map.
 //
 // Every key flow lives in session.js; this view only collects the typed
 // passwords, shows the KDF/server progress on the submit button and toasts
@@ -33,9 +34,10 @@ import {
 } from '../dose.js';
 import { zurichDateOf } from '../tz.js';
 import { THEMES, DEFAULT_THEME, SCHEMES, applyTheme, applyScheme } from '../themes/index.js';
-import { t, tn, availableLocales, getLocale, setLocale } from '../i18n/index.js';
+import { t, tn, availableLocales, getLocale, setLocale, localeMeta } from '../i18n/index.js';
 import { openWhatsNewSheet } from '../whats-new-sheet.js';
 import { openFeedbackForm, openFeedbackInbox } from '../feedback-sheet.js';
+import { openSpotsSheet } from '../spots-sheet.js';
 import { WHATS_NEW } from '../whats-new.js';
 
 // Labels are read when shown (getters), never at module load: the language
@@ -135,6 +137,23 @@ function reminderListHtml() {
 }
 
 /** The note under the reminders while this phone does not show them on «Jetzt». */
+/** «Startansicht: …» with the buttons to take the map's last view or to
+ *  clear it — the «Karte» section of the device settings. */
+function mapStartHtml() {
+  const start = prefs.mapStart;
+  const last = prefs.mapView;
+  const fmt = (n, digits) => n.toFixed(digits).replace('.', localeMeta().decimalSeparator);
+  const label = start
+    ? t('more.map.start.set', { zoom: fmt(start.zoom, start.zoom % 1 ? 1 : 0), lat: fmt(start.lat, 3), lon: fmt(start.lon, 3) })
+    : t('more.map.start.none');
+  return `<p class="setting-value">${escapeHtml(label)}</p>
+    <div class="btn-row">
+      <button type="button" class="btn small" data-map-start-capture ${last ? '' : 'disabled'}>${t('more.map.start.capture')}</button>
+      ${start ? `<button type="button" class="btn small" data-map-start-reset>${t('more.map.start.reset')}</button>` : ''}
+    </div>
+    ${last ? '' : `<p class="hint">${t('more.map.start.captureHint')}</p>`}`;
+}
+
 function homeCardNoteHtml() {
   if (prefs.homeCard === 'reminders' || prefs.homeCard === 'both') {
     return '';
@@ -305,13 +324,15 @@ const isFeedbackLink = () => /^#\/mehr\/feedback\/?$/.test(location.hash || '');
 
 /** The operator has unread feedback (the dot on Anleitung and on the Mehr tab). */
 const feedbackUnread = () => store.feedback.isInbox && store.feedback.unread > 0;
+/** … or reported places waiting for a decision (the same dots). */
+const spotsPending = () => store.spots.isCurator && store.spots.pending > 0;
 
 /** The dot on a sub tab: something to do there (the unconfirmed recovery
  *  code under Konto, the unread how-to after a sign-up, the operator's
  *  unread feedback). */
 function paneDot(key) {
   const on =
-    (key === 'konto' && prefs.recoveryPending) || (key === 'anleitung' && (prefs.howtoPending || feedbackUnread()));
+    (key === 'konto' && prefs.recoveryPending) || (key === 'anleitung' && (prefs.howtoPending || feedbackUnread() || spotsPending()));
   return on ? `<span class="seg-dot" aria-label="${escapeHtml(t('more.pane.dot'))}"></span>` : '';
 }
 
@@ -330,6 +351,16 @@ function feedbackSectionHtml() {
     <h2 class="section-title">${t('feedback.section.title')}</h2>
     <p class="hint">${t('feedback.section.hint')}</p>
     <button type="button" class="btn wide" data-feedback-send>${t('feedback.section.send')}</button>`;
+}
+
+/** The reported places, for the operator only: how many wait, the list. */
+function spotsSectionHtml() {
+  if (!store.spots.isCurator) return '';
+  const n = store.spots.pending;
+  return `
+    <h2 class="section-title">${t('spots.section.title')}</h2>
+    <p class="hint">${t('spots.section.hint')}${n > 0 ? ` <strong>${escapeHtml(t('spots.section.pending', { n }))}</strong>` : ''}</p>
+    <button type="button" class="btn wide" data-spots-open>${t('spots.section.open')}</button>`;
 }
 
 /** The operator's usage block: null = loading, false = failed, else the
@@ -511,6 +542,10 @@ export function renderMore(el) {
         }).join('')}
       </div>
 
+      <h2 class="section-title">${t('more.map.title')}</h2>
+      <p class="hint">${t('more.map.hint')}</p>
+      <div data-map-start>${mapStartHtml()}</div>
+
       <h2 class="section-title">${t('common.language')}</h2>
       <div class="segmented" role="radiogroup" aria-label="${attr('common.language')}" data-langs>
         ${availableLocales()
@@ -594,6 +629,7 @@ export function renderMore(el) {
       <button type="button" class="btn wide" data-whats-new>${t('shell.whatsNew.title')}</button>
       <div data-feedback-wrap>${feedbackSectionHtml()}</div>
       <div data-usage-wrap></div>
+      <div data-spots-wrap>${spotsSectionHtml()}</div>
       </section>`;
 
     // --- sub tabs: toggle the panes, keep the hash in step (no hashchange:
@@ -621,7 +657,7 @@ export function renderMore(el) {
     function howtoSeen() {
       if (!prefs.howtoPending) return;
       prefs.howtoPending = false;
-      if (!feedbackUnread()) el.querySelector('[data-subtab="anleitung"] .seg-dot')?.remove();
+      if (!feedbackUnread() && !spotsPending()) el.querySelector('[data-subtab="anleitung"] .seg-dot')?.remove();
     }
     if (pane === 'anleitung') howtoSeen();
     // «Was ist neu»: the release notes, re-readable from the how-to's foot.
@@ -644,10 +680,20 @@ export function renderMore(el) {
       if (feedbackWrap.innerHTML !== html) feedbackWrap.innerHTML = html;
       const tab = el.querySelector('[data-subtab="anleitung"]');
       const dot = tab.querySelector('.seg-dot');
-      const want = prefs.howtoPending || feedbackUnread();
+      const want = prefs.howtoPending || feedbackUnread() || spotsPending();
       if (want && !dot) tab.insertAdjacentHTML('beforeend', paneDot('anleitung'));
       if (!want && dot) dot.remove();
       loadUsage(); // the operator may be recognised only by the first sync
+      syncSpots();
+    }
+    // The reported places (operator only): the section follows the sync like the inbox.
+    const spotsWrap = el.querySelector('[data-spots-wrap]');
+    spotsWrap.addEventListener('click', (e) => {
+      if (e.target.closest('[data-spots-open]')) openSpotsSheet();
+    });
+    function syncSpots() {
+      const html = spotsSectionHtml();
+      if (spotsWrap.innerHTML !== html) spotsWrap.innerHTML = html;
     }
     // The operator's usage numbers under the inbox: fetched once per visit
     // (they are not part of the sync), and only on the operator's phone.
@@ -1015,6 +1061,23 @@ export function renderMore(el) {
         });
       })
     );
+
+    // --- the map's start view (per device): taken from where the map was
+    //     last, cleared back to the whole box ---
+    const mapStartWrap = el.querySelector('[data-map-start]');
+    mapStartWrap.addEventListener('click', (e) => {
+      if (e.target.closest('[data-map-start-capture]')) {
+        const view = prefs.mapView;
+        if (!view) return;
+        prefs.mapStart = view;
+        mapStartWrap.innerHTML = mapStartHtml();
+        toast(t('more.map.start.saved'), 'success');
+      } else if (e.target.closest('[data-map-start-reset]')) {
+        prefs.mapStart = null;
+        mapStartWrap.innerHTML = mapStartHtml();
+        toast(t('more.map.start.cleared'), 'success');
+      }
+    });
 
     // --- language (per device): the shell relabels the tab bar and re-routes
     //     on `bt-lang` (main.js), which rebuilds this view on the same pane —

@@ -4,12 +4,13 @@
 // here are the ones the English views show — keep them in step.
 export default {
   // The lead paragraph
-  'lead': 'Zuno keeps track of when the baby fed, what was in the diaper and how long it slept – the same on both phones. The essentials take one tap, even at three in the morning.',
-  // "The four tabs": one item per tab
-  'tabs.title': 'The four tabs',
+  'lead': 'Zuno keeps track of when the baby fed, what was in the diaper and how long it slept – the same on both phones – and shows the nearest changing table when you are out. The essentials take one tap, even at three in the morning.',
+  // "The five tabs": one item per tab
+  'tabs.title': 'The five tabs',
   'tabs.now': '<strong>Now</strong> – where things stand: how long since the last meal, the day so far (meals and wet diapers against the target), sleep or the next reminder. Below that, the buttons for logging.',
   'tabs.log': '<strong>Log</strong> – anything with a time of your choosing, including weight, temperature and medication.',
   'tabs.history': '<strong>History</strong> – every entry by day, to look things up, correct and delete.',
+  'tabs.map': '<strong>Map</strong> – changing tables and nursing places nearby, from OpenStreetMap and reported by parents.',
   'tabs.more': '<strong>More</strong> – reminders, settings, account and family, this guide.',
   // "Nursing": one item per step
   'nursing.title': 'Nursing',
@@ -43,11 +44,14 @@ export default {
   'reminders.title': 'Reminders',
   'reminders.body': 'What is due every day at fixed times – vitamin D for the baby, a medication for Mom or Dad – you set up under <strong>More › Reminders</strong>: what, for whom, the times – and whether daily or every two, three, seven days, from a first day. They appear on "Now" as soon as "Reminders" or "Both" is chosen under Settings › Home screen: the card shows what is next up and ticks it off with one tap; the "Reminders" button opens the day\'s list. A tick is a "Done" entry – both phones see it; in the list a second tap on the tick takes it back. The app sends no notifications, it only shows what is due.',
   // "The two of you" — the two-phone sync
+  // "Map" — the places around the parents
+  'map.title': 'Map',
+  'map.body': '<strong>"Map"</strong> shows what OpenStreetMap knows of changing tables and nursing places – in Switzerland and across the border, on a map served by our own server, with no third-party service – plus the places parents reported. <strong>"My location"</strong> gets the position, on a tap only; it stays on the phone – the server only sees which parts of the map it loads. The chips at the top filter: changing table or nursing. Three buttons at the bottom: <strong>"Info"</strong> says where the data comes from and how old it is; <strong>"Add a place"</strong> reports a place the map does not know yet: move the map until the cross sits on the place, say what is there – the person running Zuno checks the report, then everyone sees the place, without your name; <strong>"Places nearby"</strong> lists the ten closest places as the crow flies. A tap on a dot says where exactly the table is (in the women\'s toilet, in the accessible toilet, a room of its own), whether it costs anything, the opening hours when they are known – and who runs the place, say the city or the restaurant the toilet is in. Nursing places are still rare on OpenStreetMap; what is missing you can also add there, the next update brings it along. Under <strong>More › Settings › Map</strong> you set where the map stands when it opens.',
   'twoPhones.title': 'The two of you',
   'twoPhones.body': 'Both phones show the same entries: the app fetches the latest state every minute and every time it opens. A timer started on one phone can be stopped on the other. Whoever logs something is named on the entry by their display name. Without a connection, "Now" shows the last known state ("As of 14:32" at the top right) – logging still works: the entry is saved on the phone ("waiting for network") and sent as soon as Zuno is open and online again; the top right says how many are still waiting, a tap shows them. If the other phone has ended, changed or deleted the same entry meanwhile, its version stands, and this phone says so.',
   // "Settings" — family vs. this phone
   'settings.title': 'Settings',
-  'settings.body': '<strong>"For the family"</strong> applies on both phones: the feeding amount (birth date and meals per day for the calculated target), the recommended amount that applies instead, three bottle amounts each for breast milk and formula, whether the baby is nursed and roughly how much it drinks then, whether to count from the start of the meal. <strong>"This phone only"</strong>: what "Now" shows in the fourth slot (sleep, reminders, both or nothing), whether the screen stays on while nursing, the design, light or dark.',
+  'settings.body': '<strong>"For the family"</strong> applies on both phones: the feeding amount (birth date and meals per day for the calculated target), the recommended amount that applies instead, three bottle amounts each for breast milk and formula, whether the baby is nursed and roughly how much it drinks then, whether to count from the start of the meal. <strong>"This phone only"</strong>: what "Now" shows in the fourth slot (sleep, reminders, both or nothing), whether the screen stays on while nursing, the design, light or dark – and where the map opens.',
   // "Account and family" + the encryption paragraph
   'account.title': 'Account and family',
   'account.body': 'Under <strong>More › Account</strong>: change your display name and your own password, sign out (removes the keys and entries from this phone). Below that, the family: the family password (only needed by whoever joins – it is good for one join and expires after that; to invite someone, set a new one here), the recovery code (after entering your password – write it down!) and the export of all entries. A second parent registers with the family name and the family password and then sees the same entries.',

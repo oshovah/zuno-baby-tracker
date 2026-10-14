@@ -54,4 +54,13 @@ export default {
   'feedback.notFound': 'Message not found',
   'feedback.badRead': 'Invalid value',
   'feedback.throttled': 'Too many messages in a short time – please try again later',
+
+  // map places reported by parents (lib/spots.php, auth.php's spot:<ip> budget)
+  'spots.unavailable': 'Reporting places is not set up',
+  'spots.badPosition': 'Invalid position',
+  'spots.badKinds': 'Invalid kind of place',
+  'spots.badText': 'Name up to {name} characters, note up to {note} characters',
+  'spots.throttled': 'Too many reports in a short time – please try again later',
+  'spots.full': 'The list of reported places is full – please try again later',
+  'spots.notFound': 'Place not found',
 };

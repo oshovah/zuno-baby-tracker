@@ -130,6 +130,16 @@ export default {
   'scheme.auto': 'Like the phone',
   'scheme.light': 'Light',
   'scheme.dark': 'Dark',
+  // "Map": where the map starts on this phone (views/map.js reads prefs.mapStart)
+  'map.title': 'Map',
+  'map.hint': 'Where the map stands when it opens: all of Switzerland – or a view you set once. Open the map, zoom to the place, then take it over here.',
+  'map.start.none': 'Start view: all of Switzerland',
+  'map.start.set': 'Start view: zoom {zoom} · {lat} N, {lon} E',
+  'map.start.capture': 'Take the current map view',
+  'map.start.captureHint': 'No view yet: open the map first and zoom to the place.',
+  'map.start.reset': 'Reset',
+  'map.start.saved': 'Start view saved – the map now opens there',
+  'map.start.cleared': 'Start view reset – the map opens with all of Switzerland',
   // --- Account: the own account ---
   'account.group': 'Your account',
   // Lands in innerHTML: the params are escaped by the view

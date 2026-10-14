@@ -1,6 +1,9 @@
 // Bottom sheet: the one overlay pattern in the app (quick entries + editing).
 // openSheet(title, build) -> close function; build(body, close, setGuard)
-// fills the content. Backdrop tap, Esc, and the hardware/gesture Back all
+// fills the content. close() returns a promise that resolves once the sheet
+// is really gone — its history entry consumed — so a caller that navigates
+// afterwards (location.hash = …) awaits it, or the pending traversal
+// swallows the new entry. Backdrop tap, Esc, and the hardware/gesture Back all
 // close it — and all three respect a dirty-form guard (two-step discard), so
 // a stray 3am tap can't throw away half-filled input.
 
@@ -33,6 +36,10 @@ export function openSheet(title, build) {
   let closed = false;
   let awaitingPop = false; // we called history.back() and wait for its popstate
   let popFallback = null;
+  let onClosed = null;
+  const closedP = new Promise((resolve) => {
+    onClosed = resolve;
+  });
 
   function reallyClose() {
     if (closed) return;
@@ -51,6 +58,7 @@ export function openSheet(title, build) {
         /* the opener may be gone */
       }
     }
+    onClosed();
   }
 
   /**
@@ -59,13 +67,14 @@ export function openSheet(title, build) {
    * while a pending traversal could still swallow the user's next navigation.
    */
   function performClose() {
-    if (closed || awaitingPop) return;
+    if (closed || awaitingPop) return closedP;
     awaitingPop = true;
     history.back();
     // Safety net for embedders that never deliver the popstate.
     popFallback = setTimeout(() => {
       if (!closed) reallyClose();
     }, 400);
+    return closedP;
   }
 
   /** Dismissal (backdrop/Esc/Back/✕): needs a second attempt when dirty. */

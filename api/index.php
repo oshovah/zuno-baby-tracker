@@ -30,7 +30,9 @@
  *   PATCH  /api/me/password           {currentAuthKey, authKey, kdf, fdkWrappedUser} -> {ok}
  *   PATCH  /api/families/password     {currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily} -> {ok}
  *   GET    /api/sync?since=&limit=    {serverNow, feed, rows, next[, reset][, art, artKey][, feedback]
- *                                     [, feedbackUnread]} (feedback: an inbox exists; the count: operator only)
+ *                                     [, feedbackUnread][, spots][, spotsPending]} (feedback: an inbox
+ *                                     exists; spots: the version of the approved places, with an
+ *                                     operator configured; the two counts: operator only)
  *   POST   /api/entries               {eid, blob} -> 201 row (507 at the family's or the database's row cap)
  *   PATCH  /api/entries/:eid          {blob, ifSeq} -> row (409 when the seq moved)
  *   DELETE /api/entries/:eid          [{ifSeq}] -> row (soft delete; with a body, 409 when the seq moved)
@@ -41,12 +43,18 @@
  *   GET    /api/feedback/key          {publicKey} — the operator's inbox key to seal a message to
  *                                     (404 while the feature is off or the inbox is not set up)
  *   POST   /api/feedback              {blob} -> 201 {ok} (sealed message; no sender stored, see lib/feedback.php)
+ *   POST   /api/spots                 {lat, lon, kinds, name?, note?} -> 201 {ok} (a reported map place,
+ *                                     pending until the operator approves; no sender stored, lib/spots.php)
+ *   GET    /api/spots                 {version, items} — the approved places every phone lays over its map
  * Operator only (config admin_username; everyone else the same 404):
  *   POST   /api/feedback/key          {publicKey, privateSealed} -> {publicKey} (once; 409 afterwards)
  *   GET    /api/feedback?before=      {publicKey, privateSealed, items, next, unread}
  *   PATCH  /api/feedback/:id          {read} -> item
  *   DELETE /api/feedback/:id          -> {ok} (for good)
  *   GET    /api/stats                 usage counts (families, accounts, rows, active lately — lib/stats.php)
+ *   GET    /api/spots/pending         {items} — the reported places waiting for a decision, oldest first
+ *   PATCH  /api/spots/:id             {approve?, name?, note?, kinds?} -> item (correct and/or approve)
+ *   DELETE /api/spots/:id             -> {ok} (reject or withdraw: for good)
  *   GET    /api/art/<name>            a private artwork file (image/png) for members of the configured
  *                                     family; the same 404 for everyone and everything else (lib/art.php)
  * User JSON everywhere: {username, familyId, familyName, profileBlob}; row
@@ -67,7 +75,8 @@
  * write budget ('write:<ip>', 300 / 15 min) before anything else happens,
  * and a create stops at the row caps of lib/entries.php (507). Feedback
  * messages have a budget of their own ('fb:<ip>', 10 / hour) and a cap
- * (lib/feedback.php).
+ * (lib/feedback.php); so have reported places ('spot:<ip>', 10 / hour, the
+ * caps of lib/spots.php).
  *
  * Routing works identically in three situations:
  *  1. Apache + .htaccess rewrite (possibly under a subdirectory):
@@ -89,6 +98,7 @@ require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/entries.php';
 require_once __DIR__ . '/lib/art.php';
 require_once __DIR__ . '/lib/feedback.php';
+require_once __DIR__ . '/lib/spots.php';
 require_once __DIR__ . '/lib/stats.php';
 
 /** Damping delay after a wrong secret (microseconds). */
@@ -462,6 +472,15 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
         if (bt_feedback_is_admin($config, $user)) {
             $page['feedbackUnread'] = bt_feedback_unread($pdo);
         }
+        // Reported places: with an operator configured every member learns
+        // the version of the approved list (and fetches it only on a change);
+        // the operator's phone also counts what waits (the dot on Mehr).
+        if (bt_spots_on($config)) {
+            $page['spots'] = bt_spots_version($pdo);
+            if (bt_feedback_is_admin($config, $user)) {
+                $page['spotsPending'] = bt_spots_pending_count($pdo);
+            }
+        }
         return [200, $page];
     }
 
@@ -500,6 +519,37 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
         }
         if ($method === 'DELETE') {
             return [200, bt_feedback_delete($pdo, $id)];
+        }
+        throw new HttpError(405, 'Methode nicht erlaubt', 'request.methodNotAllowed');
+    }
+
+    // Reported map places (lib/spots.php): members report and read, the
+    // operator curates — the curation routes are the same 404 for everyone else.
+    if ($segments === ['spots']) {
+        bt_require_method($method, ['GET', 'POST']);
+        if ($method === 'POST') {
+            bt_charge_spot($pdo, $ip); // before anything else, like feedback
+            bt_spots_assert_on($config);
+            return [201, bt_spot_create($pdo, $readBody())];
+        }
+        bt_spots_assert_on($config);
+        return [200, bt_spots_list($pdo)];
+    }
+
+    if ($segments === ['spots', 'pending']) {
+        bt_feedback_assert_admin($config, $user); // before the method: anyone else sees no route at all
+        bt_require_method($method, ['GET']);
+        return [200, bt_spots_pending($pdo)];
+    }
+
+    if (count($segments) === 2 && $segments[0] === 'spots') {
+        bt_feedback_assert_admin($config, $user); // before the id: nobody else learns whether one exists
+        $id = bt_valid_spot_id($segments[1]);
+        if ($method === 'PATCH') {
+            return [200, bt_spot_update($pdo, $id, $readBody())];
+        }
+        if ($method === 'DELETE') {
+            return [200, bt_spot_delete($pdo, $id)];
         }
         throw new HttpError(405, 'Methode nicht erlaubt', 'request.methodNotAllowed');
     }

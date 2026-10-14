@@ -4,10 +4,13 @@
  *
  * Steps (idempotent — deploy/ is wiped first):
  *   1. `npm run build` (vite) unless --no-build
- *   2. dist/*  -> deploy/            (built frontend, incl. sw.js + manifest)
+ *   2. dist/*  -> deploy/            (built frontend, incl. sw.js + manifest; the map's
+ *                                       places file public/map/pois.json must be there —
+ *                                       `npm run map:data` — the basemap archive is NOT
+ *                                       part of deploy/, see scripts/map-basemap.mjs)
  *      api/*   -> deploy/api/        (PHP backend, minus tests/ and the dev config.php)
  *   3. generate deploy/api/config.php   (db_path from DEPLOY_DB_PATH, the private-art family,
- *                                        the feedback operator from ADMIN_USERNAME)
+ *                                        the operator — feedback, reported places — from ADMIN_USERNAME)
  *   4. generate deploy/.htaccess        (api rewrite, FilesMatch denials, caching)
  *   5. generate deploy/data/.htaccess   (deny-all stub — the SQLite db must never be served)
  *   5b. private-art/ -> deploy/private-art/ when PRIVATE_ART_FAMILY is set (deny-all stub;
@@ -196,15 +199,16 @@ if (env.PRIVATE_ART_FAMILY && env.PRIVATE_ART_FAMILY.trim() !== '') {
 }
 
 // ADMIN_USERNAME — the one account that reads the parents' feedback (the foot
-// of Mehr › Anleitung shows it the inbox instead of the form; api/lib/feedback.php).
-// Unset = feedback is off. Never printed: the log only says whether it is set.
+// of Mehr › Anleitung shows it the inbox instead of the form; api/lib/feedback.php)
+// and curates the places they report on the map (api/lib/spots.php). Unset =
+// both are off. Never printed: the log only says whether it is set.
 let adminUsername = null;
 if (env.ADMIN_USERNAME && env.ADMIN_USERNAME.trim() !== '') {
   adminUsername = env.ADMIN_USERNAME.trim().toLowerCase();
   if (/[\r\n\0]/.test(adminUsername)) fail('ADMIN_USERNAME contains a line break or NUL');
-  log('ADMIN_USERNAME set: feedback is on, that account reads it');
+  log('ADMIN_USERNAME set: that account reads the feedback and curates the reported places');
 } else {
-  log('no ADMIN_USERNAME in .env: feedback is off');
+  log('no ADMIN_USERNAME in .env: no operator — feedback and «Ort melden» are off');
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +273,27 @@ const apiCount = copyTree(apiDir, path.join(deployDir, 'api'), (rel, entry) => {
 });
 log(`copied api/ -> deploy/api/ (${apiCount} files, excluded tests/ and dev config.php)`);
 
+// The map's places (scripts/map-data.mjs) ship with every build: without the
+// file the «Karte» tab has nothing to show, so packaging refuses — and says
+// so when the places are getting old (the map shows their date).
+{
+  const poisFile = path.join(deployDir, 'map', 'pois.json');
+  if (!fs.existsSync(poisFile)) {
+    fail('no public/map/pois.json — run "npm run map:data" first (the places of the «Karte» tab, README › Karte)');
+  }
+  let fc = null;
+  try {
+    fc = JSON.parse(fs.readFileSync(poisFile, 'utf8'));
+  } catch {
+    fc = null;
+  }
+  if (!fc || !Array.isArray(fc.features) || typeof fc.generated !== 'string') {
+    fail('public/map/pois.json is not a places file — run "npm run map:data" again');
+  }
+  const ageDays = Math.floor((Date.now() - Date.parse(fc.generated)) / 86400000);
+  log(`map: ${fc.features.length} places as of ${fc.generated}${ageDays > 60 ? ` — ${ageDays} days old, consider "npm run map:data"` : ''}`);
+}
+
 // ---------------------------------------------------------------------------
 // 2b. Version the service worker: precache the build's shell files and tie the
 //     cache name to their content, so the FIRST offline open works and every
@@ -288,7 +313,17 @@ log(`copied api/ -> deploy/api/ (${apiCount} files, excluded tests/ and dev conf
     .sort()
     .map((f) => `./assets/${f}`);
 
-  const precache = ['./', './manifest.webmanifest', ...assetRefs, ...fontRefs];
+  // The map's engine — a lazy chunk and its CSS (src/map-engine.js) — is
+  // small enough for the shell cache: «Karte» then opens after an update
+  // without network too (the places file is cached on first use, the
+  // basemap never is).
+  const mapRefs = fs
+    .readdirSync(path.join(deployDir, 'assets'))
+    .filter((f) => /^map-engine-.*\.(js|css)$/.test(f))
+    .sort()
+    .map((f) => `./assets/${f}`);
+
+  const precache = ['./', './manifest.webmanifest', ...assetRefs, ...fontRefs, ...mapRefs];
   const version = createHash('sha256').update(precache.join('\n') + indexHtml).digest('hex').slice(0, 10);
 
   const swPath = path.join(deployDir, 'sw.js');
@@ -325,8 +360,9 @@ return [
     // (PRIVATE_ART_FAMILY in .env at packaging time), or null: nobody does.
     'private_art_family' => ${privateArtFamily === null ? 'null' : phpSingleQuoted(privateArtFamily)},
     'private_art_dir' => null,
-    // Username of the account that reads the feedback (ADMIN_USERNAME in
-    // .env at packaging time), or null: feedback is off.
+    // Username of the account that reads the feedback and curates the
+    // reported places (ADMIN_USERNAME in .env at packaging time), or null:
+    // both are off.
     'admin_username' => ${adminUsername === null ? 'null' : phpSingleQuoted(adminUsername)},
 ];
 `;
@@ -370,11 +406,19 @@ const htaccess = `# Generated by scripts/package.mjs — do not edit; regenerate
 
 AddType application/manifest+json .webmanifest
 
+# The map's basemap archive (basemap/, uploaded with "npm run deploy:basemap"):
+# a binary the browser reads in byte ranges — never compressed on the fly (a
+# deflate filter would turn a 206 into a 200, and pmtiles gives up on that).
+AddType application/octet-stream .pmtiles
+<IfModule mod_setenvif.c>
+  SetEnvIfNoCase Request_URI "\\.pmtiles$" no-gzip
+</IfModule>
+
 # Caching: hashed build assets are safe to cache hard; HTML, the manifest and
 # ESPECIALLY sw.js must always be revalidated (a stale service worker would
 # pin users to an old version).
 <IfModule mod_headers.c>
-  <FilesMatch "\\.(js|css|jpg|jpeg|png|gif|svg|webp|ico|woff|woff2)$">
+  <FilesMatch "\\.(js|css|jpg|jpeg|png|gif|svg|webp|ico|woff|woff2|pmtiles)$">
     Header set Cache-Control "public, max-age=2592000, immutable"
   </FilesMatch>
   <FilesMatch "^(sw\\.js|manifest\\.webmanifest|.*\\.html|.*\\.json)$">

@@ -27,6 +27,7 @@ import { renderLogin } from './views/login.js';
 import { renderHome } from './views/home.js';
 import { renderBackfill } from './views/backfill.js';
 import { renderHistory } from './views/history.js';
+import { renderMap } from './views/map.js';
 import { renderMore } from './views/more.js';
 import { WHATS_NEW, unseenWhatsNew, newestWhatsNewId } from './whats-new.js';
 import { openWhatsNewSheet } from './whats-new-sheet.js';
@@ -37,7 +38,7 @@ const tabbar = document.getElementById('tabbar');
 
 // The tab bar is static markup in index.html (German, the pre-JS default):
 // label it in the active language, again after every switch.
-const TAB_KEYS = { jetzt: 'shell.tab.now', nachtragen: 'shell.tab.backfill', verlauf: 'shell.tab.history', mehr: 'shell.tab.more' };
+const TAB_KEYS = { jetzt: 'shell.tab.now', nachtragen: 'shell.tab.backfill', verlauf: 'shell.tab.history', karte: 'shell.tab.map', mehr: 'shell.tab.more' };
 function labelShell() {
   tabbar.setAttribute('aria-label', t('shell.nav.label'));
   const meta = document.querySelector('meta[name="description"]');
@@ -54,23 +55,26 @@ labelShell();
 applyKeptArt();
 store.subscribe(() => syncArt(store.artVersion, store.artKey));
 
-// The operator's unread feedback: a dot on the «Mehr» tab (its «Anleitung»
-// sub tab carries one too, views/more.js).
-function syncFeedbackDot() {
+// The operator's unread feedback, or reported places waiting for a decision:
+// a dot on the «Mehr» tab (its «Anleitung» sub tab carries one too, views/more.js).
+function syncMoreDot() {
   const tab = tabbar.querySelector('a[data-tab="mehr"]');
   if (!tab) return;
-  const want = store.feedback.isInbox && store.feedback.unread > 0;
+  const unread = store.feedback.isInbox && store.feedback.unread > 0 ? store.feedback.unread : 0;
+  const pending = store.spots.isCurator && store.spots.pending > 0 ? store.spots.pending : 0;
+  const want = unread > 0 || pending > 0;
+  const label = unread > 0 ? t('feedback.section.unread', { n: unread }) : t('spots.section.pending', { n: pending });
   const dot = tab.querySelector('.tab-dot');
   if (want && !dot) {
-    tab.insertAdjacentHTML('beforeend', `<span class="tab-dot" aria-label="${escapeHtml(t('feedback.section.unread', { n: store.feedback.unread }))}"></span>`);
+    tab.insertAdjacentHTML('beforeend', `<span class="tab-dot" aria-label="${escapeHtml(label)}"></span>`);
   } else if (!want && dot) {
     dot.remove();
   } else if (want && dot) {
-    dot.setAttribute('aria-label', t('feedback.section.unread', { n: store.feedback.unread }));
+    dot.setAttribute('aria-label', label);
   }
 }
-syncFeedbackDot();
-store.subscribe(syncFeedbackDot);
+syncMoreDot();
+store.subscribe(syncMoreDot);
 
 let cleanup = null;
 let mode = 'boot'; // 'boot' | 'auth' | 'app'
@@ -79,6 +83,7 @@ const routes = [
   { pattern: /^#\/?$/, tab: 'jetzt', render: (el) => renderHome(el) },
   { pattern: /^#\/nachtragen\/?$/, tab: 'nachtragen', render: (el) => renderBackfill(el) },
   { pattern: /^#\/verlauf\/?$/, tab: 'verlauf', render: (el) => renderHistory(el) },
+  { pattern: /^#\/karte\/?$/, tab: 'karte', render: (el) => renderMap(el) },
   // `familie` is the deep link into the family half of the «Konto» pane (the
   // recovery toast below, older links) — the sub tab itself writes `konto`;
   // `feedback` opens «Anleitung» at its feedback section.

@@ -64,14 +64,16 @@ function logoHtml() {
 // The pitch under the login form — what whoever got the link is looking at.
 // The form stays on top so a returning parent logs in without scrolling;
 // the two selling points lead: one shared state across both phones, and
-// end-to-end encryption; the hosting panel (hostingHtml) closes the list
-// before the CTA. [hue, icon, key under login.pitch.*]
+// end-to-end encryption; the map's feature says the one thing a parent
+// would ask of a map (no map provider); the hosting panel (hostingHtml)
+// closes the list before the CTA. [hue, icon, key under login.pitch.*]
 const PITCH_FEATURES = [
   ['milk', 'sync', 'sync'],
   ['sleep', 'lock', 'e2ee'],
   ['milk', 'bolt', 'oneTap'],
   ['diaper', 'care', 'midwife'],
   ['sleep', 'reminder', 'reminders'],
+  ['diaper', 'map', 'map'],
   ['measure', 'phone', 'noStore'],
 ];
 
@@ -123,7 +125,7 @@ const SOURCE_URL = 'https://github.com/oshovah/zuno-baby-tracker';
 const extLink = (url, label) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 
 // What is missing on purpose — the tags under login.hosting.none.*
-const HOSTING_NONE = ['cdn', 'fonts', 'analytics', 'ads', 'login', 'ai'];
+const HOSTING_NONE = ['cdn', 'fonts', 'maps', 'analytics', 'ads', 'login', 'ai'];
 
 // The whole data path as a drawing: two phones, ONE server between them.
 // Strokes in currentColor — muted from .hosting-map, the server in the

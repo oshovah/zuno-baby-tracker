@@ -173,3 +173,7 @@
 [data-theme='swiss'] .ico[data-ico='phone'] {
   --ico: url('./icons/swiss/phone.svg');
 }
+
+[data-theme='swiss'] .ico[data-ico='map'] {
+  --ico: url('./icons/swiss/map.svg');
+}

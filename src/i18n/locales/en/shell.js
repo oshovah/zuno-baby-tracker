@@ -4,6 +4,7 @@ export default {
   'tab.now': 'Now',
   'tab.backfill': 'Log',
   'tab.history': 'History',
+  'tab.map': 'Map',
   'tab.more': 'More',
   'meta.description': 'Track nursing, bottles, diapers and sleep – end-to-end encrypted',
   'nav.label': 'Main navigation',

@@ -195,6 +195,7 @@ export const ICONS = {
   bolt: '⚡',
   care: '🩺',
   phone: '📲',
+  map: '🗺️',
 };
 
 /** `<span class="ico …" data-ico="name"><i>emoji</i></span>` — decorative. */

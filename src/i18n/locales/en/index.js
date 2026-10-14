@@ -12,5 +12,7 @@ import forms from './forms.js';
 import errors from './errors.js';
 import api from './api.js';
 import feedback from './feedback.js';
+import map from './map.js';
+import spots from './spots.js';
 
-export default buildLocale(meta, { common, shell, home, history, more, login, authInfo, howto, forms, errors, api, feedback });
+export default buildLocale(meta, { common, shell, home, history, more, login, authInfo, howto, forms, errors, api, feedback, map, spots });

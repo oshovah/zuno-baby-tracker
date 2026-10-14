@@ -92,7 +92,7 @@ export default {
   'error.sessionGone': 'Anmeldung abgelaufen – bitte neu anmelden',
   'error.familyCheck': 'Der Familienname konnte nicht geprüft werden – bitte nochmals versuchen',
 
-  // The pitch under the login form: six features, the CTA
+  // The pitch under the login form: seven features, the CTA
   'pitch.title': 'Für zwei Handys gebaut',
   'pitch.lead': 'Ein Baby, zwei Eltern, ein gemeinsamer Stand – ohne dass irgendwer mitliest.',
   'pitch.sync.title': 'Auf dem einen starten, auf dem anderen stoppen.',
@@ -105,6 +105,8 @@ export default {
   'pitch.midwife.body': 'Seit wann wach, wann die letzte Mahlzeit, wie viele nasse und volle Windeln heute – alles auf einen Blick. Dazu der Verlauf, Nachtragen und ein Export.',
   'pitch.reminders.title': 'Erinnerungen, die beide sehen.',
   'pitch.reminders.body': 'Vitamin D um sechs, Mamas Tablette am Morgen: einmal anlegen, und «Jetzt» zeigt, was heute noch offen ist. Ein Fingertipp hakt ab – auf dem anderen Handy ist es auch erledigt.',
+  'pitch.map.title': 'Der nächste Wickeltisch – ohne Kartendienst.',
+  'pitch.map.body': 'Die Karte zeigt Wickeltische und Still-Orte in der Nähe – aus OpenStreetMap, von unserem eigenen Server. Kein Kartendienst, kein Dienst von Dritten: Dein Standort bleibt auf dem Handy, nichts geht nach aussen. Fehlt ein Ort, fügst du ihn hinzu – nach der Prüfung sehen ihn alle.',
   'pitch.noStore.title': 'Ohne App-Store.',
   'pitch.noStore.body': 'Im Browser öffnen, «Zum Home-Bildschirm» – läuft auf iPhone und Android wie eine App.',
   'pitch.cta': 'Konto erstellen',
@@ -132,10 +134,11 @@ export default {
   'hosting.map.server': '{name}, Basel',
   'hosting.map.partner': 'Das zweite Handy',
   'hosting.where': 'Zuno läuft vollständig bei {host} in Basel: Die App und die Datenbank mit euren verschlüsselten Einträgen liegen auf Servern in der Schweiz.',
-  'hosting.only': 'Dein Handy spricht nur mit diesem einen Server – auch Schriften, Skripte und Bilder kommen von dort. Kein Dienst, kein Tool und kein CDN von Dritten: nichts ausserhalb des Hostings bei {name}.',
+  'hosting.only': 'Dein Handy spricht nur mit diesem einen Server – auch Schriften, Skripte, Bilder und die Karte kommen von dort. Kein Dienst, kein Tool und kein CDN von Dritten: nichts ausserhalb des Hostings bei {name}.',
   'hosting.noneTitle': 'Was hier fehlt – mit Absicht:',
   'hosting.none.cdn': 'CDN',
   'hosting.none.fonts': 'Google Fonts',
+  'hosting.none.maps': 'Externe Kartendienste',
   'hosting.none.analytics': 'Analyse-Tools',
   'hosting.none.ads': 'Werbenetze',
   'hosting.none.login': 'Login über Google oder Apple',

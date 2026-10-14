@@ -100,10 +100,10 @@ function fake_eid(): string
 function empty_db(): PDO
 {
     $pdo = bt_db(['db_path' => $GLOBALS['__bt_db_file']]);
-    foreach (['entries', 'auth_tokens', 'login_attempts', 'users', 'families', 'feedback', 'sqlite_sequence'] as $table) {
+    foreach (['entries', 'auth_tokens', 'login_attempts', 'users', 'families', 'feedback', 'spots', 'sqlite_sequence'] as $table) {
         $pdo->exec("DELETE FROM $table");
     }
-    $pdo->exec("DELETE FROM settings WHERE key IN ('feedback_pub', 'feedback_priv')");
+    $pdo->exec("DELETE FROM settings WHERE key IN ('feedback_pub', 'feedback_priv', 'spots_version')");
     logout();
     $GLOBALS['__bt_fix'] = null;
     return $pdo;
@@ -475,6 +475,7 @@ bt_test('routes: GET /me health check, JSON guard 415, unknown routes 401/404, w
     assert_error(api_call('GET', '/me/keys/unlock'), 405, 'Methode nicht erlaubt');
     assert_error(api_call('POST', '/me/password', []), 405, 'Methode nicht erlaubt');
     assert_error(api_call('POST', '/families/password', []), 405, 'Methode nicht erlaubt');
+    assert_error(api_call('PUT', '/spots', []), 405, 'Methode nicht erlaubt');
 });
 
 bt_test('routes: GET /auth/params and GET /families/check are public and shaped for the client', function () {

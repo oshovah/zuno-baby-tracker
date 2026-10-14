@@ -2,12 +2,16 @@
 
 A small, self-hosted newborn tracker for two parents — nursing, bottles,
 diapers, sleep, measurements and daily reminders, shared between both phones
-and **end-to-end encrypted**: the server stores ciphertext only and never
-sees a password.
+and **end-to-end encrypted**: everything about the baby reaches the server
+as ciphertext, and it never sees a password.
 
 No e-mail address, no tracking, no third-party requests, no app store. The
-client is a vanilla-JS PWA (Vite, zero runtime dependencies), the server a
-tiny PHP 7.4+ API over SQLite that runs on cheap shared hosting. The UI ships
+client is a vanilla-JS PWA (Vite; its only runtime dependencies are the
+map's — Leaflet, protomaps-leaflet and pmtiles, bundled from npm, nothing
+from a CDN), the server a tiny PHP 7.4+ API over SQLite that runs on cheap
+shared hosting. The «Karte» tab shows changing tables and nursing places
+from OpenStreetMap — and the places parents report in the app, checked by
+the operator — on a map this server hosts itself (see «Karte» below). The UI ships
 in German (Swiss flavour, the source language) and English.
 
 This repository is public so that anyone can check the privacy claims the app
@@ -27,8 +31,10 @@ and computes nothing.
 | The family's data key only *wrapped* (AES-KW) under keys derived from passwords | The family data key itself: it is generated on the phone and only ever leaves it wrapped |
 | Display names and family settings as encrypted blobs | |
 | SHA-256 hashes of the session tokens (HttpOnly, SameSite cookie) | |
-| Throttle counters keyed by the client's address (failed logins, registrations, entry writes, feedback messages) — rows older than a day are pruned at the next login or registration | |
+| Throttle counters keyed by the client's address (failed logins, registrations, entry writes, feedback messages, reported places) — rows older than a day are pruned at the next login or registration | |
+| Which parts of the self-hosted map a phone asks for while the «Karte» tab is open (byte ranges of one archive — ordinary access-log material) | Where the phone is: the position stays on the phone, and the map never comes from a map provider |
 | Feedback messages to the operator (optional, see «Feedback»): per message ONE blob sealed on the phone to the operator's inbox key, a day-granular date and a read mark — no column for the sender | What a message says and who wrote it: a named message carries the name inside the blob, an anonymous one nowhere |
+| Map places reported by parents (optional, see «Feedback»): the position, the kind of place, a name and a note in plaintext — public map data, nothing about a baby —, pending or approved, two day-granular dates — no column for who reported it | Who reported a place: the row has no user or family column, and the request is throttled per address like a feedback message |
 
 What a server still learns, like any server: that a family exists, how many
 rows it has and roughly when a phone writes (request times, web-server logs),
@@ -116,6 +122,10 @@ and `about.*` strings in `src/i18n/locales/*/login.js` and the description in
 `index.html` before you put it online. The same page links to the source
 (`SOURCE_URL`, next to `HOSTER`): if you run a **modified** copy for other
 people, the AGPL asks you to offer them *your* source — point it there.
+The map is yours as well: its places and tiles are cut from OpenStreetMap on
+your machine (`npm run map:data`, `npm run map:basemap`; the area is
+`BBOX` in [`scripts/lib/map-config.mjs`](scripts/lib/map-config.mjs)) and
+uploaded once with `npm run deploy:basemap` — see «Karte» in the German part.
 
 The pictures in the login page's slider are the real app with invented data,
 taken by `npm run screenshots` ([`scripts/make-screenshots.mjs`](scripts/make-screenshots.mjs):
@@ -155,8 +165,8 @@ manifest by itself after a few days.
 Optional: the parents can write to whoever runs the installation — a wish,
 a bug report, anything — under «Mehr › Anleitung», by name or anonymously.
 Name your own account in `.env` (`ADMIN_USERNAME`) and package; that one
-account sees an inbox there instead of the form. Unset, the section does
-not appear.
+account sees an inbox there instead of the form — and the places parents
+report for the map (below). Unset, the section does not appear.
 
 The messages are end-to-end encrypted like everything else
 ([`api/lib/feedback.php`](api/lib/feedback.php),
@@ -185,6 +195,21 @@ are stored and how many families logged something in the last 7 / 30 days
 the database does not show whoever runs it anyway, and `GET /api/stats` is
 the same 404 for everyone else.
 
+**Reported places.** With an operator configured, the «Karte» tab also
+offers «Ort hinzufügen»: a parent moves the map until the crosshair sits on the
+place, says what is there (a changing table, a place to nurse), a name and
+where exactly, and sends it. Unlike everything else this is stored in the
+clear ([`api/lib/spots.php`](api/lib/spots.php), table `spots`): a
+position, a kind, a name and a note are public map data, not family data —
+and the row has no user or family column, the request is throttled per
+address only (10 an hour), so a report is anonymous by construction. The
+operator's account sees the open reports under «Mehr › Anleitung»
+(«Gemeldete Orte»), approves them as they are or with corrections, or
+rejects them; approved places are served by `GET /api/spots` to every
+member's phone, which lays them over the OpenStreetMap file and keeps the
+list for offline. Rejecting and withdrawing delete the row for good. The
+caps: 200 open reports, 5000 rows.
+
 ## Licence
 
 [GNU Affero General Public License v3.0](LICENSE). In short: use it, host it,
@@ -193,7 +218,18 @@ offer them your source too. For an app whose whole point is that you can check
 what it does, that seemed the right rule. The icon set is original work,
 drawn by [`scripts/make-icons.mjs`](scripts/make-icons.mjs). The bundled fonts
 (Inter, Jost, Nunito) are under the SIL Open Font License, their licence texts
-sit next to them in [`src/themes/fonts/`](src/themes/fonts/).
+sit next to them in [`src/themes/fonts/`](src/themes/fonts/). The map's
+places and tiles (`public/map/pois.json` and `basemap/`, both generated — see
+«Karte») are OpenStreetMap data under the
+[Open Database License](https://www.openstreetmap.org/copyright): the map
+shows the attribution, and `basemap/LICENSE.txt` travels with the archive.
+The places parents report in the app are the installation's own data, not
+OpenStreetMap's.
+The hand-kept additions in
+[`scripts/map/extra-places.csv`](scripts/map/extra-places.csv) are dedicated
+to the public domain ([CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/))
+so that anyone may carry them into OpenStreetMap; a row that takes its point
+or tags from an OSM object says so in its note, and that part stays OSM's.
 
 ---
 
@@ -218,7 +254,9 @@ SQLite auf Shared Hosting (cyon). Produktentscheide stehen in
 - **Ende-zu-Ende verschlüsselt:** Jeder Eintrag (Art, Zeiten, Mengen, Namen)
   wird auf dem Handy mit einem zufälligen Familienschlüssel verschlüsselt.
   Der Server speichert nur Benutzernamen, Familiennamen, verpackte Schlüssel
-  und die verschlüsselten Datensätze — und kann nichts davon lesen. Passwörter
+  und die verschlüsselten Datensätze — und kann nichts davon lesen. Einzig
+  die Orte, die Eltern auf der Karte melden, liegen im Klartext: öffentliche
+  Kartendaten ohne Bezug zu einem Konto (siehe «Karte»). Passwörter
   verlassen das Handy nie (der Server sieht nur einen abgeleiteten Wert).
   Deshalb gibt es kein «Passwort zurücksetzen» durch den Betreiber; siehe
   «Schlüssel und Wiederherstellung».
@@ -305,7 +343,8 @@ node scripts/export-plain.mjs data/baby.db --recovery-code > export.json
 
 Kein Admin-Panel, kein E-Mail: Der Betreiber kann in der Datenbank Konten
 löschen, aber keine Passwörter setzen und keine Einträge lesen (siehe
-«Konten von Hand verwalten»).
+«Konten von Hand verwalten»). In der App prüft das Betreiber-Konto nur, was
+Eltern ihm schicken: Feedback und gemeldete Orte für die Karte.
 
 ## Deployment (cyon)
 
@@ -313,10 +352,25 @@ Einmalig: `.env.example` nach `.env` kopieren und die `DEPLOY_*`-Zugänge
 ausfüllen.
 
 ```bash
+npm run map:data  # die Orte der Karte holen (Overpass) – vor dem Packen, siehe «Karte»
 npm run package   # baut + stellt deploy/ zusammen
 npm run preview   # deploy/ lokal testen: http://127.0.0.1:8081 (auch /baby/)
 npm run deploy    # deploy/ hochladen (rsync/sftp/ftp gemäss .env)
+
+npm run map:basemap -- --build YYYYMMDD   # die Hintergrundkarte schneiden (einmal pro Build)
+npm run deploy:basemap                    # … und hochladen (einmal; nie mit der App)
+npm run deploy:beta                       # dasselbe auf eine zweite Installation (.env.beta)
 ```
+
+- **Karte**: `npm run map:data` vor dem Packen (ohne `public/map/pois.json`
+  bricht `package` ab); das Kartenarchiv (`basemap/`, ~570 MB) geht einmal
+  pro Build separat hoch – `npm run deploy:basemap`, zuerst das Archiv, dann
+  `index.json`, danach die Probe, dass der Server Byte-Ranges liefert (206).
+  Reihenfolge beim ersten Mal: Archiv hochladen, dann die App.
+- **Zweite Installation (Testserver)**: `.env.beta` neben `.env` mit
+  eigenem `DEPLOY_PATH` und `DEPLOY_URL` (kein `DEPLOY_DB_PATH` – die
+  Datenbank liegt dann in deren Docroot); `npm run deploy:beta` und
+  `npm run deploy:basemap:beta` nehmen diese Datei.
 
 - Re-Deploys fassen das entfernte `data/` **nie** an — die Datenbank auf dem
   Server bleibt bestehen.
@@ -380,6 +434,16 @@ braucht keine Sicherungskopie; kein Handy synchronisiert neu. Ein älterer
 Stand öffnet eine v5-Datei unverändert (er kennt die Tabelle nicht und liest
 sie nie).
 
+## Schema v5 → v6
+
+v6 fügt nur die Tabelle `spots` hinzu (id, status, lat, lon, kinds, name,
+note, created_at und decided_at als Datum) — die Orte, die Eltern auf der
+Karte melden, ohne Spalte für Absender, Konto oder Familie; dazu, erst beim
+ersten Freigeben, der Zähler `settings.spots_version`. Die Migration läuft
+bei der ersten Anfrage nach dem Deploy, fasst keine andere Tabelle an und
+braucht keine Sicherungskopie; kein Handy synchronisiert neu. Ein älterer
+Stand öffnet eine v6-Datei unverändert.
+
 ## Konten von Hand verwalten
 
 Direkt in der SQLite-Datei (`sqlite3 data/baby.db`, auf dem Server per SSH).
@@ -426,7 +490,8 @@ Adressen aus (20 / Stunde). Schreibzugriffe auf Einträge sind pro IP auf 300 /
 bzw. 400 000 insgesamt (507; gelöschte Einträge zählen mit, sie bleiben als
 Tombstones) — die Registrierung ist offen, ohne diese Grenzen könnte ein
 Fremdkonto die Disk füllen. Feedback-Nachrichten haben ein eigenes Budget
-(10 / Stunde pro IP) und eine eigene Grenze (2000). «Betreiber» = das Konto aus
+(10 / Stunde pro IP) und eine eigene Grenze (2000), gemeldete Orte ebenso
+(10 / Stunde pro IP; 200 offene, 5000 Zeilen). «Betreiber» = das Konto aus
 `ADMIN_USERNAME`; alle anderen bekommen auf diesen Routen dasselbe 404.
 Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 `authKey` (PBKDF2 + HKDF); Schlüssel und Datensätze sind base64url-Blobs.
@@ -444,7 +509,7 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `PATCH /api/me` | ✓ | `{profileBlob}` (verschlüsselter Anzeigename) |
 | `PATCH /api/me/password` | ✓ | `{currentAuthKey, authKey, kdf, fdkWrappedUser}` — meldet andere Geräte ab |
 | `PATCH /api/families/password` | ✓ | `{currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily}` |
-| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an. Dazu `feedback: true`, wenn es ein Feedback-Postfach gibt, und nur für das Betreiber-Konto `feedbackUnread` |
+| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an. Dazu `feedback: true`, wenn es ein Feedback-Postfach gibt, und nur für das Betreiber-Konto `feedbackUnread`; mit eingerichtetem Betreiber `spots` (die Version der freigegebenen Orte) und nur für das Betreiber-Konto `spotsPending` |
 | `POST /api/entries` | ✓ | `{eid, blob}` → Datensatz (507 an der Zeilengrenze der Familie bzw. der Datenbank) |
 | `PATCH /api/entries/:eid` | ✓ | `{blob, ifSeq}` → Datensatz (409, wenn ein anderes Gerät dazwischenkam) |
 | `DELETE /api/entries/:eid` | ✓ | Soft-Delete; optionaler JSON-Body `{ifSeq}` macht ihn bedingt (409, wenn ein anderes Gerät dazwischenkam) |
@@ -455,6 +520,10 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `GET /api/feedback?before=` | Betreiber | `{publicKey, privateSealed, items, next, unread}` — neueste zuerst, 100 pro Seite |
 | `PATCH /api/feedback/:id` · `DELETE /api/feedback/:id` | Betreiber | `{read}` gelesen/ungelesen · endgültig löschen |
 | `GET /api/stats` | Betreiber | Nutzungszahlen: `{asOf, families, familiesActive7, familiesActive30, accounts, accountsNew30, entries, entriesNew7}` — nur Zahlen |
+| `POST /api/spots` | ✓ | `{lat, lon, kinds, name?, note?}` → 201 — ein gemeldeter Ort, offen bis zur Prüfung; gespeichert ohne Absender (400 ungültig, 429 nach 10 / Stunde pro Adresse, 507 bei 200 offenen oder 5000 Zeilen; 404, solange kein Betreiber eingerichtet ist) |
+| `GET /api/spots` | ✓ | `{version, items}` — die freigegebenen Orte, die jedes Handy über seine Karte legt |
+| `GET /api/spots/pending` | Betreiber | `{items}` — die offenen Meldungen, älteste zuerst |
+| `PATCH /api/spots/:id` · `DELETE /api/spots/:id` | Betreiber | `{approve?, name?, note?, kinds?}` korrigieren und/oder freigeben · ablehnen oder zurückziehen (endgültig) |
 | `GET /api/art/k/<key>/<name>` | – | Dieselben Bilder und `manifest.webmanifest` über den zufälligen Schlüssel der Installation (nur die Mitglieder jener Familie erhalten ihn, als `artKey` im Sync) — für das, was der Browser ohne Sitzung lädt: das Installations-Symbol. Falscher Schlüssel, unbekannter Name, Funktion aus: dasselbe 404 |
 | `GET /api/art/<name>` | (✓) | Privates Bildmaterial (`image/png`) für die Mitglieder der in `PRIVATE_ART_FAMILY` genannten Familie — für alle anderen, auch ohne Anmeldung, dasselbe 404 (siehe «Private artwork») |
 
@@ -488,7 +557,7 @@ die Tagesgrenzen; Push-Benachrichtigungen gibt es keine.
 «Mehr» hat vier Bereiche: Erinnerungen, Einstellungen, Konto (das eigene
 Konto und darunter alles zur Familie: Familien-Passwort,
 Wiederherstellungscode, Export, Verschlüsselungsstatus) und die
-**Anleitung** — wie die App benutzt wird, von den vier Tabs über das
+**Anleitung** — wie die App benutzt wird, von den fünf Tabs über das
 Ein-Tipp-Erfassen und die Mahlzeiten bis zu den Schlüsseln (statischer Text
 in `src/views/howto.js`). Wer sich auf einem Handy neu registriert, sieht
 beim Start eine Meldung «Neu hier? … unter Mehr › Anleitung» mit
@@ -534,6 +603,85 @@ Schrift-Tokens in `src/themes/`; ein neues entsteht aus `_template.css`
 plus einem Eintrag in `src/themes/index.js` — Anleitung und Checkliste in
 `src/themes/README.md`.
 
+## Karte
+
+Der fünfte Tab zeigt Wickeltische und Still-Orte – alles, was OpenStreetMap
+in der Schweiz und im Grenzgebiet kennt (`changing_table=*`,
+`baby_feeding=*`) – auf einer Karte, die dieser Server selbst ausliefert.
+Das Login-Versprechen («nichts ausserhalb des Hostings») und die CSP gelten
+auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
+
+- **Orte**: `npm run map:data` fragt Overpass (die Hauptinstanz und ihre
+  zwei Spiegel, die den ganzen Planeten halten; bei einem Fehler eine zweite
+  Runde) nach der Box in `scripts/lib/map-config.mjs` und
+  schreibt `public/map/pois.json` (~160 KB, gitignored; fährt mit jedem Build
+  mit, die Karte zeigt das Datum). `scripts/map-data.mjs`; die Normalisierung
+  und die Wortwahl sind pur in `src/mapdata.js` (node-getestet).
+- **Ergänzungen**: `scripts/map/extra-places.csv` hält Orte, die
+  OpenStreetMap (noch) nicht kennt, und Angaben zu Orten, bei denen dort der
+  Wickeltisch noch nicht eingetragen ist – eine Zeile je Ort, die Spalten sind
+  OSM-Schlüssel (`changing_table`, `baby_feeding`, `level` …) plus `use`
+  (yes/no), Quelle, Prüfdatum und Notiz. `npm run map:data` fragt Overpass,
+  was an der Stelle schon steht (ein Objekt derselben Art, 30 m bei einem
+  Punkt, 60 m bei einer Fläche): trägt es den Tag schon, bleibt OSM die
+  Quelle («covered»); fehlt er, bekommt das OSM-Objekt die Angaben der Zeile
+  («merged», der OSM-Link bleibt); steht dort nichts, wird ein eigener Punkt
+  angelegt («added», ohne OSM-Link). Räume, die nur Angehörigen einer
+  Institution offenstehen, gehören nicht hinein. Der bessere Ort für jede
+  Zeile ist OpenStreetMap selbst – dort eingetragen, wird sie beim nächsten
+  Lauf «covered».
+- **Gemeldete Orte**: mit eingerichtetem Betreiber (`ADMIN_USERNAME`) zeigt
+  die Karte «Ort hinzufügen»: die Karte schieben, bis das Kreuz auf dem Ort
+  steht (ab Zoom 15), sagen, was es dort gibt, Name und «Wo genau?», melden.
+  Die Meldung geht ohne Namen an den Server (`api/lib/spots.php`, Tabelle
+  `spots`: Position, Art, Name, Notiz im Klartext – öffentliche Kartendaten,
+  keine Spalte für Konto oder Familie, Drossel nur pro Adresse). Das
+  Betreiber-Konto prüft sie unter Mehr › Anleitung («Gemeldete Orte»:
+  freigeben, korrigieren, ablehnen, später zurückziehen – mit dem nächsten
+  bekannten Ort als Warnung vor Doppelten). Freigegebene Orte liefert
+  `GET /api/spots`; jedes Handy legt sie über die OSM-Datei (`src/spots.js`,
+  `store.spots`), lädt die Liste nur, wenn ihre Version auf der Sync-Seite
+  gestiegen ist, und behält sie in `localStorage` (`bt.spots`) für den
+  ersten Aufbau und offline. Im Sheet steht ein solcher Ort als «Von Eltern
+  gemeldet, vom Betreiber geprüft», ohne OSM-Link.
+- **Hintergrundkarte**: `npm run map:basemap -- --build YYYYMMDD` schneidet mit
+  der `pmtiles`-CLI (`brew install pmtiles`) aus dem täglichen Protomaps-
+  Planet-Build ein Archiv für dieselbe Box (Zoom 0–14, ~570 MB; `--maxzoom 15`
+  verdoppelt) nach `basemap/basemap-<build>.pmtiles`, dazu `index.json` (was
+  die App lädt) und `LICENSE.txt`. Der Ordner ist gitignored und nicht Teil
+  von `deploy/`: `npm run deploy:basemap` lädt ihn einmal pro Build nach
+  `<DEPLOY_PATH>/basemap/` und prüft, dass der Server Byte-Ranges liefert
+  (206) – so liest das Handy die Kacheln. Lokal liefern ihn ein Vite-Plugin
+  (`scripts/lib/map-assets-plugin.mjs`, auch in den Headless-Läufen) und der
+  Preview-Router mit Ranges aus. Ein neuer Build bekommt einen neuen
+  Dateinamen; ein Archiv wird nie an Ort und Stelle überschrieben.
+- **Im Handy**: Leaflet und protomaps-leaflet zeichnen die Kacheln auf
+  Canvas (`src/map-engine.js`, erst beim Öffnen des Tabs geladen; kein
+  Worker, keine Schriftdateien, keine Sprites); die Pins sind DOM-Elemente in
+  den Farben des Designs, ab Zoom 11. «Mein Standort» nur auf Tipp
+  (Geolocation; die Position verlässt das Handy nicht). Unten drei Knöpfe:
+  «Info» (woher die Daten stammen, ihr Stand, die Attribution; eine kleine
+  Attribution steht zudem über der Kartenecke), «Ort hinzufügen» und «Orte
+  in der Nähe» (die zehn nächsten im Sheet – geht auch ohne Karte, ohne
+  Netz, ohne Archiv auf dem Server). Wo
+  die Karte beim Öffnen steht, legt jedes Handy unter Mehr › Einstellungen ›
+  Karte fest (`prefs.mapStart`, aus dem zuletzt gezeigten Ausschnitt). Der Service Worker
+  lässt Range-Anfragen und `basemap/` am Cache vorbei, `map/pois.json` bleibt
+  gecacht.
+- **Was der Server erfährt**: welche Byte-Bereiche des Archivs ein Handy
+  liest, während die Karte offen ist (normales Access-Log) – nicht den
+  Standort. Wer einen Ort meldet, schickt dessen Position, Art, Name und
+  Notiz (ohne Konto; die Drossel zählt pro Adresse).
+- **Lizenz**: Daten © OpenStreetMap-Mitwirkende, ODbL; die Karte zeigt die
+  Attribution, `basemap/LICENSE.txt` liegt beim Archiv. Die Ergänzungen in
+  `scripts/map/extra-places.csv` sind gemeinfrei (CC0 1.0), damit sie jemand
+  nach OpenStreetMap übertragen kann; nimmt eine Zeile ihren Punkt oder ihre
+  Tags von einem OSM-Objekt, sagt es die Notiz – der Teil bleibt ODbL.
+  Still-Orte sind in OpenStreetMap noch dünn erfasst (Oktober 2026: 15 in der
+  Box, dazu 800 Wickeltische) – mehr gibt es nur über Einträge dort.
+- **Anderes Gebiet**: die Box in `scripts/lib/map-config.mjs` ändern und
+  beide Scripts erneut laufen lassen.
+
 ## Struktur
 
 ```
@@ -544,11 +692,19 @@ src/            Frontend: main.js Shell, views/, store.js (lokales Modell +
                 (reine Logik, node-getestet), themes/ (ein CSS pro Design +
                 Registry; README dort), i18n/ (Sprachen: locales/<id>/,
                 README dort), whats-new.js (die Notizen fürs Update-Sheet),
-                feedback.js + feedback-sheet.js (Feedback an den Betreiber)
-public/         Manifest, Service Worker, Icons
+                feedback.js + feedback-sheet.js (Feedback an den Betreiber),
+                mapdata.js (die Orte der Karte, pur) + map-engine.js (Leaflet,
+                lazy) + views/map.js (der Tab «Karte»), spots.js +
+                spots-sheet.js (gemeldete Orte: melden, prüfen) + pois.js
+                (die Ortsdatei, einmal geladen)
+public/         Manifest, Service Worker, Icons; map/pois.json (generiert, gitignored)
+basemap/        das Kartenarchiv + index.json (generiert, gitignored, eigener Upload)
 scripts/        dev-router, preview-router, package.mjs, deploy.mjs,
                 export-plain.mjs (Offline-Entschlüsselung), make-icons.mjs
                 (zeichnet das Icon-Set nach public/img/), make-screenshots.mjs
-                (die Bildschirmfotos der Anmeldeseite)
+                (die Bildschirmfotos der Anmeldeseite), map-data.mjs +
+                map-basemap.mjs (die Karte: Orte und Archiv), map/extra-places.csv
+                (die Ergänzungen), lib/map-config.mjs (die Box),
+                lib/map-assets-plugin.mjs (Ranges im Dev-Server), lib/csv.mjs
 data/           lokale SQLite-DB (gitignored, nie deployt)
 ```

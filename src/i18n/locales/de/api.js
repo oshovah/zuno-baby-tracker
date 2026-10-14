@@ -58,4 +58,13 @@ export default {
   'feedback.notFound': 'Nachricht nicht gefunden',
   'feedback.badRead': 'Ungültige Angabe',
   'feedback.throttled': 'Zu viele Nachrichten in kurzer Zeit – bitte später nochmals versuchen',
+
+  // map places reported by parents (lib/spots.php, auth.php's spot:<ip> budget)
+  'spots.unavailable': 'Orte melden ist nicht eingerichtet',
+  'spots.badPosition': 'Ungültige Position',
+  'spots.badKinds': 'Ungültige Art des Orts',
+  'spots.badText': 'Name höchstens {name} Zeichen, Notiz höchstens {note} Zeichen',
+  'spots.throttled': 'Zu viele Meldungen in kurzer Zeit – bitte später nochmals versuchen',
+  'spots.full': 'Die Liste der gemeldeten Orte ist voll – bitte später nochmals versuchen',
+  'spots.notFound': 'Ort nicht gefunden',
 };

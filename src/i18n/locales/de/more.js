@@ -130,6 +130,16 @@ export default {
   'scheme.auto': 'Wie das Handy',
   'scheme.light': 'Hell',
   'scheme.dark': 'Dunkel',
+  // «Karte»: where the map starts on this phone (views/map.js reads prefs.mapStart)
+  'map.title': 'Karte',
+  'map.hint': 'Wo die Karte beim Öffnen steht: die ganze Schweiz – oder ein Ausschnitt, den du einmal festlegst. Dazu die Karte öffnen, zum Ort zoomen und hier übernehmen.',
+  'map.start.none': 'Startansicht: die ganze Schweiz',
+  'map.start.set': 'Startansicht: Zoom {zoom} · {lat} N, {lon} O',
+  'map.start.capture': 'Aktuellen Kartenausschnitt übernehmen',
+  'map.start.captureHint': 'Noch kein Ausschnitt: zuerst die Karte öffnen und zum Ort zoomen.',
+  'map.start.reset': 'Zurücksetzen',
+  'map.start.saved': 'Startansicht gespeichert – die Karte beginnt jetzt dort',
+  'map.start.cleared': 'Startansicht zurückgesetzt – die Karte beginnt mit der ganzen Schweiz',
   // --- Konto: the own account ---
   'account.group': 'Dein Konto',
   // Lands in innerHTML: the params are escaped by the view
