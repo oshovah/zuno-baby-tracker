@@ -161,7 +161,7 @@ no longer exists (times edited afterwards) counts for the nearest open slot
 of its day; a second tick of a ticked slot (two phones raced) only shows in
 Verlauf. No notification fires — the home screen shows what is due.
 
-**Taster (button devices)**: a Wi-Fi microcontroller with real buttons
+**Analog-Buttons (button devices)**: a Wi-Fi microcontroller with real buttons
 (`arduino/`) that logs an entry without a phone. One entry of type `device`
 per registered device — `details {id, name, token, key}`: the server's id,
 the name (the logger of every entry the device makes), the token the
@@ -173,9 +173,9 @@ cookie; the sync page carries the family's waiting presses (`deviceEvents`),
 the phone opens them (`src/devices.js pressToDraft`: an event type, a recent
 instant), creates the entry under a deterministic eid (`pressEid`: both
 phones make the same one) and deletes the press. Mehr › Einstellungen ›
-Taster: the list, «Taster hinzufügen» (the name, then the 96-hex code =
+Analog-Buttons: the list, «Analog-Buttons hinzufügen» (the name, then the 96-hex code =
 token ‖ key), «Testdruck senden» (the phone presses like the device),
-«Taster entfernen» (kills the token).
+«Knopf entfernen» (kills the token).
 
 **Family settings** travel the same way: one entry of type `settings` per
 family — its `details` is the settings document (`feedFromStart`,

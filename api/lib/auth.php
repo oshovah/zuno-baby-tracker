@@ -1114,7 +1114,7 @@ function bt_charge_spot(PDO $pdo, string $ip): void
 }
 
 /**
- * The budget of button presses from an address: 429 'Zu viele Tastendrücke …'
+ * The budget of button presses from an address: 429 'Zu viele Knopfdrücke …'
  * once it is used up, else the press is counted (before validation, like
  * feedback — the route has no cookie, so this is its whole defence).
  */
@@ -1126,7 +1126,7 @@ function bt_charge_device(PDO $pdo, string $ip): void
     } catch (HttpError $e) {
         throw new HttpError(
             429,
-            'Zu viele Tastendrücke in kurzer Zeit – bitte später nochmals versuchen',
+            'Zu viele Knopfdrücke in kurzer Zeit – bitte später nochmals versuchen',
             'devices.throttled',
             ['minutes' => (int) ceil(BT_DEVICE_WINDOW_SECONDS / 60)]
         );

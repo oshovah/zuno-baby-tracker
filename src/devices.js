@@ -1,4 +1,4 @@
-// Physical buttons («Taster»): a microcontroller with real buttons — next
+// Physical buttons («Analog-Buttons»): a microcontroller with real buttons — next
 // to the changing table, say — that logs an entry without anyone picking up
 // a phone (arduino/ in the repository holds the sketch). The pure half:
 // the device code, what a press carries and the entry it becomes. No DOM,

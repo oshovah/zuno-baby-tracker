@@ -2353,7 +2353,7 @@ function devicesApi(server, dv) {
     const m = /^api\/devices\/events\/(\d+)$/.exec(path);
     if (!m) return null;
     const row = dv.events.find((e) => e.id === Number(m[1]));
-    if (!row) throw httpError(404, 'Tastendruck nicht gefunden', 'devices.eventNotFound');
+    if (!row) throw httpError(404, 'Knopfdruck nicht gefunden', 'devices.eventNotFound');
     return row;
   };
   return {
@@ -2373,7 +2373,7 @@ function devicesApi(server, dv) {
       if (path === 'api/devices/events') {
         // The device's own request (no cookie): the token names the device.
         const device = dv.devices.find((d) => d.token === body.token);
-        if (!device) throw httpError(404, 'Taster nicht gefunden', 'devices.notFound');
+        if (!device) throw httpError(404, 'Knopf nicht gefunden', 'devices.notFound');
         dv.events.push({ id: ++dv.lastId, device: device.id, blob: body.blob, createdAt: TODAY });
         return { ok: true };
       }
@@ -2388,7 +2388,7 @@ function devicesApi(server, dv) {
       const m = /^api\/devices\/(\d+)$/.exec(path);
       if (m) {
         const id = Number(m[1]);
-        if (!dv.devices.some((d) => d.id === id)) throw httpError(404, 'Taster nicht gefunden', 'devices.notFound');
+        if (!dv.devices.some((d) => d.id === id)) throw httpError(404, 'Knopf nicht gefunden', 'devices.notFound');
         dv.devices = dv.devices.filter((d) => d.id !== id);
         dv.events = dv.events.filter((e) => e.device !== id);
         return { ok: true };
@@ -2469,7 +2469,7 @@ test('devices: a press nobody can read, one with a wrong clock, one of a removed
   const server = fakeServer();
   const dv = { devices: [], events: [], registered: [], lastId: 0 };
   const mama = await online(phone(server, { api: devicesApi(server, dv) }), FDK_RAW);
-  const dev = await mama.store.devices.add('Taster');
+  const dev = await mama.store.devices.add('Knopf');
   const { sealPress, randomDeviceKey } = await import('../crypto.js');
 
   dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(randomDeviceKey(), { v: 3, at: minus(1), type: 'diaper', details: { kind: 'pee' } }), createdAt: TODAY });
@@ -2480,10 +2480,10 @@ test('devices: a press nobody can read, one with a wrong clock, one of a removed
   assert.equal(mama.store.snapshot.data.today.diapers, 0);
   assert.deepEqual(dv.events, [], 'every press cleared: none comes back');
   assert.deepEqual(mama.toasts, [
-    'Tastendruck von «Taster» verworfen: Entschlüsselung fehlgeschlagen',
-    'Tastendruck von «Taster» verworfen: Die Uhr des Tasters stimmt nicht',
-    'Tastendruck von «Taster» verworfen: "details.kind" muss "pee", "poop" oder "both" sein',
-    'Tastendruck eines unbekannten Tasters verworfen',
+    'Knopfdruck von «Knopf» verworfen: Entschlüsselung fehlgeschlagen',
+    'Knopfdruck von «Knopf» verworfen: Die Uhr des Knopfs stimmt nicht',
+    'Knopfdruck von «Knopf» verworfen: "details.kind" muss "pee", "poop" oder "both" sein',
+    'Knopfdruck eines unbekannten Knopfs verworfen',
   ]);
 
   // A good press after the bad ones still lands.
@@ -2496,7 +2496,7 @@ test('devices: a press nobody can read, one with a wrong clock, one of a removed
   dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(dev.details.key, { v: 3, at: minus(1), type: 'sleep', details: {} }), createdAt: TODAY });
   await mama.store.refresh();
   assert.equal(mama.store.snapshot.data.openTimers.length, 1);
-  assert.equal(mama.toasts.at(-1), 'Tastendruck von «Taster» verworfen: Es läuft bereits ein Schlaf-Timer');
+  assert.equal(mama.toasts.at(-1), 'Knopfdruck von «Knopf» verworfen: Es läuft bereits ein Schlaf-Timer');
 
   // Remove: the server row goes first (the token dies), then the entry.
   await mama.store.devices.remove(dev.eid);

@@ -1,8 +1,8 @@
-# Zuno – Taster: real buttons for the changing table
+# Zuno – Analog-Buttons: real buttons for the changing table
 
 A small Wi-Fi microcontroller with push buttons that logs a diaper (or
 anything else) into Zuno with one press — no phone needed. The sketch in
-`zuno-taster/` is written for the **Arduino Nano ESP32**; any ESP32 board
+`zuno-analog-buttons/` is written for the **Arduino Nano ESP32**; any ESP32 board
 with Wi-Fi works with other pin names.
 
 End-to-end encryption holds: the press is sealed **on the device** with a
@@ -17,8 +17,8 @@ the device's name.
   pin and GND — the sketch uses the internal pull-ups, no resistors
 - The Arduino IDE 2.x with the board package **Arduino ESP32 Boards**
   (Boards Manager; the Espressif *esp32* package works too)
-- A device code from the app: Mehr › Einstellungen › Taster › «Taster
-  hinzufügen» (the code is also shown again later by tapping the device)
+- A device code from the app: Mehr › Einstellungen › Analog-Buttons ›
+  «Analog-Buttons hinzufügen» (the code is also shown again later by tapping the device)
 
 ## Wiring
 
@@ -35,7 +35,7 @@ timer `{}` (a second sleep press while one runs is refused by the phone).
 
 ## Setup
 
-1. Open `zuno-taster/zuno-taster.ino` in the Arduino IDE, select the
+1. Open `zuno-analog-buttons/zuno-analog-buttons.ino` in the Arduino IDE, select the
    board and its port.
 2. Fill in the block at the top: Wi-Fi name and password, `ZUNO_URL` (the
    address you open on the phone, without a trailing slash) and

@@ -29,7 +29,7 @@ export const SETTINGS_TYPE = 'settings';
 // home screen expands them into today's to-dos (reminders.js) and a tick
 // becomes a `task` entry that references the reminder and its due instant.
 export const REMINDER_TYPE = 'reminder';
-// … and the family's physical buttons («Taster», src/devices.js): one entry
+// … and the family's physical buttons («Analog-Buttons», src/devices.js): one entry
 // of type `device` per registered device — its server id, a name and the
 // two secrets the device holds (the token the server knows as a hash, the
 // key the device seals its presses with, which the server never sees).
@@ -54,7 +54,7 @@ export const TYPE_LABELS = {
   get device() { return t('common.type.device'); },
 };
 
-// A device's name («Taster Wickeltisch»): shown in the list and as the
+// A device's name («Knopf Wickeltisch»): shown in the list and as the
 // logger of the entries its presses make.
 export const DEVICE_NAME_MAX = 40;
 const HEX32_RE = /^[0-9a-f]{32}$/;

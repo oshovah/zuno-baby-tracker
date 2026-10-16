@@ -784,7 +784,7 @@ export function renderMore(el) {
     });
 
     // --- physical buttons: the list follows the store (the partner may add
-    //     one); a row opens the sheet with the code, «Taster hinzufügen»
+    //     one); a row opens the sheet with the code, «Analog-Buttons hinzufügen»
     //     the form ---
     const deviceList = el.querySelector('[data-device-list]');
     function syncDevices() {

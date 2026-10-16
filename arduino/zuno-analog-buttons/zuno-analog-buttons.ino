@@ -1,4 +1,4 @@
-// Zuno – Taster: real buttons next to the changing table that log an entry
+// Zuno – Analog-Buttons: real buttons next to the changing table that log an entry
 // into Zuno – Baby Tracker without anyone picking up a phone.
 //
 // Board: Arduino Nano ESP32 (any ESP32 with Wi-Fi works with other pin
@@ -40,7 +40,7 @@ const char* WIFI_PASS = "your-wifi-password";
 // Where Zuno runs, without a trailing slash (the address you open on the phone).
 const char* ZUNO_URL = "https://example.ch/baby";
 
-// The code from Mehr › Einstellungen › Taster (96 hex characters; spaces are fine).
+// The code from Mehr › Einstellungen › Analog-Buttons (96 hex characters; spaces are fine).
 const char* ZUNO_CODE = "";
 
 // The buttons: a pin, and the entry a press makes. Wire each button between
@@ -383,7 +383,7 @@ void setup() {
   }
   codeOk = parseCode(ZUNO_CODE);
   if (!codeOk) {
-    Serial.println("[setup] ZUNO_CODE is not a device code (96 hex characters from Mehr › Einstellungen › Taster)");
+    Serial.println("[setup] ZUNO_CODE is not a device code (96 hex characters from Mehr › Einstellungen › Analog-Buttons)");
   }
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);

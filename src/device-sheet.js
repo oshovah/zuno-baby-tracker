@@ -1,4 +1,4 @@
-// «Taster» in the bottom sheet (Mehr › Einstellungen › Taster):
+// «Analog-Buttons» in the bottom sheet (Mehr › Einstellungen › Analog-Buttons):
 //   openDeviceSheet({onChanged})        add one: a name, then the code the
 //                                       sketch wants — the same sheet swaps
 //                                       its body to the detail view

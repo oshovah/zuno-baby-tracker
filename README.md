@@ -35,7 +35,7 @@ and computes nothing.
 | Which parts of the self-hosted map a phone asks for while the «Karte» tab is open (byte ranges of one archive — ordinary access-log material) | Where the phone is: the position stays on the phone, and the map never comes from a map provider |
 | Feedback messages to the operator (optional, see «Feedback»): per message ONE blob sealed on the phone to the operator's inbox key, a day-granular date and a read mark — no column for the sender | What a message says and who wrote it: a named message carries the name inside the blob, an anonymous one nowhere |
 | Map places reported by parents (optional, see «Feedback»): the position, the kind of place, a name and a note in plaintext — public map data, nothing about a baby —, pending or approved, two day-granular dates — no column for who reported it | Who reported a place: the row has no user or family column, and the request is throttled per address like a feedback message |
-| Button devices (see «Button devices»): per device the family and the SHA-256 of its token; per press ONE blob sealed on the device, the device, the family and a day-granular date — deleted once a phone has made the entry | What a press means or when it happened: the key that seals a press is made on the phone and never sent; the device's name lives inside an encrypted entry |
+| Analog buttons (see «Analog buttons»): per device the family and the SHA-256 of its token; per press ONE blob sealed on the device, the device, the family and a day-granular date — deleted once a phone has made the entry | What a press means or when it happened: the key that seals a press is made on the phone and never sent; the device's name lives inside an encrypted entry |
 
 What a server still learns, like any server: that a family exists, how many
 rows it has and roughly when a phone writes (request times, web-server logs),
@@ -211,7 +211,7 @@ member's phone, which lays them over the OpenStreetMap file and keeps the
 list for offline. Rejecting and withdrawing delete the row for good. The
 caps: 200 open reports, 5000 rows.
 
-## Button devices («Taster»)
+## Analog buttons («Analog-Buttons»)
 
 Optional hardware: a small Wi-Fi microcontroller with real push buttons —
 next to the changing table — that logs a diaper (or anything else) with one
@@ -221,7 +221,7 @@ works).
 
 The encryption holds all the way ([`api/lib/devices.php`](api/lib/devices.php),
 [`src/devices.js`](src/devices.js), `sealPress` in
-[`src/crypto.js`](src/crypto.js)). Under Mehr › Einstellungen › Taster a
+[`src/crypto.js`](src/crypto.js)). Under Mehr › Einstellungen › Analog-Buttons a
 member registers a device: the server hands out an id and a **token** it
 keeps only as a hash; the phone makes a **key** the server never gets. Both
 go into an entry of type `device` — encrypted under the family data key, so
@@ -515,7 +515,7 @@ beitreten.
 
 v7 fügt nur die Tabellen `devices` (id, family_id, token_hash, created_at
 als Datum) und `device_events` (id, device_id, family_id, blob, created_at
-als Datum) hinzu — die Taster und ihre versiegelten Tastendrücke, ohne
+als Datum) hinzu — die Analog-Buttons und ihre versiegelten Knopfdrücke, ohne
 Spalte für den Namen, den Schlüssel oder den Inhalt eines Drucks. Die
 Migration läuft bei der ersten Anfrage nach dem Deploy, fasst keine andere
 Tabelle an und braucht keine Sicherungskopie; kein Handy synchronisiert
@@ -534,8 +534,8 @@ bzw. 400 000 insgesamt (507; gelöschte Einträge zählen mit, sie bleiben als
 Tombstones) — die Registrierung ist offen, ohne diese Grenzen könnte ein
 Fremdkonto die Disk füllen. Feedback-Nachrichten haben ein eigenes Budget
 (10 / Stunde pro IP) und eine eigene Grenze (2000), gemeldete Orte ebenso
-(10 / Stunde pro IP; 200 offene, 5000 Zeilen), Tastendrücke der Taster
-(60 / Stunde pro IP; 200 unverarbeitete pro Familie, 10 Taster pro
+(10 / Stunde pro IP; 200 offene, 5000 Zeilen), Knopfdrücke der Analog-Buttons
+(60 / Stunde pro IP; 200 unverarbeitete pro Familie, 10 Knöpfe pro
 Familie). «Betreiber» = das Konto aus
 `ADMIN_USERNAME`; alle anderen bekommen auf diesen Routen dasselbe 404.
 Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
@@ -554,7 +554,7 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `PATCH /api/me` | ✓ | `{profileBlob}` (verschlüsselter Anzeigename) |
 | `PATCH /api/me/password` | ✓ | `{currentAuthKey, authKey, kdf, fdkWrappedUser}` — meldet andere Geräte ab |
 | `PATCH /api/families/password` | ✓ | `{currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily}` |
-| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an. Dazu `feedback: true`, wenn es ein Feedback-Postfach gibt, und nur für das Betreiber-Konto `feedbackUnread`; mit eingerichtetem Betreiber `spots` (die Version der freigegebenen Orte) und nur für das Betreiber-Konto `spotsPending`; `deviceEvents`, solange Tastendrücke der Familie auf ein Handy warten |
+| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an. Dazu `feedback: true`, wenn es ein Feedback-Postfach gibt, und nur für das Betreiber-Konto `feedbackUnread`; mit eingerichtetem Betreiber `spots` (die Version der freigegebenen Orte) und nur für das Betreiber-Konto `spotsPending`; `deviceEvents`, solange Knopfdrücke der Familie auf ein Handy warten |
 | `POST /api/entries` | ✓ | `{eid, blob}` → Datensatz (507 an der Zeilengrenze der Familie bzw. der Datenbank) |
 | `PATCH /api/entries/:eid` | ✓ | `{blob, ifSeq}` → Datensatz (409, wenn ein anderes Gerät dazwischenkam) |
 | `DELETE /api/entries/:eid` | ✓ | Soft-Delete; optionaler JSON-Body `{ifSeq}` macht ihn bedingt (409, wenn ein anderes Gerät dazwischenkam) |
@@ -569,10 +569,10 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `GET /api/spots` | ✓ | `{version, items}` — die freigegebenen Orte, die jedes Handy über seine Karte legt |
 | `GET /api/spots/pending` | Betreiber | `{items}` — die offenen Meldungen, älteste zuerst |
 | `PATCH /api/spots/:id` · `DELETE /api/spots/:id` | Betreiber | `{approve?, name?, note?, kinds?}` korrigieren und/oder freigeben · ablehnen oder zurückziehen (endgültig) |
-| `POST /api/devices` | ✓ | → 201 `{id, token, createdAt}` — ein Taster der Familie; der Token wird einmal gezeigt und nur als Hash gespeichert (507 ab 10 pro Familie) |
-| `DELETE /api/devices/:id` | ✓ | Taster entfernen: der Token gilt sofort nicht mehr, wartende Drücke gehen mit |
-| `POST /api/devices/events` | – | `{token, blob}` → 201 — ein versiegelter Tastendruck des Geräts (kein Cookie; 404 bei unbekanntem Token, 429 nach 60 / Stunde pro Adresse, 507 bei 200 unverarbeiteten der Familie) |
-| `DELETE /api/devices/events/:id` | ✓ | ein Tastendruck, den das Handy zum Eintrag gemacht hat |
+| `POST /api/devices` | ✓ | → 201 `{id, token, createdAt}` — ein Knopf (Analog-Button) der Familie; der Token wird einmal gezeigt und nur als Hash gespeichert (507 ab 10 pro Familie) |
+| `DELETE /api/devices/:id` | ✓ | Knopf entfernen: der Token gilt sofort nicht mehr, wartende Drücke gehen mit |
+| `POST /api/devices/events` | – | `{token, blob}` → 201 — ein versiegelter Knopfdruck des Geräts (kein Cookie; 404 bei unbekanntem Token, 429 nach 60 / Stunde pro Adresse, 507 bei 200 unverarbeiteten der Familie) |
+| `DELETE /api/devices/events/:id` | ✓ | ein Knopfdruck, den das Handy zum Eintrag gemacht hat |
 | `GET /api/art/k/<key>/<name>` | – | Dieselben Bilder und `manifest.webmanifest` über den zufälligen Schlüssel der Installation (nur die Mitglieder jener Familie erhalten ihn, als `artKey` im Sync) — für das, was der Browser ohne Sitzung lädt: das Installations-Symbol. Falscher Schlüssel, unbekannter Name, Funktion aus: dasselbe 404 |
 | `GET /api/art/<name>` | (✓) | Privates Bildmaterial (`image/png`) für die Mitglieder der in `PRIVATE_ART_FAMILY` genannten Familie — für alle anderen, auch ohne Anmeldung, dasselbe 404 (siehe «Private artwork») |
 
@@ -582,7 +582,7 @@ paused?}`, `bottle {amount_ml, colostrum_ml?}`, `diaper {kind}`, `sleep`, `weigh
 reminderEid?, due?}` (ein abgehakter Punkt) sowie die Nicht-Ereignisse
 `settings` (das Einstellungsdokument der Familie), `reminder {title, who,
 note?, times}` (ein täglicher Zeitplan) und `device {id, name, token, key}`
-(ein Taster mit seinen Geheimnissen); Zeiten UTC-ISO; höchstens ein
+(ein Knopf mit seinen Geheimnissen); Zeiten UTC-ISO; höchstens ein
 offener Timer pro Typ und Familie (Regel im Client, bei einem Wettlauf gewinnt
 der zuerst gespeicherte).
 
@@ -747,8 +747,8 @@ src/            Frontend: main.js Shell, views/, store.js (lokales Modell +
                 lazy) + views/map.js (der Tab «Karte»), spots.js +
                 spots-sheet.js (gemeldete Orte: melden, prüfen) + pois.js
                 (die Ortsdatei, einmal geladen), devices.js + device-sheet.js
-                (die Taster: Code, Testdruck, entfernen)
-arduino/        der Sketch für die Taster (Arduino Nano ESP32) + Bauanleitung
+                (die Analog-Buttons: Code, Testdruck, entfernen)
+arduino/        der Sketch für die Analog-Buttons (Arduino Nano ESP32) + Bauanleitung
 public/         Manifest, Service Worker, Icons; map/pois.json (generiert, gitignored)
 basemap/        das Kartenarchiv + index.json (generiert, gitignored, eigener Upload)
 scripts/        dev-router, preview-router, package.mjs, deploy.mjs,
