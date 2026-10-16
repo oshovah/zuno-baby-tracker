@@ -31,7 +31,9 @@
 #include "root_ca.h"
 
 // ---------------------------------------------------------------------------
-// Configure
+// Configure — in YOUR copy of this sketch (File › New Sketch in the IDE,
+// paste this file in), never in the repository's file: the values below
+// are your Wi-Fi password and your device code.
 // ---------------------------------------------------------------------------
 
 const char* WIFI_SSID = "your-wifi";

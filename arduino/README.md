@@ -148,17 +148,26 @@ So kommt er auf den Nano:
 
 1. Arduino IDE 2 installieren. Unter **Tools › Board › Boards Manager**
    «Arduino ESP32 Boards» installieren.
-2. In der App: Mehr › Einstellungen › Analog-Buttons › «Analog-Buttons
+2. **Einen eigenen Sketch anlegen, nicht die Datei im Repo bearbeiten:**
+   in der IDE **File › New Sketch**, dann den ganzen Inhalt von
+   `zuno-analog-buttons.ino` hineinkopieren (Inhalt markieren, kopieren,
+   im neuen Sketch alles ersetzen). Über das Menü des Tab-Balkens (die
+   drei Punkte rechts) **New Tab** wählen, ihn `root_ca.h` nennen und den
+   Inhalt der Datei `root_ca.h` hineinkopieren. Die IDE speichert den
+   Sketch in ihrem eigenen Ordner – die Datei im Repo bleibt sauber, denn
+   gleich kommen das WLAN-Passwort und der Code hinein, und die gehören
+   nicht in den Quellcode.
+3. In der App: Mehr › Einstellungen › Analog-Buttons › «Analog-Buttons
    hinzufügen», dem Gerät einen Namen geben («Wickeltisch»), «Code
    kopieren».
-3. Die Datei `zuno-analog-buttons.ino` öffnen, die vier Werte eintragen
-   (den Code zwischen die Anführungszeichen; Leerzeichen stören nicht).
-4. Den Nano per USB-C anschliessen, **Tools › Board › Arduino ESP32
+4. Im eigenen Sketch die vier Werte eintragen (den Code zwischen die
+   Anführungszeichen; Leerzeichen stören nicht).
+5. Den Nano per USB-C anschliessen, **Tools › Board › Arduino ESP32
    Boards › Arduino Nano ESP32** wählen, unter **Tools › Port** den Nano,
    dann **Upload** (der Pfeil). Nimmt der Nano den Upload nicht an:
    RST-Knopf auf der Platine zweimal kurz drücken (die LED pulsiert, der
    Nano wartet auf Firmware) und nochmals hochladen.
-5. **Tools › Serial Monitor**, 115200 Baud: Dort steht «[wifi] connecting»,
+6. **Tools › Serial Monitor**, 115200 Baud: Dort steht «[wifi] connecting»,
    «[clock] …» (die Uhrzeit vom Server) und bei jedem Druck «[press] …»
    und «[send] 201 {"ok":true}».
 
@@ -199,8 +208,12 @@ timer `{}` (a second sleep press while one runs is refused by the phone).
 
 ## Setup
 
-1. Open `zuno-analog-buttons/zuno-analog-buttons.ino` in the Arduino IDE, select the
-   board and its port.
+1. In the Arduino IDE make a sketch of your own (**File › New Sketch**),
+   paste the whole of `zuno-analog-buttons/zuno-analog-buttons.ino` into
+   it, add a tab named `root_ca.h` (the tab bar's menu › New Tab) and
+   paste that file in too. Do not edit the repository's file: your Wi-Fi
+   password and device code go into the copy, never into the source.
+   Select the board and its port.
 2. Fill in the block at the top: Wi-Fi name and password, `ZUNO_URL` (the
    address you open on the phone, without a trailing slash) and
    `ZUNO_CODE` (paste from the app; spaces are fine).
