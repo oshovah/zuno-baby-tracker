@@ -10,6 +10,153 @@ key the server never sees. The server stores a blob it cannot read, and the
 next phone of the family that syncs turns it into the entry — signed with
 the device's name.
 
+## Bauanleitung (Deutsch) – Schritt für Schritt
+
+Für genau diese Teile: ein **Arduino Nano ESP32** mit angelöteten
+Stiftleisten (Pins nach unten) und **6 × 6 mm Taster mit vier Beinen**
+(die kleinen schwarzen Knöpfe). Dazu braucht es ein Steckbrett
+(Breadboard, halbe Grösse reicht), ein paar Steckbrücken (Jumper-Kabel,
+Stecker–Stecker) und ein USB-C-Kabel. Zwei Knöpfe genügen; der dritte
+kommt später an denselben Platz.
+
+**Vorher:** Den Nano aus dem schwarzen Schaumstoff nehmen. Der
+antistatische Schaum ist leitfähig und verbindet alle Pins miteinander –
+nie damit an den Strom.
+
+### 1. Der Knopf: welche Beine?
+
+Ein 6 × 6-Taster hat vier Beine, je zwei davon sind innen fest
+verbunden; gedrückt verbindet er die beiden Paare. Welche zwei Beine ein
+Paar sind, sieht man dem Knopf nicht an. Die sichere Regel: **immer zwei
+diagonal gegenüberliegende Beine** benutzen – die liegen nie im selben
+Paar, egal wie der Knopf gedreht ist.
+
+```
+   Knopf von oben, vier Beine:
+
+     1 ─┬────────┬─ 2
+        │   ( )  │
+     3 ─┴────────┴─ 4
+
+   Benutzt werden 1 und 4 (oder 2 und 3) – diagonal.
+```
+
+### 2. Der Nano auf dem Steckbrett
+
+Der Nano steckt über dem Mittelgraben des Steckbretts; der USB-C-Stecker
+ragt über den Rand hinaus. Die Pin-Reihe mit **D2, D3, D4 und GND** (die
+Reihe mit RST / RX0 / TX1 am Ende) kommt in die Reihe **e** – so bleiben
+vor jedem dieser Pins vier freie Löcher (a–d). Die andere Reihe (D13,
+3.3V, A0 … VIN) landet dann in Reihe **i**.
+
+Die Pins der oberen Reihe, von links (USB) nach rechts:
+
+```
+ D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 GND RST RX0 TX1
+                            ─┘ ─┘ ─┘  └─ hier wird alles angeschlossen
+```
+
+GND ist der Pin **direkt neben D2** (auf der Platine mit einem eckigen
+Lötauge). Ein zweites GND liegt am anderen Ende der unteren Reihe neben
+VIN – geht genauso.
+
+### 3. Verkabelung
+
+Jeder Knopf sitzt wie der Nano über dem Mittelgraben: zwei Beine in Reihe
+e, zwei in Reihe f, zwei Spalten auseinander. Dann:
+
+| Kabel | von | nach | wofür |
+| --- | --- | --- | --- |
+| 1 | ein Loch vor **GND** (Spalte von GND, Reihe a–d) | blaue Minus-Schiene (–) des Steckbretts | gemeinsame Masse |
+| 2 | Knopf 1, Bein in Reihe e (Loch a derselben Spalte) | Minus-Schiene (–) | Knopf 1 an Masse |
+| 3 | Knopf 1, **diagonales** Bein in Reihe f (Loch j derselben Spalte) | ein Loch vor **D2** (Reihe a–d) | Knopf 1 = Pipi |
+| 4 | Knopf 2, Bein in Reihe e (Loch a) | Minus-Schiene (–) | Knopf 2 an Masse |
+| 5 | Knopf 2, diagonales Bein in Reihe f (Loch j) | ein Loch vor **D3** | Knopf 2 = Gaggi |
+| 6 | Knopf 3, Bein in Reihe e (Loch a) | Minus-Schiene (–) | später: Knopf 3 an Masse |
+| 7 | Knopf 3, diagonales Bein in Reihe f (Loch j) | ein Loch vor **D4** | später: Knopf 3 = Beides |
+
+Mehr ist es nicht: kein Widerstand, keine Diode, kein Strom für die
+Knöpfe. Der Nano zieht die Pins intern hoch (Pull-up); ein gedrückter
+Knopf zieht den Pin auf Masse, das ist das Signal. Ein Pin ohne Knopf
+bleibt oben und löst nie aus – darum dürfen die Zeilen für drei Knöpfe im
+Programm stehen, auch wenn erst zwei verkabelt sind.
+
+Als Bild (halbes Steckbrett, Spalten 1–30; der Nano links über dem
+Graben, die Knöpfe rechts; `●` = Bein, `═` = Kabel):
+
+```
+  Spalte:   …  9  10  11  12 … 20  22     24  26     28  30
+  Reihe a      ·   ·   ·   ·     ●═══╗      ●═══╗      ●═══╗     } Knopf-Bein → –
+  Reihe b      ·   ·   ·   ·     ·   ║      ·   ║      ·   ║
+  Reihe c      ·   ·   ·   ·     ·   ║      ·   ║      ·   ║
+  Reihe d      ·   ·  ═╗  ·      ·   ║      ·   ║      ·   ║
+  Reihe e     D4  D3  D2 GND     ●   ●      ●   ●      ●   ●     ← Nano-Pins / Knopf-Beine
+  ───────── Mittelgraben ─────────────────────────────────────────
+  Reihe f      ·   ·   ·   ·     ●   ●      ●   ●      ●   ●
+  Reihe g      ·   ·   ·   ·     ·   ·      ·   ·      ·   ·
+  Reihe h      ·   ·   ·   ·     ·   ·      ·   ·      ·   ·
+  Reihe i     A?  A?  A?  A?     ·   ·      ·   ·      ·   ·     ← Nano-Pins (untere Reihe)
+  Reihe j      ·   ·   ·   ·     ·   ●═══   ·   ●═══   ·   ●═══  } diagonales Bein → D2 / D3 / D4
+  Minus (–)  ═══════════════════╝════════════╝═══════════╝        ← alle Massen, dazu Kabel 1 von GND
+```
+
+(Die Kabel von Reihe j zu D2 / D3 / D4 laufen oben über den Nano hinweg –
+ein Stecker vor D2, einer vor D3, einer vor D4.) Die Spaltenzahlen sind
+Beispiele; wichtig ist nur: ein Knopf über dem Graben, ein Bein an Minus,
+das diagonale Bein an den Pin.
+
+**Ohne Steckbrett** geht es auch: an zwei diagonale Beine jedes Knopfs je
+ein Kabel löten; die Masse-Kabel aller Knöpfe zusammen auf eine Buchse
+(Dupont, Buchse–Buchse) an den GND-Pin, die anderen Kabel einzeln auf
+D2, D3, D4. Die Stiftleisten des Nano nehmen solche Buchsen direkt auf.
+
+### 4. Der Code
+
+Der ganze Code ist die Datei `zuno-analog-buttons/zuno-analog-buttons.ino`
+(mit `root_ca.h` daneben, beide gehören zusammen). Anzupassen ist nur der
+Block oben:
+
+```cpp
+const char* WIFI_SSID = "your-wifi";             // euer WLAN
+const char* WIFI_PASS = "your-wifi-password";
+const char* ZUNO_URL  = "https://example.ch/baby";  // die Adresse von Zuno, ohne Schrägstrich am Ende
+const char* ZUNO_CODE = "";                      // der Code aus Mehr › Einstellungen › Analog-Buttons
+
+Button BUTTONS[] = {
+  { D2, "diaper", "{\"kind\":\"pee\"}" },   // Knopf 1: Pipi
+  { D3, "diaper", "{\"kind\":\"poop\"}" },  // Knopf 2: Gaggi
+  { D4, "diaper", "{\"kind\":\"both\"}" },  // Knopf 3: Beides (Pin darf noch leer sein)
+};
+```
+
+So kommt er auf den Nano:
+
+1. Arduino IDE 2 installieren. Unter **Tools › Board › Boards Manager**
+   «Arduino ESP32 Boards» installieren.
+2. In der App: Mehr › Einstellungen › Analog-Buttons › «Analog-Buttons
+   hinzufügen», dem Gerät einen Namen geben («Wickeltisch»), «Code
+   kopieren».
+3. Die Datei `zuno-analog-buttons.ino` öffnen, die vier Werte eintragen
+   (den Code zwischen die Anführungszeichen; Leerzeichen stören nicht).
+4. Den Nano per USB-C anschliessen, **Tools › Board › Arduino ESP32
+   Boards › Arduino Nano ESP32** wählen, unter **Tools › Port** den Nano,
+   dann **Upload** (der Pfeil). Nimmt der Nano den Upload nicht an:
+   RST-Knopf auf der Platine zweimal kurz drücken (die LED pulsiert, der
+   Nano wartet auf Firmware) und nochmals hochladen.
+5. **Tools › Serial Monitor**, 115200 Baud: Dort steht «[wifi] connecting»,
+   «[clock] …» (die Uhrzeit vom Server) und bei jedem Druck «[press] …»
+   und «[send] 201 {"ok":true}».
+
+### 5. Ausprobieren
+
+Knopf 1 drücken: die grüne LED blinkt einmal (Druck erfasst), kurz blau
+(wird gesendet), grün (angekommen). Innerhalb einer Minute steht «Windel ·
+Pipi» mit dem Namen des Geräts im Verlauf beider Handys – die App muss
+dafür offen sein, sie holt die Drücke beim Abgleich. Rot an heisst: es
+warten Drücke (kein WLAN oder noch keine Uhrzeit); dreimal rot heisst:
+der Server lehnt ab, der Serial Monitor sagt warum (404 = Gerät in der
+App entfernt, 400 = Code falsch eingetragen).
+
 ## What you need
 
 - An Arduino Nano ESP32 (or another ESP32 with Wi-Fi) and a USB cable
