@@ -22,7 +22,8 @@ export default {
   'attribution': '© OpenStreetMap-Mitwirkende',
   // the «Info» sheet: where the data comes from
   'info.button': 'Info/Einstellung',
-  'info.title': 'Über die Karte',
+  'info.title': 'Info/Einstellung',
+  'info.about': 'Über die Karte',
   'info.places': 'Die Orte – Wickeltische und Still-Orte – kommen von OpenStreetMap, der freien Weltkarte, die Freiwillige pflegen.',
   'info.date': 'Stand der Orte: {date}.',
   'info.tiles': 'Auch die Kartengrafik ist aus OpenStreetMap-Daten gezeichnet (Protomaps) und liegt auf unserem eigenen Server – dein Handy spricht mit keinem anderen Dienst.',

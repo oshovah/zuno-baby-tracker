@@ -22,7 +22,8 @@ export default {
   'attribution': '© OpenStreetMap contributors',
   // the "Info" sheet: where the data comes from
   'info.button': 'Info/Settings',
-  'info.title': 'About the map',
+  'info.title': 'Info/Settings',
+  'info.about': 'About the map',
   'info.places': 'The places – changing tables and nursing places – come from OpenStreetMap, the free world map kept by volunteers.',
   'info.date': 'Places as of {date}.',
   'info.tiles': 'The map drawing is made from OpenStreetMap data too (Protomaps) and lives on our own server – your phone talks to no other service.',

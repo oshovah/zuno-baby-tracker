@@ -287,21 +287,22 @@ export function renderMap(el) {
       ${can ? '' : `<p class="hint">${escapeHtml(t('map.start.captureHint'))}</p>`}`;
   }
 
-  /** «Info/Einstellung»: where the places and the map come from, their date,
-   *  the attribution — and the start view (per device), set from the view
-   *  behind the sheet. */
+  /** «Info/Einstellung»: the start view (per device, set from the view
+   *  behind the sheet) first — the thing one comes here to do —, then where
+   *  the places and the map come from, their date, the attribution. */
   function openInfo() {
     openSheet(t('map.info.title'), (body) => {
       const date = fc && fc.generated ? fmtDay(fc.generated) : null;
       body.innerHTML = `
+        <h2 class="section-title first">${escapeHtml(t('map.start.title'))}</h2>
+        <p class="hint">${escapeHtml(t('map.start.hint'))}</p>
+        <div data-map-start>${startHtml()}</div>
+        <h2 class="section-title">${escapeHtml(t('map.info.about'))}</h2>
         <p>${escapeHtml(t('map.info.places'))}${date ? ` ${escapeHtml(t('map.info.date', { date }))}` : ''}</p>
         <p>${escapeHtml(t('map.info.tiles'))}</p>
         ${store.spots.on ? `<p>${escapeHtml(t('map.info.spots'))}</p>` : ''}
         <p>${escapeHtml(t('map.info.location'))}</p>
         <p>${escapeHtml(t('map.info.missing'))}</p>
-        <h2 class="section-title">${escapeHtml(t('map.start.title'))}</h2>
-        <p class="hint">${escapeHtml(t('map.start.hint'))}</p>
-        <div data-map-start>${startHtml()}</div>
         <p class="hint">${escapeHtml(t('map.info.license'))} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">openstreetmap.org/copyright</a></p>`;
       const wrap = body.querySelector('[data-map-start]');
       wrap.addEventListener('click', (e) => {
