@@ -63,9 +63,6 @@ So sitzt D12 in Spalte 1 und die Zahlen laufen aufwärts:
                                            ─┘  ─┘  ─┘ └─ hier wird angeschlossen
 ```
 
-(Steckt die TX1-Reihe stattdessen in Reihe e, zeigt der USB-Stecker auf die
-30er-Seite und D12 liegt in Spalte 30 – geht auch, zählt nur verkehrt.)
-
 GND gibt es zweimal: in der oberen Reihe neben D2 (Spalte 12, eckiges
 Lötauge) und in der unteren Reihe neben VIN (Spalte 15). Die untere ist
 die bequemere für die Minus-Schiene, weil ihr freies Loch a15 direkt an
