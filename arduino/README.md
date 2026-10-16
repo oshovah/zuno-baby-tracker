@@ -1,297 +1,35 @@
 # Zuno – Analog-Buttons: real buttons for the changing table
 
-A small Wi-Fi microcontroller with push buttons that logs a diaper (or
-anything else) into Zuno with one press — no phone needed. The sketch in
-`zuno-analog-buttons/` is written for the **Arduino Nano ESP32**; any ESP32 board
-with Wi-Fi works with other pin names.
+A small Wi-Fi microcontroller with push buttons that logs a diaper (or any
+other entry) into Zuno with one press — no phone needed. The sketch in
+`zuno-analog-buttons/` is written for the **Arduino Nano ESP32**; any ESP32
+board with Wi-Fi works with other pin names.
 
-End-to-end encryption holds: the press is sealed **on the device** with a
-key the server never sees. The server stores a blob it cannot read, and the
-next phone of the family that syncs turns it into the entry — signed with
-the device's name.
+End-to-end encryption holds all the way: a press is sealed **on the device**
+with a key the server never sees. The server stores a blob it cannot read,
+and the next phone of the family that syncs turns it into the entry, signed
+with the device's name.
 
-## Bauanleitung (Deutsch) – Schritt für Schritt
+This folder has two parts:
 
-Für genau diese Teile: ein **Arduino Nano ESP32** mit angelöteten
-Stiftleisten (Pins nach unten) und **6 × 6 mm Taster mit vier Beinen**
-(die kleinen schwarzen Knöpfe). Dazu braucht es ein Steckbrett
-(Breadboard, halbe Grösse reicht), ein paar Steckbrücken (Jumper-Kabel,
-Stecker–Stecker) und ein USB-C-Kabel. Zwei Knöpfe genügen; der dritte
-kommt später an denselben Platz.
-
-**Vorher:** Den Nano aus dem schwarzen Schaumstoff nehmen. Der
-antistatische Schaum ist leitfähig und verbindet alle Pins miteinander –
-nie damit an den Strom.
-
-### 1. Der Knopf: welche Beine?
-
-Ein 6 × 6-Taster hat vier Beine, je zwei davon sind innen fest
-verbunden; gedrückt verbindet er die beiden Paare. Welche zwei Beine ein
-Paar sind, sieht man dem Knopf nicht an. Die sichere Regel: **immer zwei
-diagonal gegenüberliegende Beine** benutzen – die liegen nie im selben
-Paar, egal wie der Knopf gedreht ist.
-
-```
-   Knopf von oben, vier Beine:
-
-     1 ─┬────────┬─ 2
-        │   ( )  │
-     3 ─┴────────┴─ 4
-
-   Benutzt werden 1 und 4 (oder 2 und 3) – diagonal.
-```
-
-### 2. Der Nano auf dem Steckbrett
-
-Das Steckbrett liegt mit den Zahlen 1–30 von links nach rechts vor dir,
-Reihe a unten, Reihe j oben, der Mittelgraben zwischen e und f. Der Nano
-steckt über dem Graben, **der USB-C-Stecker ragt links über den Rand
-hinaus** (vor Spalte 1):
-
-- Die Pin-Reihe mit **D2, D3, D4, GND** (die mit RST / RX0 / TX1 am Ende)
-  kommt in Reihe **f** – die Reihe direkt über dem Graben. Darüber bleiben
-  vier freie Löcher (g–j) pro Pin: dort werden die Knöpfe angeschlossen.
-- Die andere Reihe (D13, 3V3, A0 … GND, VIN) landet damit von selbst in
-  Reihe **b**; darunter bleibt ein freies Loch (a) pro Pin.
-
-So sitzt D12 in Spalte 1 und die Zahlen laufen aufwärts:
-
-```
- Spalte:   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
- Reihe f: D12 D11 D10  D9  D8  D7  D6  D5  D4  D3  D2 GND RST RX0 TX1
- Reihe b: D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 GND VIN
-                                           ─┘  ─┘  ─┘ └─ hier wird angeschlossen
-```
-
-GND gibt es zweimal, beide mit eckigem Lötauge: in der oberen Reihe
-zwischen D2 und RST (Spalte 12) und in der unteren Reihe zwischen B1 und
-VIN (Spalte **14** – VIN ist der letzte Pin, Spalte 15). Die untere ist die
-bequemere für die Minus-Schiene, weil ihr freies Loch a14 direkt an der
-Schiene liegt. Nicht verwechseln: a15 ist VIN, der Stromeingang – der darf
-nie an die Minus-Schiene.
-
-### 3. Verkabelung
-
-Jeder Knopf sitzt wie der Nano über dem Mittelgraben: zwei Beine in
-Reihe e, zwei in Reihe f, zwei Spalten auseinander – Knopf 1 in den
-Spalten 20 und 22, Knopf 2 in 24 und 26, Knopf 3 in 28 und 30. Vom Bein in
-Reihe e geht es nach unten an die Minus-Schiene, vom **diagonalen** Bein
-in Reihe f nach oben zum Pin:
-
-| Kabel | von | nach | wofür |
-| --- | --- | --- | --- |
-| 1 | **a14** (unter dem GND der unteren Reihe, zwischen B1 und VIN) | untere Minus-Schiene (–) | gemeinsame Masse |
-| 2 | **a20** (Knopf 1, Bein in Reihe e, Spalte 20) | Minus-Schiene (–) | Knopf 1 an Masse |
-| 3 | **j22** (Knopf 1, diagonales Bein in Reihe f, Spalte 22) | **j11** (über D2) | Knopf 1 = Pipi |
-| 4 | **a24** (Knopf 2, Bein in Reihe e) | Minus-Schiene (–) | Knopf 2 an Masse |
-| 5 | **j26** (Knopf 2, diagonales Bein in Reihe f) | **j10** (über D3) | Knopf 2 = Gaggi |
-| 6 | **a28** (Knopf 3, Bein in Reihe e) | Minus-Schiene (–) | später: Knopf 3 an Masse |
-| 7 | **j30** (Knopf 3, diagonales Bein in Reihe f) | **j9** (über D4) | später: Knopf 3 = Beides |
-
-Mehr ist es nicht: kein Widerstand, keine Diode, kein Strom für die
-Knöpfe. Der Nano zieht die Pins intern hoch (Pull-up); ein gedrückter
-Knopf zieht den Pin auf Masse, das ist das Signal. Ein Pin ohne Knopf
-bleibt oben und löst nie aus – darum dürfen die Zeilen für drei Knöpfe im
-Programm stehen, auch wenn erst zwei verkabelt sind.
-
-Als Bild (Reihe j oben, a unten; `●` = Knopf-Bein, `[1]` … `[7]` = die
-Kabel der Tabelle, jeweils an beiden Enden):
-
-```
- Spalte:    1   2   3   4   5   6   7   8   9  10  11  12  13  14  15    20  22    24  26    28  30
- Reihe j    ·   ·   ·   ·   ·   ·   ·   ·  [7] [5] [3]  ·   ·   ·   ·     ·  [3]    ·  [5]    ·  [7]
- Reihe i    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
- Reihe h    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
- Reihe g    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
- Reihe f   D12 D11 D10  D9  D8  D7  D6  D5  D4  D3  D2 GND RST RX0 TX1    ●   ●     ●   ●     ●   ●
- ─────────────────────────────── Mittelgraben ──────────────────────────────────────────────────────
- Reihe e    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ●   ●     ●   ●     ●   ●
- Reihe d    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
- Reihe c    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
- Reihe b   D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 GND VIN    ·   ·     ·   ·     ·   ·
- Reihe a    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  [1]  ·    [2]  ·    [4]  ·    [6]  ·
- Minus (–) ═[1]═══════════════════════════════════════════════════════[2]═══════[4]═══════[6]═══
- ◄ USB-C ragt hier über den Rand hinaus
-```
-
-Die Kabel 3, 5 und 7 laufen oben in Reihe j von den Knöpfen nach links zu
-D2, D3 und D4; die Kabel 1, 2, 4 und 6 unten zur Minus-Schiene. Nichts
-kreuzt den Nano. Kabel 1 sitzt in Spalte 14 (GND), nicht 15 (VIN). Die Spaltenzahlen der Knöpfe sind Vorschläge; wichtig
-ist nur: ein Knopf über dem Graben, ein Bein an Minus, das diagonale Bein
-an den Pin.
-
-**Ohne Steckbrett** geht es auch: an zwei diagonale Beine jedes Knopfs je
-ein Kabel löten; die Masse-Kabel aller Knöpfe zusammen auf eine Buchse
-(Dupont, Buchse–Buchse) an den GND-Pin, die anderen Kabel einzeln auf
-D2, D3, D4. Die Stiftleisten des Nano nehmen solche Buchsen direkt auf.
-
-### 4. Der Code
-
-Der ganze Code ist die Datei `zuno-analog-buttons/zuno-analog-buttons.ino`
-(mit `root_ca.h` daneben, beide gehören zusammen). Anzupassen ist nur der
-Block oben:
-
-```cpp
-const char* WIFI_SSID = "your-wifi";             // euer WLAN
-const char* WIFI_PASS = "your-wifi-password";
-const char* ZUNO_URL  = "https://example.ch/baby";  // die Adresse von Zuno, ohne Schrägstrich am Ende
-const char* ZUNO_CODE = "";                      // der Code aus Mehr › Einstellungen › Analog-Buttons
-
-Button BUTTONS[] = {
-  { D2, "diaper", "{\"kind\":\"pee\"}" },   // Knopf 1: Pipi
-  { D3, "diaper", "{\"kind\":\"poop\"}" },  // Knopf 2: Gaggi
-  { D4, "diaper", "{\"kind\":\"both\"}" },  // Knopf 3: Beides (Pin darf noch leer sein)
-};
-```
-
-So kommt er auf den Nano:
-
-1. Arduino IDE 2 installieren. Unter **Tools › Board › Boards Manager**
-   «Arduino ESP32 Boards» installieren.
-2. **Einen eigenen Sketch anlegen, nicht die Datei im Repo bearbeiten:**
-   in der IDE **File › New Sketch**, dann den ganzen Inhalt von
-   `zuno-analog-buttons.ino` hineinkopieren (Inhalt markieren, kopieren,
-   im neuen Sketch alles ersetzen). Über das Menü des Tab-Balkens (die
-   drei Punkte rechts) **New Tab** wählen, ihn `root_ca.h` nennen und den
-   Inhalt der Datei `root_ca.h` hineinkopieren. Die IDE speichert den
-   Sketch in ihrem eigenen Ordner – die Datei im Repo bleibt sauber, denn
-   gleich kommen das WLAN-Passwort und der Code hinein, und die gehören
-   nicht in den Quellcode.
-3. In der App: Mehr › Einstellungen › Analog-Buttons › «Analog-Buttons
-   hinzufügen», dem Gerät einen Namen geben («Wickeltisch»), «Code
-   kopieren».
-4. Im eigenen Sketch die vier Werte eintragen (den Code zwischen die
-   Anführungszeichen; Leerzeichen stören nicht).
-5. Den Nano per USB-C anschliessen, **Tools › Board › Arduino ESP32
-   Boards › Arduino Nano ESP32** wählen, unter **Tools › Port** den Nano,
-   dann **Upload** (der Pfeil). Nimmt der Nano den Upload nicht an:
-   RST-Knopf auf der Platine zweimal kurz drücken (die LED pulsiert, der
-   Nano wartet auf Firmware) und nochmals hochladen.
-6. **Tools › Serial Monitor**, 115200 Baud: Dort steht «[wifi] connecting»,
-   «[clock] …» (die Uhrzeit vom Server) und bei jedem Druck «[press] …»
-   und «[send] 201 {"ok":true}».
-
-### 5. Wenn der Upload nicht klappt
-
-- **«Bad CPU type in executable» … `esptool` … «exit status 126»** (Mac mit
-  Apple-Chip): Das Board-Paket bringt `esptool` als Intel-Programm mit, und
-  Rosetta 2 fehlt. Einmal im Terminal
-  `softwareupdate --install-rosetta --agree-to-license` ausführen (fragt
-  nach dem Mac-Passwort), dann nochmals hochladen – nichts muss neu
-  installiert werden. Die Meldung steht unter «Compilation error», hat
-  mit dem Sketch aber nichts zu tun.
-- **Der Nano nimmt den Upload nicht an** (Port verschwindet, «no device
-  found»): RST auf der Platine zweimal kurz drücken – die LED pulsiert, der
-  Nano wartet auf Firmware –, dann unter Tools › Port den neuen Eintrag
-  wählen und nochmals hochladen.
-- **`root_ca.h: No such file`**: der zweite Tab fehlt im eigenen Sketch
-  (Schritt 2 unter «Der Code»).
-- **Es geht einmal, dann nicht mehr – oder nur, wenn man auf den Nano
-  drückt:** Der Nano sitzt nicht fest im Steckbrett. Das USB-Kabel zieht ihn
-  mit seinem Gewicht leicht schräg, und die Pins verlieren den Kontakt zu
-  den Federn im Brett. Den Nano bis zum Anschlag hineindrücken und das
-  Kabel so führen, dass es nicht am Stecker hängt (ein Kabelbinder oder
-  Gummiband am Brett, ein Knick im Kabel auf dem Tisch).
-- **Nichts blinkt, nichts im Serial Monitor:** Den Monitor auf **115200
-  baud** stellen und auf dem Nano **RST** drücken – oder den Monitor
-  schliessen und neu öffnen: Der Sketch meldet sich jedes Mal, wenn der
-  Monitor verbunden wird, mit `[boot] Zuno Analog-Buttons · 3 Knöpfe · Code
-  ok · WLAN …` und einer Zeile pro Knopf («Pin 2, diaper … liest gerade
-  offen»). Was davor gedruckt wurde, verwirft der USB-Anschluss. Steht
-  dort «Code FEHLT/ungültig», stimmt `ZUNO_CODE` nicht. Steht bei einem
-  Knopf «GEDRÜCKT», ohne dass jemand drückt, sind zwei Beine desselben
-  Paars verkabelt – das diagonale Bein nehmen. Kommt beim Drücken kein
-  `[press]`, den Knopf überbrücken: ein Kabel von j11 (über D2) kurz an die
-  Minus-Schiene halten – erscheint dann `[press]`, liegt es am Knopf oder
-  seinen Beinen, sonst an der Verbindung von j11 zu D2 (steckt der Nano
-  wirklich mit D2 in Spalte 11?).
-
-### 6. Ausprobieren
-
-Knopf 1 drücken: die grüne LED blinkt einmal (Druck erfasst), kurz blau
-(wird gesendet), grün (angekommen). Innerhalb einer Minute steht «Windel ·
-Pipi» mit dem Namen des Geräts im Verlauf beider Handys – die App muss
-dafür offen sein, sie holt die Drücke beim Abgleich. Rot an heisst: es
-warten Drücke (kein WLAN oder noch keine Uhrzeit); dreimal rot heisst:
-der Server lehnt ab, der Serial Monitor sagt warum (404 = Gerät in der
-App entfernt, 400 = Code falsch eingetragen).
-
-## What you need
-
-- An Arduino Nano ESP32 (or another ESP32 with Wi-Fi) and a USB cable
-- Up to three push buttons (momentary, normally open), each wired between
-  a pin and GND — the sketch uses the internal pull-ups, no resistors. Two
-  are enough to start: a pin without a button simply never fires
-- The Arduino IDE 2.x with the board package **Arduino ESP32 Boards**
-  (Boards Manager; the Espressif *esp32* package works too)
-- A device code from the app: Mehr › Einstellungen › Analog-Buttons ›
-  «Analog-Buttons hinzufügen» (the code is also shown again later by tapping the device)
-
-## Wiring
-
-| Button | Pin | Entry |
-| --- | --- | --- |
-| 1 | D2 ↔ GND | Windel · Pipi |
-| 2 | D3 ↔ GND | Windel · Gaggi |
-| 3 | D4 ↔ GND | Windel · Beides (optional — leave the pin open until you add the button) |
-
-Pins and entries live in `BUTTONS[]` at the top of the sketch; swap a pin
-or a kind there. Any event type Zuno knows works the same way — the
-`details` are what the app stores for that type (see `src/validate.js`):
-a bottle `{"amount_ml":90}`, a medication `{"name":"Vitamin D"}`, a sleep
-timer `{}` (a second sleep press while one runs is refused by the phone).
-
-## Setup
-
-1. In the Arduino IDE make a sketch of your own (**File › New Sketch**),
-   paste the whole of `zuno-analog-buttons/zuno-analog-buttons.ino` into
-   it, add a tab named `root_ca.h` (the tab bar's menu › New Tab) and
-   paste that file in too. Do not edit the repository's file: your Wi-Fi
-   password and device code go into the copy, never into the source.
-   Select the board and its port.
-2. Fill in the block at the top: Wi-Fi name and password, `ZUNO_URL` (the
-   address you open on the phone, without a trailing slash) and
-   `ZUNO_CODE` (paste from the app; spaces are fine).
-3. Upload. Open the serial monitor at 115200 baud to watch it connect,
-   read the time and send.
-
-If the upload stops with *"Bad CPU type in executable"* on a Mac with an
-Apple chip, the board package's `esptool` is an Intel binary and Rosetta 2
-is missing: run `softwareupdate --install-rosetta --agree-to-license` once
-in the Terminal and upload again. If the Nano does not take the upload,
-press its RST button twice (the LED pulses) and upload again. A missing
-`root_ca.h` means the second tab was not added to your sketch.
-
-The device is now registered in the app (one device per board, however
-many buttons it has — the app names the device, the sketch says which
-button logs what); press a button and the entry appears on both phones
-with the next sync (within a minute while the app
-is open). «Testdruck senden» in the app sends one press without the
-hardware — the same bytes the sketch sends — to prove the path.
-
-## The LEDs (Nano ESP32)
-
-| LED | Meaning |
-| --- | --- |
-| green blink | a press was taken, or a press was sent |
-| blue | sending |
-| red on | presses are waiting (no Wi-Fi, no clock yet) |
-| red blink ×1 | a send failed, will be retried (backing off up to five minutes) |
-| red blink ×3 | the server refused the press for good — see the serial monitor |
-| red flashing | `ZUNO_CODE` is not a device code |
-
-Whenever the serial monitor connects (115200 baud) the sketch prints a
-`[boot]` summary: the code, Wi-Fi, clock, waiting presses and every
-button's pin and current state — the first thing to read when nothing
-happens.
+- **The sketch** — the firmware, finished and in use.
+- **A proof-of-concept build** on a breadboard with a dev board and loose
+  tactile buttons: enough to test the whole path end to end, not a thing
+  to mount on a changing table. A soldered, installable version with
+  proper buttons follows.
 
 ## How it works
 
-- **The code** = the token (32 hex) followed by the key (64 hex). The
-  server knows the token only as a hash and checks it on every press; the
-  key never leaves the device and the family's phones.
+- **One device = one board.** The app registers a device and names it (the
+  name signs every entry the device makes); which physical button logs what
+  is set in the sketch. A board may carry up to three buttons — one entry
+  each — and a pin without a button simply never fires.
+- **The device code** from the app (96 hex characters) is the token (32
+  hex) followed by the key (64 hex). The server knows the token only as a
+  hash and checks it on every press; the key never leaves the device and
+  the family's phones.
 - **A press** is `{"v":3,"at":"<UTC>","type":"diaper","details":{…}}`,
-  padded with spaces to 128 bytes (so a «Pipi» and a «Gaggi» are the same
+  padded with spaces to 128 bytes (so a «Pipi» and a «Gaggi» have the same
   length on the wire), encrypted with AES-256-GCM (hardware-accelerated on
   the ESP32; AAD `bt1|device`, a random 12-byte IV) and posted as
   base64url(`0x03` ‖ iv ‖ ciphertext ‖ tag) to `POST /api/devices/events`
@@ -301,20 +39,261 @@ happens.
   party. A press made before the clock is known keeps its true time (the
   device remembers how long ago it was pressed). A phone refuses a press
   whose time is in the future or older than a week.
-- **TLS**: presses are verified against `root_ca.h` (ISRG Root X1, the
-  root behind Let's Encrypt). Another certificate authority: paste its
-  root there. The clock request alone runs without the check — a
+- **TLS:** presses are verified against `root_ca.h` (ISRG Root X1, the root
+  behind Let's Encrypt). A host with another certificate authority: paste
+  that root there. The clock request alone runs without the check — a
   certificate cannot be judged before the clock is known, and that request
   carries nothing.
-- **Offline**: up to 16 presses wait in memory while the Wi-Fi is down and
-  go out in order once it is back; a reboot loses what is waiting.
+- **Offline:** up to 16 presses wait in memory while the Wi-Fi is down and
+  go out in order once it is back; a reboot loses what is waiting. The
+  network work runs in a task of its own, so the buttons are read all the
+  time — two quick presses in a row both arrive.
 - **Limits** (the server's): 60 presses an hour per address, 200 unread
-  presses per family — a stuck button stops there. A `404` means the
-  device was removed in the app; a `429`, the hourly budget.
+  presses per family, 10 devices per family. A `404` means the device was
+  removed in the app; a `429`, the hourly budget.
+
+## The sketch
+
+`zuno-analog-buttons/zuno-analog-buttons.ino` and `root_ca.h` belong
+together. Only the block at the top is yours to change:
+
+```cpp
+const char* WIFI_SSID = "your-wifi";
+const char* WIFI_PASS = "your-wifi-password";
+const char* ZUNO_URL  = "https://example.ch/baby";  // the address you open on the phone, no trailing slash
+const char* ZUNO_CODE = "";                         // from Mehr › Einstellungen › Analog-Buttons
+
+Button BUTTONS[] = {
+  { D2, "diaper", "{\"kind\":\"pee\"}" },   // button 1: Pipi
+  { D3, "diaper", "{\"kind\":\"poop\"}" },  // button 2: Gaggi
+  { D4, "diaper", "{\"kind\":\"both\"}" },  // button 3: Beides (the pin may stay empty)
+};
+```
+
+Each button is a pin and the entry a press makes. `details` is what Zuno
+stores for that type (see `src/validate.js`): a diaper `{"kind":"pee"}`,
+`{"kind":"poop"}` or `{"kind":"both"}`; a bottle `{"amount_ml":90}`; a
+medication `{"name":"Vitamin D"}`; a sleep timer `{}` (a second sleep press
+while one runs is refused by the phone). Swap a pin or a kind there.
+
+### Getting it onto the board
+
+1. Install the Arduino IDE 2 and, under **Tools › Board › Boards Manager**,
+   the package **Arduino ESP32 Boards**.
+2. **Make a sketch of your own — do not edit the repository's file.** In the
+   IDE: **File › New Sketch**, paste the whole of `zuno-analog-buttons.ino`
+   into it, then add a tab named `root_ca.h` (the tab bar's menu, the three
+   dots on the right › New Tab) and paste that file in too. The IDE keeps
+   your sketch in its own folder; the file in the repository stays clean —
+   your Wi-Fi password and your device code must never end up in the
+   source.
+3. In the app: Mehr › Einstellungen › Analog-Buttons › «Analog-Buttons
+   hinzufügen», give the device a name («Wickeltisch»), «Code kopieren».
+4. Fill in the four values in your sketch (the code between the quotes;
+   spaces are fine).
+5. Connect the board over USB-C, choose **Tools › Board › Arduino ESP32
+   Boards › Arduino Nano ESP32** and the board under **Tools › Port**, then
+   **Upload**.
+6. **Tools › Serial Monitor**, 115200 baud. The sketch greets every newly
+   connected monitor with a `[boot]` summary (code, Wi-Fi, clock, waiting
+   presses, the last reset's reason, every button's pin and current state);
+   then `[wifi]`, `[clock] …` (the time from the server) and, on a press,
+   `[btn]`, `[press] …` and `[send] 201 {"ok":true}`.
+
+The device is now registered; a press appears on both phones with the next
+sync (within a minute while the app is open). «Testdruck senden» in the app
+sends one press without the hardware — the same bytes the sketch sends — to
+prove the path.
+
+### The LEDs (Nano ESP32)
+
+| LED | Meaning |
+| --- | --- |
+| green, steady | the board's power LED — always on, not the sketch's |
+| green blink | a press was taken, or a press was sent |
+| blue | sending |
+| red on | presses are waiting (no Wi-Fi, no clock yet) |
+| red blink ×1 | a send failed, will be retried (backing off up to five minutes) |
+| red blink ×2 | the queue is full (16 waiting), the press was dropped |
+| red blink ×3 | the server refused the press for good — see the serial monitor |
+| red flashing | `ZUNO_CODE` is not a device code |
+
+## Proof of concept on a breadboard
+
+A test rig, not a product: a dev board pressed into a breadboard, loose
+tactile buttons, jumper wires. It proves the whole chain — button, device,
+server, phones — in an afternoon. For the changing table a soldered build
+with proper buttons follows; the sketch stays the same.
+
+### Parts
+
+- An Arduino Nano ESP32 with male headers soldered (pins pointing down)
+- Up to three 6 × 6 mm tactile buttons with four legs (two are enough to
+  start)
+- A half-size breadboard (30 columns, rows a–j, two power rails) and a
+  handful of male–male jumper wires
+- A USB-C cable
+
+Before you start: take the Nano out of the black foam it ships in. That
+anti-static foam is conductive and ties every pin to every other — never
+power the board in it.
+
+### The button's legs
+
+A 6 × 6 tactile button has four legs, two of them joined inside; pressing
+connects the two pairs. Which two legs form a pair is not visible. The safe
+rule: **always use two diagonally opposite legs** — they are never in the
+same pair, whichever way the button is turned.
+
+```
+   button from above, four legs:
+
+     1 ─┬────────┬─ 2
+        │   ( )  │
+     3 ─┴────────┴─ 4
+
+   use 1 and 4 (or 2 and 3) — diagonal
+```
+
+The button must straddle the breadboard's centre channel. A breadboard
+joins the five holes a–e of a column and, separately, f–j. A button sitting
+entirely on one side would have two of its legs joined by the board itself
+— and if those are the two the button is meant to connect, it reads as
+pressed all the time. Across the channel the board joins nothing the
+button does not join itself. These buttons are made for circuit boards:
+their leg pitch (6.5 × 4.5 mm) does not quite match the breadboard's
+(7.62 × 5.08 mm), so they hold only with slightly spread legs and firm
+pressure. Straighten the legs with small pliers if they are kinked, push
+the button in until it seats, and check that it does not wobble.
+
+### The Nano on the breadboard
+
+Lay the breadboard with the numbers 1–30 left to right, row a at the
+bottom, row j at the top, the channel between e and f. The Nano straddles
+the channel with **its USB-C connector hanging over the left edge** (before
+column 1):
+
+- The pin row with **D2, D3, D4, GND** (the one ending in RST / RX0 / TX1)
+  goes into row **f**, directly above the channel. Four free holes (g–j)
+  remain above every pin: that is where the buttons connect.
+- The other row (D13, 3V3, A0 … GND, VIN) then lands in row **b**, with one
+  free hole (a) below every pin.
+
+So D12 sits in column 1 and the columns count up:
+
+```
+ column:  1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+ row f:  D12 D11 D10  D9  D8  D7  D6  D5  D4  D3  D2 GND RST RX0 TX1
+ row b:  D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 GND VIN
+                                           ─┘  ─┘  ─┘ └─ everything connects here
+```
+
+GND exists twice, both with a square pad: in the top row between D2 and
+RST (column 12) and in the bottom row between B1 and VIN (column **14** —
+VIN is the last pin, column 15). The bottom one is the handier for the
+minus rail: its free hole a14 sits right next to the rail. Do not mix them
+up: a15 is VIN, the power input, and must never touch the minus rail.
+
+### Wiring
+
+Each button straddles the channel like the Nano: two legs in row e, two in
+row f, two columns apart — button 1 in columns 20 and 22, button 2 in 24
+and 26, button 3 in 28 and 30. From the leg in row e a wire goes down to
+the minus rail, from the **diagonal** leg in row f a wire goes up to the
+pin:
+
+| Wire | from | to | what for |
+| --- | --- | --- | --- |
+| 1 | **a14** (below the bottom row's GND, between B1 and VIN) | bottom minus rail (–) | common ground |
+| 2 | **a20** (button 1, leg in row e, column 20) | minus rail (–) | button 1 to ground |
+| 3 | **j22** (button 1, diagonal leg in row f, column 22) | **j11** (above D2) | button 1 = Pipi |
+| 4 | **a24** (button 2, leg in row e) | minus rail (–) | button 2 to ground |
+| 5 | **j26** (button 2, diagonal leg in row f) | **j10** (above D3) | button 2 = Gaggi |
+| 6 | **a28** (button 3, leg in row e) | minus rail (–) | later: button 3 to ground |
+| 7 | **j30** (button 3, diagonal leg in row f) | **j9** (above D4) | later: button 3 = Beides |
+
+That is all: no resistor, no diode, no power for the buttons. The Nano
+pulls the pins up internally; a pressed button pulls its pin to ground,
+and that is the signal. A pin without a button stays up and never fires,
+which is why the three lines may stay in the sketch while only two buttons
+are wired. The minus rail is one long strip on a half-size board: any hole
+of it will do (on a full-size board the rails are often split in the
+middle — a gap in the printed line shows it). The plus rail stays empty.
+
+As a picture (row j at the top, a at the bottom; `●` = a button leg, `[1]` …
+`[7]` = the wires of the table, at both ends):
+
+```
+ column:    1   2   3   4   5   6   7   8   9  10  11  12  13  14  15    20  22    24  26    28  30
+ row j      ·   ·   ·   ·   ·   ·   ·   ·  [7] [5] [3]  ·   ·   ·   ·     ·  [3]    ·  [5]    ·  [7]
+ row i      ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ row h      ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ row g      ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ row f     D12 D11 D10  D9  D8  D7  D6  D5  D4  D3  D2 GND RST RX0 TX1    ●   ●     ●   ●     ●   ●
+ ─────────────────────────────── channel ───────────────────────────────────────────────────────────
+ row e      ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ●   ●     ●   ●     ●   ●
+ row d      ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ row c      ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ row b     D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 GND VIN    ·   ·     ·   ·     ·   ·
+ row a      ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  [1]  ·    [2]  ·    [4]  ·    [6]  ·
+ minus (–) ═[1]═══════════════════════════════════════════════════════[2]═══════[4]═══════[6]═══
+ ◄ the USB-C connector hangs over this edge
+```
+
+Wires 3, 5 and 7 run along row j from the buttons left to D2, D3 and D4;
+wires 1, 2, 4 and 6 run down to the minus rail. Nothing crosses the Nano.
+The buttons' columns are suggestions; what matters is: a button across the
+channel, one leg to minus, the diagonal leg to the pin.
+
+**Without a breadboard** the same works with solder: two short wires on two
+diagonal legs of each button; the ground wires of all buttons joined onto
+one female jumper (Dupont) on the GND pin, the other wires onto D2, D3, D4.
+The Nano's header pins take such jumpers directly.
+
+### Trying it out
+
+Press button 1: the green LED blinks once (press taken), blue for a moment
+(sending), green again (confirmed). Within a minute «Windel · Pipi» with
+the device's name is in the Verlauf of both phones — the app must be open,
+it fetches the presses when it syncs. Red on means presses are waiting
+(no Wi-Fi or no clock yet); red ×3 means the server refused, and the serial
+monitor says why.
+
+### Troubleshooting
+
+- **"Bad CPU type in executable" … `esptool` … "exit status 126"** (Mac
+  with an Apple chip): the board package's `esptool` is an Intel binary
+  and Rosetta 2 is missing. Run
+  `softwareupdate --install-rosetta --agree-to-license` once in the
+  Terminal (it asks for your Mac password), then upload again — nothing
+  needs reinstalling. The message is shown under "Compilation error" but
+  has nothing to do with the sketch.
+- **The Nano does not take the upload** (the port vanishes, "no device
+  found"): press RST on the board twice quickly — the LED pulses, the Nano
+  waits for firmware — then pick the new entry under Tools › Port and
+  upload again.
+- **`root_ca.h: No such file`**: the second tab is missing in your sketch
+  (step 2 above).
+- **It works once, then no more — or only while pressing on the Nano:** the
+  Nano is not seated firmly. The USB cable's weight tilts it a little and
+  the pins lose contact with the breadboard's springs. Push the Nano in to
+  the stop and route the cable so it does not hang on the connector (a
+  rubber band or cable tie on the board, a bend in the cable on the table).
+- **Nothing blinks, nothing in the serial monitor:** set the monitor to
+  115200 baud and press RST on the Nano, or close and reopen the monitor —
+  the sketch greets every newly connected monitor with `[boot] …` and one
+  line per button («Pin 2, diaper … liest gerade offen»). What was printed
+  before the monitor connected is discarded by the USB port. «Code
+  FEHLT/ungültig» means `ZUNO_CODE` is wrong. A button reading «GEDRÜCKT»
+  with nobody pressing has two legs of the same pair wired — take the
+  diagonal leg. No `[press]` on a press: bridge the button — hold a wire
+  from j11 (above D2) to the minus rail for a moment. If `[press]` appears
+  now, the fault is the button or its legs; if not, the link from j11 to
+  D2 or the ground (is the Nano really seated with D2 in column 11?).
 
 ## Security notes
 
-Whoever has the code can make entries for the family (not read them: the
-code opens nothing the server stores). Keep the sketch with the code to
-yourself; remove the device in the app if the board is lost — its token
-stops working at once. The Wi-Fi password is in the sketch too.
+Whoever has the device code can make entries for the family (not read
+them: the code opens nothing the server stores). Keep your sketch with the
+code to yourself; remove the device in the app if the board is lost — its
+token stops working at once. The Wi-Fi password is in your sketch too.
