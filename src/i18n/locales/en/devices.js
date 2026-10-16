@@ -4,7 +4,9 @@ export default {
   // the section under Settings › For the family
   'section.title': 'Analog buttons',
   'section.hint':
-    'Real buttons next to the changing table: a small device with up to three push buttons – a microcontroller with Wi-Fi, the build guide ships with the source code – logs a diaper with one press (pee, poop or both), without anyone picking up a phone. Every press is encrypted on the device; the server only sees that a button was pressed. The next phone that syncs turns it into the entry – with the device\'s name.',
+    'Real buttons next to the changing table: a small device with up to three push buttons – a microcontroller with Wi-Fi, the {guide} ships with the source code – logs a diaper with one press (pee, poop or both), without anyone picking up a phone. Every press is encrypted on the device; the server only sees that a button was pressed. The next phone that syncs turns it into the entry – with the device\'s name.',
+  // The link in the hint (lands in innerHTML through the {guide} param)
+  'section.guide': 'build guide',
   'section.empty': 'No button device set up yet.',
   'section.add': 'Add analog buttons',
   // a row in the list: the name, the day it was set up

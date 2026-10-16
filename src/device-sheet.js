@@ -14,11 +14,9 @@ import { store } from './store.js';
 import { t } from './i18n/index.js';
 import { openSheet } from './sheet.js';
 import { escapeHtml, toast, fmtDayHeading, localDateOf } from './ui.js';
-import { DEVICE_NAME_MAX, groupedCode } from './devices.js';
+import { DEVICE_NAME_MAX, groupedCode, SKETCH_URL } from './devices.js';
 
 const ARM_MS = 3000;
-/** The build guide and the sketch, in the public source. */
-export const SKETCH_URL = 'https://github.com/oshovah/zuno-baby-tracker/tree/main/arduino';
 
 function formHtml() {
   return `

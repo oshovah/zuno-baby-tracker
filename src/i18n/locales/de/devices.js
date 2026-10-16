@@ -8,7 +8,9 @@ export default {
   // the section under Einstellungen › Für die Familie
   'section.title': 'Analog-Buttons',
   'section.hint':
-    'Echte Knöpfe neben dem Wickeltisch: Ein kleines Gerät mit bis zu drei Tasten – ein Mikrocontroller mit WLAN, die Bauanleitung liegt beim Quellcode – trägt mit einem Druck eine Windel ein (Pipi, Gaggi oder Beides), ohne dass jemand das Handy holt. Jeder Druck wird auf dem Gerät verschlüsselt; der Server sieht nur, dass ein Knopf gedrückt wurde. Das nächste Handy, das abgleicht, macht daraus den Eintrag – mit dem Namen des Geräts.',
+    'Echte Knöpfe neben dem Wickeltisch: Ein kleines Gerät mit bis zu drei Tasten – ein Mikrocontroller mit WLAN, die {guide} liegt beim Quellcode – trägt mit einem Druck eine Windel ein (Pipi, Gaggi oder Beides), ohne dass jemand das Handy holt. Jeder Druck wird auf dem Gerät verschlüsselt; der Server sieht nur, dass ein Knopf gedrückt wurde. Das nächste Handy, das abgleicht, macht daraus den Eintrag – mit dem Namen des Geräts.',
+  // The link in the hint (lands in innerHTML through the {guide} param)
+  'section.guide': 'Bauanleitung',
   'section.empty': 'Noch keine Knöpfe eingerichtet.',
   'section.add': 'Analog-Buttons hinzufügen',
   // a row in the list: the name, the day it was set up

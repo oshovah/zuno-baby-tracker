@@ -26,6 +26,9 @@ import { DEVICE_V } from './crypto.js';
 
 export { DEVICE_NAME_MAX };
 
+/** The build guide and the sketch in the public source (GitHub renders arduino/README.md there). */
+export const SKETCH_URL = 'https://github.com/oshovah/zuno-baby-tracker/tree/main/arduino';
+
 /** A press older than this is a device that slept with a wrong clock, not a diaper. */
 export const PRESS_MAX_AGE_DAYS = 7;
 

@@ -39,6 +39,7 @@ import { openWhatsNewSheet } from '../whats-new-sheet.js';
 import { openFeedbackForm, openFeedbackInbox } from '../feedback-sheet.js';
 import { openSpotsSheet } from '../spots-sheet.js';
 import { openDeviceSheet } from '../device-sheet.js';
+import { SKETCH_URL } from '../devices.js';
 import { WHATS_NEW } from '../whats-new.js';
 
 // Labels are read when shown (getters), never at module load: the language
@@ -517,7 +518,7 @@ export function renderMore(el) {
       <p class="hint">${t('more.interval.hint')}</p>
 
       <h2 class="section-title">${t('devices.section.title')}</h2>
-      <p class="hint">${t('devices.section.hint')}</p>
+      <p class="hint">${t('devices.section.hint', { guide: `<a href="${SKETCH_URL}" target="_blank" rel="noopener noreferrer">${escapeHtml(t('devices.section.guide'))}</a>` })}</p>
       <div class="reminder-list" data-device-list>${deviceListHtml()}</div>
       <button type="button" class="btn wide" data-add-device>${t('devices.section.add')}</button>
 
