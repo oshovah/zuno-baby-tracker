@@ -186,6 +186,19 @@ So kommt er auf den Nano:
   wählen und nochmals hochladen.
 - **`root_ca.h: No such file`**: der zweite Tab fehlt im eigenen Sketch
   (Schritt 2 unter «Der Code»).
+- **Nichts blinkt, nichts im Serial Monitor:** Den Monitor auf **115200
+  baud** stellen und auf dem Nano **RST** drücken – oder den Monitor
+  schliessen und neu öffnen: Der Sketch meldet sich jedes Mal, wenn der
+  Monitor verbunden wird, mit `[boot] Zuno Analog-Buttons · 3 Knöpfe · Code
+  ok · WLAN …` und einer Zeile pro Knopf («Pin 2, diaper … liest gerade
+  offen»). Was davor gedruckt wurde, verwirft der USB-Anschluss. Steht
+  dort «Code FEHLT/ungültig», stimmt `ZUNO_CODE` nicht. Steht bei einem
+  Knopf «GEDRÜCKT», ohne dass jemand drückt, sind zwei Beine desselben
+  Paars verkabelt – das diagonale Bein nehmen. Kommt beim Drücken kein
+  `[press]`, den Knopf überbrücken: ein Kabel von j11 (über D2) kurz an die
+  Minus-Schiene halten – erscheint dann `[press]`, liegt es am Knopf oder
+  seinen Beinen, sonst an der Verbindung von j11 zu D2 (steckt der Nano
+  wirklich mit D2 in Spalte 11?).
 
 ### 6. Ausprobieren
 
@@ -260,6 +273,11 @@ hardware — the same bytes the sketch sends — to prove the path.
 | red blink ×1 | a send failed, will be retried (backing off up to five minutes) |
 | red blink ×3 | the server refused the press for good — see the serial monitor |
 | red flashing | `ZUNO_CODE` is not a device code |
+
+Whenever the serial monitor connects (115200 baud) the sketch prints a
+`[boot]` summary: the code, Wi-Fi, clock, waiting presses and every
+button's pin and current state — the first thing to read when nothing
+happens.
 
 ## How it works
 

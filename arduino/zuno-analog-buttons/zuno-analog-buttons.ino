@@ -79,20 +79,18 @@ const int QUEUE_SIZE = 16;
 const size_t BUCKET_SMALL = 128;  // src/crypto.js DEVICE_BUCKETS: every press the same length on the wire
 const size_t BUCKET_LARGE = 256;
 
-// The LEDs of the Nano ESP32 (the RGB LED is active LOW). Other boards:
-// change these, or wire your own.
-#ifndef LED_GREEN
-#define LED_GREEN LED_BUILTIN
-#endif
-#ifndef LED_RED
-#define LED_RED LED_BUILTIN
-#endif
-#ifndef LED_BLUE
-#define LED_BLUE LED_BUILTIN
-#endif
+// The LEDs: the Nano ESP32's RGB LED (LED_RED / LED_GREEN / LED_BLUE are
+// constants of its board package, active LOW). Another board gets its one
+// built-in LED for everything.
 #ifdef ARDUINO_NANO_ESP32
+const uint8_t PIN_LED_R = LED_RED;
+const uint8_t PIN_LED_G = LED_GREEN;
+const uint8_t PIN_LED_B = LED_BLUE;
 const bool LED_ACTIVE_LOW = true;
 #else
+const uint8_t PIN_LED_R = LED_BUILTIN;
+const uint8_t PIN_LED_G = LED_BUILTIN;
+const uint8_t PIN_LED_B = LED_BUILTIN;
 const bool LED_ACTIVE_LOW = false;
 #endif
 
@@ -313,24 +311,24 @@ int sendPress(const Press& p) {
 void flushQueue() {
   if (queueCount == 0 || !clockSynced || WiFi.status() != WL_CONNECTED) return;
   if ((long)(millis() - nextSendAt) < 0) return;
-  led(LED_BLUE, true);
+  led(PIN_LED_B, true);
   int res = sendPress(queue[queueHead]);
-  led(LED_BLUE, false);
+  led(PIN_LED_B, false);
   if (res == 0) {
     // Back off: 5 s, 15 s, 45 s … up to five minutes, then keep trying.
     sendBackoff = sendBackoff == 0 ? 5000 : min(sendBackoff * 3, 300000UL);
     nextSendAt = millis() + sendBackoff;
-    blink(LED_RED, 1);
-    led(LED_RED, true);
+    blink(PIN_LED_R, 1);
+    led(PIN_LED_R, true);
     return;
   }
   queueHead = (queueHead + 1) % QUEUE_SIZE;
   queueCount--;
   sendBackoff = 0;
   nextSendAt = 0;
-  if (res == 1) blink(LED_GREEN, 1);
-  else blink(LED_RED, 3);
-  led(LED_RED, queueCount > 0);  // "not sent yet" stays on until the queue is empty
+  if (res == 1) blink(PIN_LED_G, 1);
+  else blink(PIN_LED_R, 3);
+  led(PIN_LED_R, queueCount > 0);  // "not sent yet" stays on until the queue is empty
 }
 
 void enqueue(uint8_t button) {
@@ -343,8 +341,8 @@ void enqueue(uint8_t button) {
   queue[(queueHead + queueCount) % QUEUE_SIZE] = { button, millis() };
   queueCount++;
   Serial.printf("[press] button %d (%s %s), %d waiting\n", button + 1, BUTTONS[button].type, BUTTONS[button].details, queueCount);
-  blink(LED_GREEN, 1, 60);
-  if (!clockSynced || WiFi.status() != WL_CONNECTED) led(LED_RED, true);  // "not sent yet" until the queue drains
+  blink(PIN_LED_G, 1, 60);
+  if (!clockSynced || WiFi.status() != WL_CONNECTED) led(PIN_LED_R, true);  // "not sent yet" until the queue drains
   nextSendAt = 0;
 }
 
@@ -376,12 +374,12 @@ void ensureWifi() {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-  pinMode(LED_BLUE, OUTPUT);
-  led(LED_GREEN, false);
-  led(LED_RED, false);
-  led(LED_BLUE, false);
+  pinMode(PIN_LED_G, OUTPUT);
+  pinMode(PIN_LED_R, OUTPUT);
+  pinMode(PIN_LED_B, OUTPUT);
+  led(PIN_LED_G, false);
+  led(PIN_LED_R, false);
+  led(PIN_LED_B, false);
   for (int i = 0; i < BUTTON_COUNT && i < 8; i++) {
     pinMode(BUTTONS[i].pin, INPUT_PULLUP);
     lastLevel[i] = false;
@@ -396,11 +394,29 @@ void setup() {
   ensureWifi();
 }
 
+/** What a freshly opened serial monitor sees (USB drops what was printed before it connected). */
+void greet() {
+  Serial.printf("[boot] Zuno Analog-Buttons · %d Knöpfe · Code %s · WLAN %s · Uhr %s · %d wartend\n",
+                BUTTON_COUNT, codeOk ? "ok" : "FEHLT/ungültig", WiFi.status() == WL_CONNECTED ? "verbunden" : "nicht verbunden",
+                clockSynced ? "gestellt" : "nicht gestellt", queueCount);
+  for (int i = 0; i < BUTTON_COUNT; i++) {
+    Serial.printf("[boot] Knopf %d: Pin %d, %s %s, liest gerade %s\n", i + 1, BUTTONS[i].pin, BUTTONS[i].type, BUTTONS[i].details,
+                  digitalRead(BUTTONS[i].pin) == LOW ? "GEDRÜCKT" : "offen");
+  }
+}
+
 void loop() {
+  static bool greeted = false;
+  if (Serial && !greeted) {
+    greeted = true;
+    greet();
+  } else if (!Serial) {
+    greeted = false;  // the monitor was closed: greet again when it comes back
+  }
   readButtons();
   if (!codeOk) {
     // Nothing can be sent: say so with the red LED and keep reading the buttons (the presses wait).
-    led(LED_RED, (millis() / 500) % 2 == 0);
+    led(PIN_LED_R, (millis() / 500) % 2 == 0);
     delay(5);
     return;
   }
