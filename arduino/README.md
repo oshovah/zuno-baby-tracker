@@ -171,7 +171,23 @@ So kommt er auf den Nano:
    «[clock] …» (die Uhrzeit vom Server) und bei jedem Druck «[press] …»
    und «[send] 201 {"ok":true}».
 
-### 5. Ausprobieren
+### 5. Wenn der Upload nicht klappt
+
+- **«Bad CPU type in executable» … `esptool` … «exit status 126»** (Mac mit
+  Apple-Chip): Das Board-Paket bringt `esptool` als Intel-Programm mit, und
+  Rosetta 2 fehlt. Einmal im Terminal
+  `softwareupdate --install-rosetta --agree-to-license` ausführen (fragt
+  nach dem Mac-Passwort), dann nochmals hochladen – nichts muss neu
+  installiert werden. Die Meldung steht unter «Compilation error», hat
+  mit dem Sketch aber nichts zu tun.
+- **Der Nano nimmt den Upload nicht an** (Port verschwindet, «no device
+  found»): RST auf der Platine zweimal kurz drücken – die LED pulsiert, der
+  Nano wartet auf Firmware –, dann unter Tools › Port den neuen Eintrag
+  wählen und nochmals hochladen.
+- **`root_ca.h: No such file`**: der zweite Tab fehlt im eigenen Sketch
+  (Schritt 2 unter «Der Code»).
+
+### 6. Ausprobieren
 
 Knopf 1 drücken: die grüne LED blinkt einmal (Druck erfasst), kurz blau
 (wird gesendet), grün (angekommen). Innerhalb einer Minute steht «Windel ·
@@ -219,6 +235,13 @@ timer `{}` (a second sleep press while one runs is refused by the phone).
    `ZUNO_CODE` (paste from the app; spaces are fine).
 3. Upload. Open the serial monitor at 115200 baud to watch it connect,
    read the time and send.
+
+If the upload stops with *"Bad CPU type in executable"* on a Mac with an
+Apple chip, the board package's `esptool` is an Intel binary and Rosetta 2
+is missing: run `softwareupdate --install-rosetta --agree-to-license` once
+in the Terminal and upload again. If the Nano does not take the upload,
+press its RST button twice (the LED pulses) and upload again. A missing
+`root_ca.h` means the second tab was not added to your sketch.
 
 The device is now registered in the app (one device per board, however
 many buttons it has — the app names the device, the sketch says which
