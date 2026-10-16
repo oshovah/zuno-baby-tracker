@@ -23,6 +23,7 @@
 #include <mbedtls/gcm.h>
 #include <sys/time.h>
 #include <time.h>
+#include <esp_system.h>
 #if __has_include(<esp_random.h>)
 #include <esp_random.h>
 #else
@@ -114,6 +115,7 @@ unsigned long lastWifiTry = 0;
 
 bool lastLevel[8];
 unsigned long levelSince[8];
+unsigned long pressesSinceBoot = 0;
 
 // --- small helpers -----------------------------------------------------------
 
@@ -340,6 +342,7 @@ void enqueue(uint8_t button) {
   }
   queue[(queueHead + queueCount) % QUEUE_SIZE] = { button, millis() };
   queueCount++;
+  pressesSinceBoot++;
   Serial.printf("[press] button %d (%s %s), %d waiting\n", button + 1, BUTTONS[button].type, BUTTONS[button].details, queueCount);
   blink(PIN_LED_G, 1, 60);
   if (!clockSynced || WiFi.status() != WL_CONNECTED) led(PIN_LED_R, true);  // "not sent yet" until the queue drains
@@ -355,6 +358,7 @@ void readButtons() {
     if (pressed != lastLevel[i]) {
       lastLevel[i] = pressed;
       levelSince[i] = now;
+      Serial.printf("[btn] Knopf %d %s\n", i + 1, pressed ? "gedrückt" : "losgelassen");  // every edge, bounces included
     } else if (pressed && levelSince[i] != 0 && now - levelSince[i] >= DEBOUNCE_MS) {
       levelSince[i] = 0;  // one press per push: counted once it has held for the debounce time
       enqueue(i);
@@ -394,11 +398,30 @@ void setup() {
   ensureWifi();
 }
 
+/** Why the chip last started: a power-on, the RST button, or a crash — the one thing to know when presses stop. */
+const char* resetReasonText() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON: return "Strom eingeschaltet";
+    case ESP_RST_EXT: return "RST gedrückt";
+    case ESP_RST_SW: return "Software-Neustart";
+    case ESP_RST_PANIC: return "ABSTURZ (panic)";
+    case ESP_RST_INT_WDT: return "ABSTURZ (interrupt watchdog)";
+    case ESP_RST_TASK_WDT: return "ABSTURZ (task watchdog)";
+    case ESP_RST_WDT: return "ABSTURZ (watchdog)";
+    case ESP_RST_DEEPSLEEP: return "aus dem Tiefschlaf";
+    case ESP_RST_BROWNOUT: return "BROWNOUT (Spannung eingebrochen)";
+    case ESP_RST_SDIO: return "SDIO";
+    default: return "unbekannt";
+  }
+}
+
 /** What a freshly opened serial monitor sees (USB drops what was printed before it connected). */
 void greet() {
   Serial.printf("[boot] Zuno Analog-Buttons · %d Knöpfe · Code %s · WLAN %s · Uhr %s · %d wartend\n",
                 BUTTON_COUNT, codeOk ? "ok" : "FEHLT/ungültig", WiFi.status() == WL_CONNECTED ? "verbunden" : "nicht verbunden",
                 clockSynced ? "gestellt" : "nicht gestellt", queueCount);
+  Serial.printf("[boot] läuft seit %lu s · letzter Start: %s · %lu Drücke seit dem Start\n",
+                millis() / 1000UL, resetReasonText(), pressesSinceBoot);
   for (int i = 0; i < BUTTON_COUNT; i++) {
     Serial.printf("[boot] Knopf %d: Pin %d, %s %s, liest gerade %s\n", i + 1, BUTTONS[i].pin, BUTTONS[i].type, BUTTONS[i].details,
                   digitalRead(BUTTONS[i].pin) == LOW ? "GEDRÜCKT" : "offen");
