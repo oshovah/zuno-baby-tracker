@@ -14,6 +14,9 @@
 //     a HEAD request) — no time server, no third party anywhere. A press
 //     made before the clock is known waits and keeps its true time.
 //   - Presses queue while the Wi-Fi is down and go out once it is back.
+//   - The network work (Wi-Fi, the clock, the sending) runs in a task of
+//     its own, so the buttons are read all the time — a second press while
+//     the first one is still on its way is not lost.
 //
 // Configure the five values below, flash, press.
 
@@ -24,6 +27,9 @@
 #include <sys/time.h>
 #include <time.h>
 #include <esp_system.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
 #if __has_include(<esp_random.h>)
 #include <esp_random.h>
 #else
@@ -99,18 +105,20 @@ struct Press {
   uint8_t button;
   unsigned long pressedMs;  // millis() at the press: the instant is derived from the clock at send time
 };
-Press queue[QUEUE_SIZE];
-int queueHead = 0, queueCount = 0;
+QueueHandle_t presses = nullptr;  // the presses waiting to be sent, oldest first (FreeRTOS: safe between the two tasks)
+
+/** How many presses wait. */
+int waiting() {
+  return presses ? (int)uxQueueMessagesWaiting(presses) : 0;
+}
 
 char token[33];      // the first 32 characters of the code
 uint8_t key[32];     // the other 64, as bytes
 bool codeOk = false;
 
-bool clockSynced = false;
+volatile bool clockSynced = false;  // set by the sender task, read by loop()
 unsigned long clockSyncedAt = 0;
 unsigned long nextClockTry = 0;
-unsigned long nextSendAt = 0;
-unsigned long sendBackoff = 0;
 unsigned long lastWifiTry = 0;
 
 bool lastLevel[8];
@@ -310,43 +318,66 @@ int sendPress(const Press& p) {
   return -1;  // 400 bad body, 404 unknown or removed device, 507 the family's presses are not being read
 }
 
-void flushQueue() {
-  if (queueCount == 0 || !clockSynced || WiFi.status() != WL_CONNECTED) return;
-  if ((long)(millis() - nextSendAt) < 0) return;
-  led(PIN_LED_B, true);
-  int res = sendPress(queue[queueHead]);
-  led(PIN_LED_B, false);
-  if (res == 0) {
-    // Back off: 5 s, 15 s, 45 s … up to five minutes, then keep trying.
-    sendBackoff = sendBackoff == 0 ? 5000 : min(sendBackoff * 3, 300000UL);
-    nextSendAt = millis() + sendBackoff;
-    blink(PIN_LED_R, 1);
-    led(PIN_LED_R, true);
-    return;
+/**
+ * The sender task: everything that waits on the network — the Wi-Fi, the
+ * clock, the presses — runs here, so loop() keeps reading the buttons while
+ * a send takes its seconds. One press at a time, oldest first; a press
+ * stays in the queue until the server has it or refuses it for good.
+ */
+void senderTask(void*) {
+  unsigned long backoff = 0;
+  for (;;) {
+    if (!codeOk) {
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+    ensureWifi();
+    if (WiFi.status() != WL_CONNECTED) {
+      vTaskDelay(pdMS_TO_TICKS(200));
+      continue;
+    }
+    bool due = !clockSynced || millis() - clockSyncedAt > CLOCK_RESYNC_MS;
+    if (due && (long)(millis() - nextClockTry) >= 0 && !syncClock()) {
+      nextClockTry = millis() + 60000;  // try again in a minute
+    }
+    if (!clockSynced) {
+      vTaskDelay(pdMS_TO_TICKS(200));
+      continue;
+    }
+    Press p;
+    if (xQueuePeek(presses, &p, pdMS_TO_TICKS(200)) != pdTRUE) continue;  // nothing waiting
+    led(PIN_LED_B, true);
+    int res = sendPress(p);
+    led(PIN_LED_B, false);
+    if (res == 0) {
+      // Back off: 5 s, 15 s, 45 s … up to five minutes, then keep trying; the press stays queued.
+      backoff = backoff == 0 ? 5000 : min(backoff * 3, 300000UL);
+      blink(PIN_LED_R, 1);
+      led(PIN_LED_R, true);
+      vTaskDelay(pdMS_TO_TICKS(backoff));
+      continue;
+    }
+    xQueueReceive(presses, &p, 0);  // the one just peeked: sent, or refused for good
+    backoff = 0;
+    if (res == 1) blink(PIN_LED_G, 1);
+    else blink(PIN_LED_R, 3);
+    led(PIN_LED_R, waiting() > 0);  // "not sent yet" stays on until the queue is empty
   }
-  queueHead = (queueHead + 1) % QUEUE_SIZE;
-  queueCount--;
-  sendBackoff = 0;
-  nextSendAt = 0;
-  if (res == 1) blink(PIN_LED_G, 1);
-  else blink(PIN_LED_R, 3);
-  led(PIN_LED_R, queueCount > 0);  // "not sent yet" stays on until the queue is empty
 }
 
 void enqueue(uint8_t button) {
-  if (queueCount == QUEUE_SIZE) {
-    // The oldest goes: a queue this full means the device has been offline
-    // for a long time, and sixteen presses are a day of diapers.
-    queueHead = (queueHead + 1) % QUEUE_SIZE;
-    queueCount--;
+  Press p = { button, millis() };
+  if (xQueueSend(presses, &p, 0) != pdTRUE) {
+    // Sixteen presses waiting means no network for a long time; the newest
+    // is dropped (the queue order must not change under the sender).
+    Serial.printf("[press] button %d ignored: %d presses waiting already\n", button + 1, QUEUE_SIZE);
+    blink(PIN_LED_R, 2);
+    return;
   }
-  queue[(queueHead + queueCount) % QUEUE_SIZE] = { button, millis() };
-  queueCount++;
   pressesSinceBoot++;
-  Serial.printf("[press] button %d (%s %s), %d waiting\n", button + 1, BUTTONS[button].type, BUTTONS[button].details, queueCount);
+  Serial.printf("[press] button %d (%s %s), %d waiting\n", button + 1, BUTTONS[button].type, BUTTONS[button].details, waiting());
   blink(PIN_LED_G, 1, 60);
   if (!clockSynced || WiFi.status() != WL_CONNECTED) led(PIN_LED_R, true);  // "not sent yet" until the queue drains
-  nextSendAt = 0;
 }
 
 // --- buttons and Wi-Fi ---------------------------------------------------------------
@@ -395,7 +426,9 @@ void setup() {
   }
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
-  ensureWifi();
+  presses = xQueueCreate(QUEUE_SIZE, sizeof(Press));
+  // The network side: 16 KB of stack for the TLS handshake, a plain priority.
+  xTaskCreate(senderTask, "zuno-send", 16384, nullptr, 1, nullptr);
 }
 
 /** Why the chip last started: a power-on, the RST button, or a crash — the one thing to know when presses stop. */
@@ -419,7 +452,7 @@ const char* resetReasonText() {
 void greet() {
   Serial.printf("[boot] Zuno Analog-Buttons · %d Knöpfe · Code %s · WLAN %s · Uhr %s · %d wartend\n",
                 BUTTON_COUNT, codeOk ? "ok" : "FEHLT/ungültig", WiFi.status() == WL_CONNECTED ? "verbunden" : "nicht verbunden",
-                clockSynced ? "gestellt" : "nicht gestellt", queueCount);
+                clockSynced ? "gestellt" : "nicht gestellt", waiting());
   Serial.printf("[boot] läuft seit %lu s · letzter Start: %s · %lu Drücke seit dem Start\n",
                 millis() / 1000UL, resetReasonText(), pressesSinceBoot);
   for (int i = 0; i < BUTTON_COUNT; i++) {
@@ -437,19 +470,9 @@ void loop() {
     greeted = false;  // the monitor was closed: greet again when it comes back
   }
   readButtons();
-  if (!codeOk) {
-    // Nothing can be sent: say so with the red LED and keep reading the buttons (the presses wait).
-    led(PIN_LED_R, (millis() / 500) % 2 == 0);
-    delay(5);
-    return;
-  }
-  ensureWifi();
-  if (WiFi.status() == WL_CONNECTED) {
-    bool due = !clockSynced || millis() - clockSyncedAt > CLOCK_RESYNC_MS;
-    if (due && (long)(millis() - nextClockTry) >= 0) {
-      if (!syncClock()) nextClockTry = millis() + 60000;  // try again in a minute, buttons keep working meanwhile
-    }
-    if (clockSynced) flushQueue();
-  }
+  // Nothing can be sent without a code: say so with the red LED and keep
+  // reading the buttons (the presses wait). Everything else — Wi-Fi, the
+  // clock, the sending — is the sender task's.
+  if (!codeOk) led(PIN_LED_R, (millis() / 500) % 2 == 0);
   delay(5);
 }

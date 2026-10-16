@@ -186,6 +186,12 @@ So kommt er auf den Nano:
   wählen und nochmals hochladen.
 - **`root_ca.h: No such file`**: der zweite Tab fehlt im eigenen Sketch
   (Schritt 2 unter «Der Code»).
+- **Es geht einmal, dann nicht mehr – oder nur, wenn man auf den Nano
+  drückt:** Der Nano sitzt nicht fest im Steckbrett. Das USB-Kabel zieht ihn
+  mit seinem Gewicht leicht schräg, und die Pins verlieren den Kontakt zu
+  den Federn im Brett. Den Nano bis zum Anschlag hineindrücken und das
+  Kabel so führen, dass es nicht am Stecker hängt (ein Kabelbinder oder
+  Gummiband am Brett, ein Knick im Kabel auf dem Tisch).
 - **Nichts blinkt, nichts im Serial Monitor:** Den Monitor auf **115200
   baud** stellen und auf dem Nano **RST** drücken – oder den Monitor
   schliessen und neu öffnen: Der Sketch meldet sich jedes Mal, wenn der
