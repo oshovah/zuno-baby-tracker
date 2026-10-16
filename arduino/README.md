@@ -51,7 +51,7 @@ hinaus** (vor Spalte 1):
 - Die Pin-Reihe mit **D2, D3, D4, GND** (die mit RST / RX0 / TX1 am Ende)
   kommt in Reihe **f** – die Reihe direkt über dem Graben. Darüber bleiben
   vier freie Löcher (g–j) pro Pin: dort werden die Knöpfe angeschlossen.
-- Die andere Reihe (D13, 3V3, A0 … VIN, GND) landet damit von selbst in
+- Die andere Reihe (D13, 3V3, A0 … GND, VIN) landet damit von selbst in
   Reihe **b**; darunter bleibt ein freies Loch (a) pro Pin.
 
 So sitzt D12 in Spalte 1 und die Zahlen laufen aufwärts:
@@ -59,14 +59,16 @@ So sitzt D12 in Spalte 1 und die Zahlen laufen aufwärts:
 ```
  Spalte:   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
  Reihe f: D12 D11 D10  D9  D8  D7  D6  D5  D4  D3  D2 GND RST RX0 TX1
- Reihe b: D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 VIN GND
+ Reihe b: D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 GND VIN
                                            ─┘  ─┘  ─┘ └─ hier wird angeschlossen
 ```
 
-GND gibt es zweimal: in der oberen Reihe neben D2 (Spalte 12, eckiges
-Lötauge) und in der unteren Reihe neben VIN (Spalte 15). Die untere ist
-die bequemere für die Minus-Schiene, weil ihr freies Loch a15 direkt an
-der Schiene liegt.
+GND gibt es zweimal, beide mit eckigem Lötauge: in der oberen Reihe
+zwischen D2 und RST (Spalte 12) und in der unteren Reihe zwischen B1 und
+VIN (Spalte **14** – VIN ist der letzte Pin, Spalte 15). Die untere ist die
+bequemere für die Minus-Schiene, weil ihr freies Loch a14 direkt an der
+Schiene liegt. Nicht verwechseln: a15 ist VIN, der Stromeingang – der darf
+nie an die Minus-Schiene.
 
 ### 3. Verkabelung
 
@@ -78,7 +80,7 @@ in Reihe f nach oben zum Pin:
 
 | Kabel | von | nach | wofür |
 | --- | --- | --- | --- |
-| 1 | **a15** (unter dem GND der unteren Reihe) | untere Minus-Schiene (–) | gemeinsame Masse |
+| 1 | **a14** (unter dem GND der unteren Reihe, zwischen B1 und VIN) | untere Minus-Schiene (–) | gemeinsame Masse |
 | 2 | **a20** (Knopf 1, Bein in Reihe e, Spalte 20) | Minus-Schiene (–) | Knopf 1 an Masse |
 | 3 | **j22** (Knopf 1, diagonales Bein in Reihe f, Spalte 22) | **j11** (über D2) | Knopf 1 = Pipi |
 | 4 | **a24** (Knopf 2, Bein in Reihe e) | Minus-Schiene (–) | Knopf 2 an Masse |
@@ -106,15 +108,15 @@ Kabel der Tabelle, jeweils an beiden Enden):
  Reihe e    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ●   ●     ●   ●     ●   ●
  Reihe d    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
  Reihe c    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
- Reihe b   D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 VIN GND    ·   ·     ·   ·     ·   ·
- Reihe a    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  [1]   [2]  ·    [4]  ·    [6]  ·
+ Reihe b   D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 GND VIN    ·   ·     ·   ·     ·   ·
+ Reihe a    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  [1]  ·    [2]  ·    [4]  ·    [6]  ·
  Minus (–) ═[1]═══════════════════════════════════════════════════════[2]═══════[4]═══════[6]═══
  ◄ USB-C ragt hier über den Rand hinaus
 ```
 
 Die Kabel 3, 5 und 7 laufen oben in Reihe j von den Knöpfen nach links zu
 D2, D3 und D4; die Kabel 1, 2, 4 und 6 unten zur Minus-Schiene. Nichts
-kreuzt den Nano. Die Spaltenzahlen der Knöpfe sind Vorschläge; wichtig
+kreuzt den Nano. Kabel 1 sitzt in Spalte 14 (GND), nicht 15 (VIN). Die Spaltenzahlen der Knöpfe sind Vorschläge; wichtig
 ist nur: ein Knopf über dem Graben, ein Bein an Minus, das diagonale Bein
 an den Pin.
 
