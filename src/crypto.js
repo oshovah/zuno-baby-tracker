@@ -25,6 +25,14 @@
 //   k = HKDF-SHA256(ECDH-P256(eph, inbox), salt = ephPub65 || inboxPub65,
 //       info "bt/v1/feedback"); a throwaway key pair per message, so the
 //   sending phone cannot open its own message afterwards; 1024 / 4096 buckets.
+//
+// A press of a physical button (src/devices.js; the device seals, the
+// phone opens — arduino/ in the repository does the same bytes in C):
+//   b64u(0x03 || iv12 || AES-256-GCM(deviceKey, iv, "bt1|device", padded JSON))
+//   deviceKey = 32 random bytes the phone made (the second half of the
+//   device code), padded to 128 bytes — every press the same length, so a
+//   «Pipi» and a «Gaggi» look alike on the wire. The entry a press becomes
+//   gets a deterministic eid (pressEid), so two phones make the same one.
 
 import { t } from './i18n/index.js';
 
@@ -45,6 +53,10 @@ const PROFILE_BUCKETS = [128, 256];
 const INBOX_BUCKETS = [512];
 export const FEEDBACK_V = 2;
 export const FEEDBACK_BUCKETS = [1024, 4096];
+export const DEVICE_V = 3;
+export const DEVICE_BUCKETS = [128, 256];
+const DEVICE_KEY_BYTES = 32;
+const DEVICE_AAD = 'bt1|device';
 const EC = { name: 'ECDH', namedCurve: 'P-256' };
 const P256_RAW_BYTES = 65;
 const ROLES = ['user', 'family'];
@@ -517,4 +529,90 @@ export async function openFeedback(privateKey, publicJwk, blob) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error(t('errors.validate.invalidRecord'));
   if (obj.v !== FEEDBACK_V) throw new Error(t('errors.crypto.version'));
   return obj;
+}
+
+// ---------------------------------------------------------------------------
+// Physical buttons (the device seals with a symmetric key the phone made)
+
+/** The device key as a CryptoKey: `raw` is 32 bytes or their 64 hex characters. */
+async function importDeviceKey(raw) {
+  let bytes = raw;
+  if (typeof raw === 'string') {
+    if (!/^[0-9a-f]{64}$/.test(raw)) throw new Error(t('errors.crypto.keyData'));
+    bytes = new Uint8Array(DEVICE_KEY_BYTES);
+    for (let i = 0; i < DEVICE_KEY_BYTES; i++) bytes[i] = parseInt(raw.slice(i * 2, i * 2 + 2), 16);
+  }
+  if (!isBytes(bytes, DEVICE_KEY_BYTES)) throw new Error(t('errors.crypto.keyData'));
+  return subtle().importKey('raw', bytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+/** A fresh device key: 32 random bytes as 64 lowercase hex (the code's second half). */
+export function randomDeviceKey() {
+  let hex = '';
+  for (const b of randomBytes(DEVICE_KEY_BYTES)) hex += b.toString(16).padStart(2, '0');
+  return hex;
+}
+
+/**
+ * Seal a press as the device does: {v: 3, at, type, details} → padded to
+ * 128 bytes → AES-256-GCM under AAD "bt1|device" → b64u(0x03 || iv ||
+ * ciphertext). The app uses it for the «Testdruck» and the tests; the
+ * sketch produces the same bytes.
+ */
+export async function sealPress(deviceKey, plain) {
+  if (!plain || typeof plain !== 'object') throw new Error(t('errors.validate.invalidRecord'));
+  const key = await importDeviceKey(deviceKey);
+  const padded = padTo(utf8(JSON.stringify({ ...plain, v: DEVICE_V })), DEVICE_BUCKETS);
+  const iv = randomBytes(IV_BYTES);
+  const ct = new Uint8Array(
+    await subtle().encrypt({ name: 'AES-GCM', iv, additionalData: utf8(DEVICE_AAD), tagLength: TAG_BITS }, key, padded)
+  );
+  const out = new Uint8Array(1 + IV_BYTES + ct.length);
+  out[0] = DEVICE_V;
+  out.set(iv, 1);
+  out.set(ct, 1 + IV_BYTES);
+  return b64u(out);
+}
+
+/** Open a press blob with the device's key → the plain object ({v: 3, at, type, details}). */
+export async function openPress(deviceKey, blob) {
+  const bytes = unb64u(blob);
+  if (bytes.length < 1 + IV_BYTES + TAG_BITS / 8) throw new Error(t('errors.validate.invalidRecord'));
+  if (bytes[0] !== DEVICE_V) throw new Error(t('errors.crypto.version'));
+  const key = await importDeviceKey(deviceKey);
+  let padded;
+  try {
+    padded = await subtle().decrypt(
+      { name: 'AES-GCM', iv: bytes.subarray(1, 1 + IV_BYTES), additionalData: utf8(DEVICE_AAD), tagLength: TAG_BITS },
+      key,
+      bytes.subarray(1 + IV_BYTES)
+    );
+  } catch (e) {
+    throw withCause(new Error(t('errors.crypto.decrypt')), e);
+  }
+  let obj;
+  try {
+    obj = JSON.parse(textDecoder.decode(padded).trimEnd());
+  } catch (e) {
+    throw withCause(new Error(t('errors.validate.invalidRecord')), e);
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error(t('errors.validate.invalidRecord'));
+  if (obj.v !== DEVICE_V) throw new Error(t('errors.crypto.version'));
+  return obj;
+}
+
+/**
+ * The eid of the entry a press becomes: the first 16 bytes of
+ * SHA-256("bt/v1/press|<deviceId>|<eventId>") as hex. Deterministic, so the
+ * two phones of a family write the SAME entry for one press (the second
+ * create is a 409 «exists», which the outbox treats as landed).
+ */
+export async function pressEid(deviceId, eventId) {
+  if (!Number.isInteger(deviceId) || deviceId < 1 || !Number.isInteger(eventId) || eventId < 1) {
+    throw new Error(t('errors.validate.invalidRecord'));
+  }
+  const digest = new Uint8Array(await subtle().digest('SHA-256', utf8(`${HKDF_PREFIX}press|${deviceId}|${eventId}`)));
+  let hex = '';
+  for (const b of digest.subarray(0, 16)) hex += b.toString(16).padStart(2, '0');
+  return hex;
 }

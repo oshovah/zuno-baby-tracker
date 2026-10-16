@@ -15,7 +15,7 @@
 // reminders.js (itself pure).
 
 import { t } from './i18n/index.js';
-import { TYPES, EVENT_TYPES, FEED_TYPES, SETTINGS_TYPE, REMINDER_TYPE, isTimerType, isEventType, validLocalDate, isoFromMs } from './validate.js';
+import { TYPES, EVENT_TYPES, FEED_TYPES, SETTINGS_TYPE, REMINDER_TYPE, DEVICE_TYPE, isTimerType, isEventType, validLocalDate, isoFromMs } from './validate.js';
 import { zurichDateOf, zurichDayWindowUtc, shiftZurichDate, secondsBetween } from './tz.js';
 import { reminderOf, sortReminders, occurrencesFor } from './reminders.js';
 
@@ -234,7 +234,9 @@ export function groupMeals(entries, nowIso) {
  * `reminders` (the family's schedules, reminders.reminderOf, by first time)
  * and `todos` ({today, tomorrow}: those schedules expanded into the day's
  * to-dos with their ticks, reminders.occurrencesFor — the home card and
- * checklist).
+ * checklist), and `devices` (the family's physical buttons: {eid, id,
+ * name, createdAt} by id — the secrets stay in the entry, the cached
+ * snapshot never carries them).
  *
  * `entries` is the map or any array of entries (filtered + sorted here);
  * nowIso should be the skew-corrected now (defaults to the wall clock).
@@ -275,6 +277,12 @@ export function deriveState(entries, nowIso) {
     today: occurrencesFor(reminders, tasks, todayDate),
     tomorrow: occurrencesFor(reminders, tasks, shiftZurichDate(todayDate, 1)),
   };
+
+  // The family's physical buttons (src/devices.js), by their server id.
+  const devices = live
+    .filter((e) => e.type === DEVICE_TYPE)
+    .map((e) => ({ eid: e.eid, id: e.details.id, name: e.details.name, createdAt: e.startedAt }))
+    .sort((a, b) => a.id - b.id);
 
   // Today (Europe/Zurich calendar day of now).
   const [dayStart, dayEnd] = zurichDayWindowUtc(todayDate);
@@ -331,6 +339,7 @@ export function deriveState(entries, nowIso) {
     familySettings,
     reminders,
     todos,
+    devices,
     today: {
       feeds,
       meals: todayMeals,

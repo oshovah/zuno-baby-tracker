@@ -141,7 +141,7 @@ test('state aggregates today counts, last feed, and sleep minutes', () => {
   assert.equal(state.lastByType.medication, null);
   assert.deepEqual(state.recentMedicationNames, []);
   // Exact /api/state shape.
-  assert.deepEqual(Object.keys(state), ['serverNow', 'openTimers', 'lastByType', 'lastFeed', 'lastMeal', 'lastNursingMeal', 'familySettings', 'reminders', 'todos', 'today', 'recentMedicationNames']);
+  assert.deepEqual(Object.keys(state), ['serverNow', 'openTimers', 'lastByType', 'lastFeed', 'lastMeal', 'lastNursingMeal', 'familySettings', 'reminders', 'todos', 'devices', 'today', 'recentMedicationNames']);
   assert.deepEqual(Object.keys(state.today), ['feeds', 'meals', 'diapers', 'diaperKinds', 'sleepMinutes']);
   // Two feeds hours apart: two meals; the last one is the 08:00 breastfeed.
   assert.equal(state.today.meals, 2);
@@ -253,6 +253,7 @@ test('empty model: nulls, zeros and empty lists', () => {
     familySettings: null,
     reminders: [],
     todos: { today: [], tomorrow: [] },
+    devices: [],
     today: { feeds: 0, meals: 0, diapers: 0, diaperKinds: { pee: 0, poop: 0, both: 0 }, sleepMinutes: 0 },
     recentMedicationNames: [],
   });

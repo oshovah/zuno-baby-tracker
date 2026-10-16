@@ -2528,7 +2528,9 @@ input[type='datetime-local'] {
 }
 
 /* The recovery code, shown once after creating a family: monospace, grouped
- * in blocks of 4, selectable as a whole, never wider than the card. */
+ * in blocks of 4, selectable as a whole, never wider than the card. The
+ * code of a physical button device (device-sheet.js) reuses it, smaller:
+ * 96 characters in groups of 8. */
 .recovery-code {
   margin: 4px 0 6px;
   padding: 14px 12px;
@@ -2544,6 +2546,20 @@ input[type='datetime-local'] {
   overflow-wrap: anywhere;
   user-select: all;
   -webkit-user-select: all;
+}
+
+.device-code {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.device-detail .field-label {
+  margin: 10px 0 2px;
+  font-weight: 600;
+}
+
+.device-detail .btn.wide {
+  margin-top: 8px;
 }
 
 .confirm-row {

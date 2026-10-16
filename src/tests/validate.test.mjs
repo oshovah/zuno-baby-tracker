@@ -47,7 +47,7 @@ test('type tables match entries.php, plus the family settings document, tasks an
   assert.deepEqual(EVENT_TYPES, ['breastfeed', 'bottle', 'diaper', 'sleep', 'weight', 'temperature', 'medication', 'task']);
   assert.equal(SETTINGS_TYPE, 'settings');
   assert.equal(REMINDER_TYPE, 'reminder');
-  assert.deepEqual(TYPES, [...EVENT_TYPES, 'settings', 'reminder']);
+  assert.deepEqual(TYPES, [...EVENT_TYPES, 'settings', 'reminder', 'device']);
   assert.deepEqual(TIMER_TYPES, ['breastfeed', 'sleep']);
   assert.deepEqual(FEED_TYPES, ['breastfeed', 'bottle']);
   assert.deepEqual(TYPE_LABELS, {
@@ -61,6 +61,7 @@ test('type tables match entries.php, plus the family settings document, tasks an
     task: 'Erledigt',
     settings: 'Einstellungen',
     reminder: 'Erinnerung',
+    device: 'Taster',
   });
   assert.deepEqual(WHO_VALUES, ['baby', 'mama', 'papa']);
   assert.equal(isEventType('settings'), false);

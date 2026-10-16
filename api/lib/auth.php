@@ -951,6 +951,9 @@ function bt_update_family_password(PDO $pdo, array $user, array $body): void
 //                       message must not be linkable to its sender)
 //   spot:<ip>           map places reported from that address (lib/spots.php;
 //                       per address only, for the same reason)
+//   dev:<ip>            presses of physical buttons from that address
+//                       (lib/devices.php; the one route without a cookie —
+//                       a stuck button or a stranger's probing stops here)
 // The address budgets stop one machine; the target budgets stop a guesser
 // who rotates addresses (a botnet, an IPv6 /64) against one account or
 // family: however many machines join in, a target sees at most
@@ -972,6 +975,8 @@ const BT_FEEDBACK_MAX_PER_WINDOW = 10;
 const BT_FEEDBACK_WINDOW_SECONDS = 3600;
 const BT_SPOT_MAX_PER_WINDOW = 10;
 const BT_SPOT_WINDOW_SECONDS = 3600;
+const BT_DEVICE_MAX_PER_WINDOW = 60;
+const BT_DEVICE_WINDOW_SECONDS = 3600;
 
 /** Throttle key of guesses against one account (the lowercased username, capped so junk cannot bloat the table). */
 function bt_user_throttle_key(string $username): string
@@ -1005,6 +1010,9 @@ function bt_throttle_budget(string $key): array
     }
     if (strpos($key, 'spot:') === 0) {
         return [BT_SPOT_MAX_PER_WINDOW, BT_SPOT_WINDOW_SECONDS];
+    }
+    if (strpos($key, 'dev:') === 0) {
+        return [BT_DEVICE_MAX_PER_WINDOW, BT_DEVICE_WINDOW_SECONDS];
     }
     return [BT_LOGIN_MAX_FAILS, BT_LOGIN_WINDOW_SECONDS];
 }
@@ -1100,6 +1108,27 @@ function bt_charge_spot(PDO $pdo, string $ip): void
             'Zu viele Meldungen in kurzer Zeit – bitte später nochmals versuchen',
             'spots.throttled',
             ['minutes' => (int) ceil(BT_SPOT_WINDOW_SECONDS / 60)]
+        );
+    }
+    bt_record_login_failure($pdo, $key);
+}
+
+/**
+ * The budget of button presses from an address: 429 'Zu viele Tastendrücke …'
+ * once it is used up, else the press is counted (before validation, like
+ * feedback — the route has no cookie, so this is its whole defence).
+ */
+function bt_charge_device(PDO $pdo, string $ip): void
+{
+    $key = 'dev:' . $ip;
+    try {
+        bt_assert_login_allowed($pdo, $key);
+    } catch (HttpError $e) {
+        throw new HttpError(
+            429,
+            'Zu viele Tastendrücke in kurzer Zeit – bitte später nochmals versuchen',
+            'devices.throttled',
+            ['minutes' => (int) ceil(BT_DEVICE_WINDOW_SECONDS / 60)]
         );
     }
     bt_record_login_failure($pdo, $key);

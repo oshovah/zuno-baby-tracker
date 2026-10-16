@@ -30,9 +30,11 @@
  *   PATCH  /api/me/password           {currentAuthKey, authKey, kdf, fdkWrappedUser} -> {ok}
  *   PATCH  /api/families/password     {currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily} -> {ok}
  *   GET    /api/sync?since=&limit=    {serverNow, feed, rows, next[, reset][, art, artKey][, feedback]
- *                                     [, feedbackUnread][, spots][, spotsPending]} (feedback: an inbox
- *                                     exists; spots: the version of the approved places, with an
- *                                     operator configured; the two counts: operator only)
+ *                                     [, feedbackUnread][, spots][, spotsPending][, deviceEvents]}
+ *                                     (feedback: an inbox exists; spots: the version of the approved
+ *                                     places, with an operator configured; the two counts: operator
+ *                                     only; deviceEvents: the family's button presses waiting to
+ *                                     become entries, only while there are any)
  *   POST   /api/entries               {eid, blob} -> 201 row (507 at the family's or the database's row cap)
  *   PATCH  /api/entries/:eid          {blob, ifSeq} -> row (409 when the seq moved)
  *   DELETE /api/entries/:eid          [{ifSeq}] -> row (soft delete; with a body, 409 when the seq moved)
@@ -46,6 +48,13 @@
  *   POST   /api/spots                 {lat, lon, kinds, name?, note?} -> 201 {ok} (a reported map place,
  *                                     pending until the operator approves; no sender stored, lib/spots.php)
  *   GET    /api/spots                 {version, items} — the approved places every phone lays over its map
+ *   POST   /api/devices               -> 201 {id, token, createdAt} (a physical button device; the token
+ *                                     is shown once, the phone keeps it inside an encrypted entry)
+ *   DELETE /api/devices/:id           -> {ok} (the token stops working; its waiting presses go too)
+ *   DELETE /api/devices/events/:id    -> {ok} (a press a phone has turned into an entry)
+ * Public, without a cookie (a device's own request, lib/devices.php):
+ *   POST   /api/devices/events        {token, blob} -> 201 {ok} (a sealed press; the family's sync
+ *                                     pages carry it as `deviceEvents` until a phone has made the entry)
  * Operator only (config admin_username; everyone else the same 404):
  *   POST   /api/feedback/key          {publicKey, privateSealed} -> {publicKey} (once; 409 afterwards)
  *   GET    /api/feedback?before=      {publicKey, privateSealed, items, next, unread}
@@ -76,7 +85,10 @@
  * and a create stops at the row caps of lib/entries.php (507). Feedback
  * messages have a budget of their own ('fb:<ip>', 10 / hour) and a cap
  * (lib/feedback.php); so have reported places ('spot:<ip>', 10 / hour, the
- * caps of lib/spots.php).
+ * caps of lib/spots.php) and the presses of physical buttons ('dev:<ip>',
+ * 60 / hour — the one route without a cookie — and the caps of
+ * lib/devices.php); registering or removing a device draws on the write
+ * budget like an entry.
  *
  * Routing works identically in three situations:
  *  1. Apache + .htaccess rewrite (possibly under a subdirectory):
@@ -99,6 +111,7 @@ require_once __DIR__ . '/lib/entries.php';
 require_once __DIR__ . '/lib/art.php';
 require_once __DIR__ . '/lib/feedback.php';
 require_once __DIR__ . '/lib/spots.php';
+require_once __DIR__ . '/lib/devices.php';
 require_once __DIR__ . '/lib/stats.php';
 
 /** Damping delay after a wrong secret (microseconds). */
@@ -384,6 +397,15 @@ function bt_dispatch(PDO $pdo, array $config, string $method, array $segments, ?
         return [200, bt_art_key_response($pdo, $config, $segments[2], $segments[3])];
     }
 
+    // A press from a physical button (lib/devices.php): the device has no
+    // cookie, its token is the credential. Budgeted per address before
+    // anything else; an unknown token is the same 404 as a removed device.
+    if ($segments === ['devices', 'events']) {
+        bt_require_method($method, ['POST']);
+        bt_charge_device($pdo, bt_client_ip());
+        return [201, bt_device_press($pdo, $readBody())];
+    }
+
     // --- authenticated (scoped to the user's family) --------------------------
 
     $user = bt_require_auth($pdo);
@@ -408,7 +430,7 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
             bt_assert_login_allowed($pdo, $key);
         }
     };
-    if ($segments !== [] && $segments[0] === 'entries' && $method !== 'GET') {
+    if ($segments !== [] && ($segments[0] === 'entries' || $segments[0] === 'devices') && $method !== 'GET') {
         bt_charge_write($pdo, $ip);
     }
 
@@ -481,6 +503,13 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
                 $page['spotsPending'] = bt_spots_pending_count($pdo);
             }
         }
+        // Presses of the family's physical buttons waiting to become
+        // entries (lib/devices.php): the phone opens them with the device's
+        // key and deletes them once the entry is written.
+        $events = bt_device_events_pending($pdo, $fid);
+        if ($events !== []) {
+            $page['deviceEvents'] = $events;
+        }
         return [200, $page];
     }
 
@@ -552,6 +581,23 @@ function bt_dispatch_authed(PDO $pdo, array $user, string $method, array $segmen
             return [200, bt_spot_delete($pdo, $id)];
         }
         throw new HttpError(405, 'Methode nicht erlaubt', 'request.methodNotAllowed');
+    }
+
+    // Physical buttons (lib/devices.php): any member registers one for the
+    // family, removes one, or clears a press their phone has processed.
+    if ($segments === ['devices']) {
+        bt_require_method($method, ['POST']);
+        return [201, bt_device_create($pdo, $fid)];
+    }
+
+    if (count($segments) === 3 && $segments[0] === 'devices' && $segments[1] === 'events') {
+        bt_require_method($method, ['DELETE']);
+        return [200, bt_device_event_delete($pdo, $fid, bt_valid_device_event_id($segments[2]))];
+    }
+
+    if (count($segments) === 2 && $segments[0] === 'devices') {
+        bt_require_method($method, ['DELETE']);
+        return [200, bt_device_delete($pdo, $fid, bt_valid_device_id($segments[1]))];
     }
 
     if ($segments === ['entries']) {

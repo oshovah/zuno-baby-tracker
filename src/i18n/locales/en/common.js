@@ -13,6 +13,7 @@ export default {
   'type.task': 'Done',
   'type.reminder': 'Reminder',
   'type.settings': 'Settings',
+  'type.device': 'Button device',
   'side.L': 'left',
   'side.R': 'right',
   'who.baby': 'Baby',

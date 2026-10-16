@@ -67,4 +67,12 @@ export default {
   'spots.throttled': 'Zu viele Meldungen in kurzer Zeit – bitte später nochmals versuchen',
   'spots.full': 'Die Liste der gemeldeten Orte ist voll – bitte später nochmals versuchen',
   'spots.notFound': 'Ort nicht gefunden',
+
+  // physical buttons (lib/devices.php, auth.php's dev:<ip> budget)
+  'devices.badToken': 'Ungültiger Taster-Code',
+  'devices.notFound': 'Taster nicht gefunden',
+  'devices.tooMany': 'Zu viele Taster – bitte zuerst einen entfernen',
+  'devices.full': 'Zu viele unverarbeitete Tastendrücke – bitte die App öffnen',
+  'devices.eventNotFound': 'Tastendruck nicht gefunden',
+  'devices.throttled': 'Zu viele Tastendrücke in kurzer Zeit – bitte später nochmals versuchen',
 };

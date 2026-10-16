@@ -15,6 +15,15 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-10-16',
+    de: [
+      'Neu unter Mehr › Einstellungen: «Taster». Ein kleines Gerät mit echten Knöpfen neben dem Wickeltisch trägt mit einem Druck die Windel ein – ohne Handy. Die App erzeugt den Code für das Gerät; jeder Druck wird dort verschlüsselt, der Server sieht nur, dass gedrückt wurde. Die Bauanleitung liegt beim Quellcode.',
+    ],
+    en: [
+      'New under More › Settings: "Button devices". A small device with real buttons next to the changing table logs the diaper with one press – no phone needed. The app makes the code for the device; every press is encrypted there, the server only sees that a button was pressed. The build guide ships with the source code.',
+    ],
+  },
+  {
     id: '2026-10-14-c',
     de: [
       'Neu auf der Karte: «Ort hinzufügen». Fehlt ein Wickeltisch oder ein Platz zum Stillen, schieb die Karte, bis das Kreuz auf dem Ort steht, und sag, was es dort gibt – ohne deinen Namen. Die Person, die Zuno betreibt, prüft die Meldung; danach sehen den Ort alle.',

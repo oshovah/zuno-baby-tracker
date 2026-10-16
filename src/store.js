@@ -67,6 +67,15 @@
 // first paint and for offline — the service worker never caches /api/. The
 // operator's pages also count what waits (spotsPending: the dot on Mehr).
 //
+// Physical buttons (store.devices, src/devices.js): a member registers a
+// device (POST /api/devices → id + token), the phone makes the device key
+// and keeps both in an entry of type `device` — the family's other phones
+// get them with the sync. The device posts sealed presses without a cookie;
+// every sync page carries the family's waiting presses (`deviceEvents`),
+// and this phone opens them with the device's key, creates the entries
+// (a deterministic eid per press, so the two phones never make two) and
+// deletes the presses. A press nobody can read is dropped with a notice.
+//
 // `createStore(deps)` builds an instance from injectable dependencies so the
 // sync/write logic runs under `node --test` with a fake api/db; the default
 // export is the real one.
@@ -85,8 +94,13 @@ import {
   openInboxPrivate,
   sealFeedback,
   openFeedback,
+  sealPress,
+  openPress,
+  pressEid,
+  randomDeviceKey,
 } from './crypto.js';
 import { readMessage } from './feedback.js';
+import { deviceCode, pressToDraft, testPress, cleanDeviceName } from './devices.js';
 import { t } from './i18n/index.js';
 import {
   PENDING_SEQ_BASE,
@@ -109,6 +123,7 @@ import {
   timerRunningMessage,
   isoFromMs,
   TYPE_LABELS,
+  DEVICE_TYPE,
 } from './validate.js';
 import {
   deriveState,
@@ -1059,6 +1074,7 @@ export function createStore(deps) {
       let changed = false;
       let spotsVersion = null; // the approved places' version the server holds (null: no operator → feature off)
       let spotsPending = null; // what waits for the operator (this account's pages only)
+      let deviceEvents = []; // the family's button presses waiting to become entries (the last page's list)
       for (;;) {
         const page = await api.get(`api/sync?since=${since}&limit=${SYNC_LIMIT}`, {
           timeoutMs: SYNC_TIMEOUT_MS,
@@ -1079,6 +1095,7 @@ export function createStore(deps) {
         setFeedbackState(page.feedback === true, page.feedbackUnread);
         spotsVersion = Number.isInteger(page.spots) && page.spots >= 0 ? page.spots : null;
         spotsPending = Number.isInteger(page.spotsPending) && page.spotsPending >= 0 ? page.spotsPending : null;
+        deviceEvents = Array.isArray(page.deviceEvents) ? page.deviceEvents : [];
         const pageFeed = typeof page.feed === 'string' && page.feed !== '' ? page.feed : null;
         if (pageFeed && feed && pageFeed !== feed) {
           // Another database behind the same URL (restored backup, re-run
@@ -1154,6 +1171,12 @@ export function createStore(deps) {
       notify(c || changed);
       kickFlush();
       resolveDuplicates();
+      // The presses of the family's buttons: after the rows (the device
+      // entry with the key may be among them), each one an ordinary create.
+      if (deviceEvents.length) {
+        await convertPresses(deviceEvents, gen);
+        assertCurrent();
+      }
       return snapshot;
     } catch (err) {
       if (gen !== generation) throw err; // the state it failed for is gone — leave the new one alone
@@ -1695,6 +1718,8 @@ export function createStore(deps) {
      * (validate.validateCreate), loggedBy from the account's display name,
      * one open timer per type, rev 1. Returns the entry as the app holds
      * it (see enqueue). opts.defer === false sends straight away (settings).
+     * opts.eid fixes the id and opts.loggedBy the author (a button press:
+     * the same id on both phones, the device's name as the logger).
      */
     async create(input, opts = {}) {
       requireKey();
@@ -1703,13 +1728,13 @@ export function createStore(deps) {
         throw fail(timerRunningMessage(v.type), 409);
       }
       const plain = {
-        eid: randomEid(),
+        eid: typeof opts.eid === 'string' && EID_RE.test(opts.eid) ? opts.eid : randomEid(),
         rev: 1,
         type: v.type,
         startedAt: v.startedAt,
         endedAt: v.endedAt,
         details: v.details,
-        loggedBy: authorName(),
+        loggedBy: typeof opts.loggedBy === 'string' ? opts.loggedBy : authorName(),
       };
       const blob = await encryptEntry(fdk, familyId, plain);
       const incoming = { eid: plain.eid, kind: 'create', blob, baseSeq: null, fields: [], guard: null, plain };
@@ -2024,6 +2049,113 @@ export function createStore(deps) {
     },
   };
 
+  // --- physical buttons (api/lib/devices.php, src/devices.js) ------------------
+
+  /** The live device entry with this server id (a pending one counts), or null. */
+  function deviceEntry(id) {
+    for (const e of effective().values()) {
+      if (e.type === DEVICE_TYPE && e.deletedAt == null && !e.error && e.details && e.details.id === id) return e;
+    }
+    return null;
+  }
+
+  /**
+   * Turn the sync page's presses into entries: each one opened with its
+   * device's key, checked (devices.pressToDraft), created under its
+   * deterministic eid unless the entry is already here (the other phone was
+   * first), and deleted on the server — unreadable or refused ones too,
+   * with a notice: a press that cannot become an entry must not come back
+   * on every sync. A create still waits for its answer like any write.
+   */
+  async function convertPresses(events, gen) {
+    for (const ev of events) {
+      if (gen !== generation) throw fail(t('errors.store.aborted'));
+      if (!ev || !Number.isInteger(ev.id) || ev.id < 1 || !Number.isInteger(ev.device) || typeof ev.blob !== 'string') continue;
+      const device = deviceEntry(ev.device);
+      let notice = device ? null : t('errors.devices.pressUnknown');
+      if (device) {
+        try {
+          const plain = await openPress(device.details.key, ev.blob);
+          const draft = pressToDraft(plain, isoFromMs(nowMs()));
+          const eid = await pressEid(ev.device, ev.id);
+          if (gen !== generation) throw fail(t('errors.store.aborted'));
+          if (!effective().has(eid)) await entries.create(draft, { eid, loggedBy: device.details.name });
+        } catch (err) {
+          if (gen !== generation) throw err;
+          notice = t('errors.devices.pressDropped', { name: device.details.name, reason: (err && err.message) || '' });
+        }
+      }
+      if (gen !== generation) throw fail(t('errors.store.aborted'));
+      try {
+        await api.del(`api/devices/events/${ev.id}`);
+      } catch (err) {
+        // Gone already (the other phone) is fine; anything else leaves the
+        // press for the next sync — the eid makes a second pass harmless.
+        if (!err || err.status !== 404) continue;
+      }
+      if (notice) toast(notice);
+    }
+  }
+
+  const devices = {
+    /** The family's devices as the snapshot lists them ({eid, id, name, createdAt}), by id; [] before the first paint. */
+    get list() {
+      const data = snapshot && snapshot.data ? snapshot.data : null;
+      return data && Array.isArray(data.devices) ? data.devices.map((d) => ({ ...d })) : [];
+    },
+
+    /**
+     * Register a device for the family under `name`: the server hands out
+     * the id and the token (once), this phone makes the key, and the three
+     * go into a `device` entry like any write. Resolves with the entry.
+     */
+    async add(name) {
+      requireKey();
+      const res = await api.post('api/devices', {});
+      if (!res || !Number.isInteger(res.id) || typeof res.token !== 'string') throw fail(t('errors.store.badPage'), 502);
+      const details = { id: res.id, name: cleanDeviceName(name), token: res.token, key: randomDeviceKey() };
+      return entries.create({ type: DEVICE_TYPE, details });
+    },
+
+    /** The code the sketch wants (token + key) of the device entry `eid`. */
+    code(eid) {
+      const e = liveLocal(eid);
+      if (e.type !== DEVICE_TYPE) throw fail(t('errors.store.notFound'), 404);
+      return deviceCode(e.details);
+    },
+
+    /**
+     * Remove a device: its token stops working on the server first (a 404
+     * there means it is gone already), then the entry is deleted like any
+     * row. Resolves with the tombstone.
+     */
+    async remove(eid) {
+      requireKey();
+      const e = liveLocal(eid);
+      if (e.type !== DEVICE_TYPE) throw fail(t('errors.store.notFound'), 404);
+      try {
+        await api.del(`api/devices/${Number(e.details.id)}`);
+      } catch (err) {
+        if (!err || err.status !== 404) throw err;
+      }
+      return entries.remove(eid);
+    },
+
+    /**
+     * «Testdruck»: send one press exactly as the device would — sealed with
+     * its key, posted with its token, no cookie needed — a wet diaper, now.
+     * The next sync turns it into the entry, so the whole path is proven
+     * without the hardware. Resolves when the server has the press.
+     */
+    async press(eid) {
+      requireKey();
+      const e = liveLocal(eid);
+      if (e.type !== DEVICE_TYPE) throw fail(t('errors.store.notFound'), 404);
+      const blob = await sealPress(e.details.key, testPress(isoFromMs(nowMs())));
+      await api.post('api/devices/events', { token: e.details.token, blob });
+    },
+  };
+
   const settings = {
     /** The values that apply on this phone: family row over this device's
      *  older per-device values over the defaults. Works from the cached
@@ -2182,6 +2314,7 @@ export function createStore(deps) {
 
     settings,
     spots,
+    devices,
 
     feedback,
 
@@ -2328,10 +2461,12 @@ export function createStore(deps) {
       await activate(key, { fromPassword: true });
     },
 
-    /** Every decrypted entry (deleted ones flagged), newest first — the export. */
+    /** Every decrypted entry (deleted ones flagged), newest first — the
+     *  export. Without the device entries: their secrets are for the
+     *  buttons, not for a file that may travel. */
     exportPlain() {
       return [...effective().values()]
-        .filter((e) => !e.error)
+        .filter((e) => !e.error && e.type !== DEVICE_TYPE)
         .sort(sortNewest)
         .map((e) => ({
           eid: e.eid,

@@ -63,4 +63,12 @@ export default {
   'spots.throttled': 'Too many reports in a short time – please try again later',
   'spots.full': 'The list of reported places is full – please try again later',
   'spots.notFound': 'Place not found',
+
+  // physical buttons (lib/devices.php, auth.php's dev:<ip> budget)
+  'devices.badToken': 'Invalid device code',
+  'devices.notFound': 'Device not found',
+  'devices.tooMany': 'Too many devices – please remove one first',
+  'devices.full': 'Too many unprocessed button presses – please open the app',
+  'devices.eventNotFound': 'Button press not found',
+  'devices.throttled': 'Too many button presses in a short time – please try again later',
 };

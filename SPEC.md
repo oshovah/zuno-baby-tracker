@@ -161,6 +161,22 @@ no longer exists (times edited afterwards) counts for the nearest open slot
 of its day; a second tick of a ticked slot (two phones raced) only shows in
 Verlauf. No notification fires — the home screen shows what is due.
 
+**Taster (button devices)**: a Wi-Fi microcontroller with real buttons
+(`arduino/`) that logs an entry without a phone. One entry of type `device`
+per registered device — `details {id, name, token, key}`: the server's id,
+the name (the logger of every entry the device makes), the token the
+server keeps as a hash, the key the device seals its presses with and the
+server never sees; `startedAt` the registration. Not an event. A press
+(`{v: 3, at, type, details}`, sealed on the device with AES-256-GCM, padded
+to 128 bytes, `src/crypto.js sealPress`) is posted with the token and no
+cookie; the sync page carries the family's waiting presses (`deviceEvents`),
+the phone opens them (`src/devices.js pressToDraft`: an event type, a recent
+instant), creates the entry under a deterministic eid (`pressEid`: both
+phones make the same one) and deletes the press. Mehr › Einstellungen ›
+Taster: the list, «Taster hinzufügen» (the name, then the 96-hex code =
+token ‖ key), «Testdruck senden» (the phone presses like the device),
+«Taster entfernen» (kills the token).
+
 **Family settings** travel the same way: one entry of type `settings` per
 family — its `details` is the settings document (`feedFromStart`,
 `recommendedMl`, `bottlePresets` — the Muttermilch chips, historical name —,
@@ -350,7 +366,7 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
     every phone and kept in `localStorage` for offline; a version on the sync
     page says when to refetch. Pure: `src/spots.js`.
 
-## Data model (schema v6)
+## Data model (schema v7)
 
 - `families` (id, name, name_key UNIQUE — case-folded, auth_hash = bcrypt of
   the family auth value, kdf_salt, kdf_iter, fdk_wrapped — the family data key
@@ -364,11 +380,11 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
   for a type, a time or an amount)
   - Inside the blob: `{v, eid, rev, type, startedAt, endedAt, details, loggedBy}`
     with `type`: `breastfeed | bottle | diaper | sleep | weight | temperature |
-    medication | task | settings | reminder`, `details` per type: `{side,
+    medication | task | settings | reminder | device`, `details` per type: `{side,
     paused?}`, `{amount_ml, colostrum_ml?}`, `{kind}`, `{grams}`, `{celsius}`, `{name}`,
-    `{title, who, reminderEid?, due?}`, the family settings document and the
-    reminder schedule `{title, who, note?, times, everyDays?, startDate?}` (see
-    *What gets tracked*);
+    `{title, who, reminderEid?, due?}`, the family settings document, the
+    reminder schedule `{title, who, note?, times, everyDays?, startDate?}` and
+    the button device `{id, name, token, key}` (see *What gets tracked*);
     canonical UTC ISO times; point-in-time types use `startedAt` only.
   - One open timer per type is a client rule (lower `seq` wins a race).
 - `auth_tokens` (hashed session tokens, bound to a user_id)
@@ -377,7 +393,8 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
   one, so phones drop a mirror that belongs to another file)
 - `login_attempts` (ip, fails, window_start) — every attempt budget: per
   address (`<ip>`, `reg:<ip>`, `write:<ip>`, `fb:<ip>`, `spot:<ip>`) and per target
-  (`user:<name>`, `family:<name key>`); the key prefix picks the budget
+  (`user:<name>`, `family:<name key>`), the button presses (`dev:<ip>`); the
+  key prefix picks the budget
 - `feedback` (id, blob — a message sealed to the operator's inbox key,
   created_at DATE, read_at DATE) — no sender column; inside the blob `{v: 2,
   kind: idea | bug | other, text, from: {username, familyName, displayName?}
@@ -389,6 +406,12 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
   places parents report on the map, in the clear (public map data), no
   sender column. `settings.spots_version` counts changes to the approved
   rows and travels on the sync page
+- `devices` (id, family_id, token_hash — SHA-256 of the device's token —,
+  created_at DATE) — the family's button devices; no name, no key (both
+  live inside the encrypted `device` entry)
+- `device_events` (id, device_id, family_id, blob — a press sealed on the
+  device —, created_at DATE) — a mailbox: deleted once a phone has made
+  the entry
 
 One baby only — no `babies` table until reality demands it.
 
@@ -418,6 +441,13 @@ One baby only — no `babies` table until reality demands it.
   `PATCH /spots/:id {approve?, name?, note?, kinds?}`, `DELETE /spots/:id`
   (reject or withdraw, for good). Sync pages carry `spots` (the version)
   with an operator configured and, for the operator, `spotsPending`
+- button devices: `POST /devices` → `{id, token, createdAt}` (the token
+  once; 507 past 10 per family), `DELETE /devices/:id` (kills the token,
+  drops its waiting presses), `DELETE /devices/events/:id` (a press a phone
+  has made the entry of); without a cookie, the device's own request:
+  `POST /devices/events {token, blob}` (`dev:<ip>` 60 / hour, 200 waiting
+  per family, 404 for an unknown or removed token). Sync pages carry
+  `deviceEvents` while presses wait
 - `GET /art/<name>`: private artwork. The repo ships its own icon set
   (`public/img/`, drawn by `scripts/make-icons.mjs`); an installation may keep
   other pictures in the gitignored `private-art/` and name ONE family

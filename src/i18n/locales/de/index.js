@@ -14,5 +14,6 @@ import api from './api.js';
 import feedback from './feedback.js';
 import map from './map.js';
 import spots from './spots.js';
+import devices from './devices.js';
 
-export default buildLocale(meta, { common, shell, home, history, more, login, authInfo, howto, forms, errors, api, feedback, map, spots });
+export default buildLocale(meta, { common, shell, home, history, more, login, authInfo, howto, forms, errors, api, feedback, map, spots, devices });

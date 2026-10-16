@@ -3,7 +3,7 @@
  * Database setup: opens data/baby.db (WAL when the host allows it), creates
  * the schema and migrates an older file in place.
  *
- * Schema v6 — nothing here describes the baby:
+ * Schema v7 — nothing here describes the baby:
  *   families, users  bcrypt of client-derived auth values, the KDF parameters
  *                and the wrapped Family Data Key (plus a recovery hash per
  *                family and an encrypted profile per user).
@@ -27,6 +27,13 @@
  *                nothing about a baby — plus pending/approved and two
  *                day-granular dates. No column for who reported it — on
  *                purpose, like feedback.
+ *   devices      the family's physical buttons (lib/devices.php): the
+ *                family, the sha256 of the device's token and a day — no
+ *                name (that lives inside an encrypted entry of type
+ *                `device`, with the key the device seals its presses with).
+ *   device_events  the presses waiting for a phone: the device, the family,
+ *                the sealed blob and a day — no column for what was pressed
+ *                or when. Deleted once a phone has made the entry.
  * One open timer per type is a client rule: no partial unique index.
  *
  * Migration (bt_create_or_migrate): the version is detected STRUCTURALLY,
@@ -42,16 +49,17 @@
  * no public release can read it. Up-to-date databases take a fast path of two
  * reads and never write per request.
  *
- * v4 -> v5 only added the feedback table, v5 -> v6 only the spots table
- * (bt_migrate_v4_to_v5, bt_migrate_v5_to_v6: CREATE IF NOT EXISTS): an older
+ * v4 -> v5 only added the feedback table, v5 -> v6 only the spots table,
+ * v6 -> v7 only the two device tables (bt_migrate_v4_to_v5,
+ * bt_migrate_v5_to_v6, bt_migrate_v6_to_v7: CREATE IF NOT EXISTS): an older
  * file is detected by that table missing, in the fast path's check as in
  * the re-check under the lock. An older release opens a newer file unchanged
  * (its stamp check passes, it never reads the table it does not know).
  *
- * Future DDL changes (v7): bump BT_SCHEMA_VERSION, add a bt_migrate_v6_to_v7()
- * with idempotent steps, detect v6 structurally (a column or table that v7
+ * Future DDL changes (v8): bump BT_SCHEMA_VERSION, add a bt_migrate_v7_to_v8()
+ * with idempotent steps, detect v7 structurally (a column or table that v8
  * introduces) in BOTH the pre-check and the re-check under the lock in
- * bt_create_or_migrate, and call it after bt_migrate_v5_to_v6, before
+ * bt_create_or_migrate, and call it after bt_migrate_v6_to_v7, before
  * bt_create_schema.
  *
  * The db path defaults to <app root>/data/baby.db (app root = parent of api/)
@@ -65,7 +73,7 @@
 
 require_once __DIR__ . '/http.php';
 
-const BT_SCHEMA_VERSION = 6;
+const BT_SCHEMA_VERSION = 7;
 
 /** App root = parent directory of api/. */
 function bt_app_root(): string
@@ -180,8 +188,8 @@ function bt_schema_version(PDO $pdo): int
 }
 
 /**
- * Ensure the v6 schema exists, migrating a v3, v4 or v5 database in place first.
- * Up-to-date databases return after three cheap reads (no write per request).
+ * Ensure the v7 schema exists, migrating a v3, v4, v5 or v6 database in place
+ * first. Up-to-date databases return after a few cheap reads (no write per request).
  */
 function bt_create_or_migrate(PDO $pdo, string $dbPath): void
 {
@@ -189,7 +197,7 @@ function bt_create_or_migrate(PDO $pdo, string $dbPath): void
     $columns = bt_entries_columns($pdo);
     bt_assert_not_pre_v3($columns);
     $isV3 = bt_entries_is_v3($columns);
-    if ($columns !== [] && !$isV3 && bt_schema_version($pdo) >= BT_SCHEMA_VERSION && bt_table_exists($pdo, 'feedback') && bt_table_exists($pdo, 'spots')) {
+    if ($columns !== [] && !$isV3 && bt_schema_version($pdo) >= BT_SCHEMA_VERSION && bt_table_exists($pdo, 'feedback') && bt_table_exists($pdo, 'spots') && bt_table_exists($pdo, 'devices')) {
         return;
     }
     if ($isV3) {
@@ -210,6 +218,9 @@ function bt_create_or_migrate(PDO $pdo, string $dbPath): void
         }
         if ($columns !== [] && !bt_table_exists($pdo, 'spots')) {
             bt_migrate_v5_to_v6($pdo);
+        }
+        if ($columns !== [] && !bt_table_exists($pdo, 'devices')) {
+            bt_migrate_v6_to_v7($pdo);
         }
         bt_create_schema($pdo);
         $pdo->exec('COMMIT');
@@ -427,6 +438,41 @@ SQL);
 }
 
 /**
+ * v6 -> v7: the device tables. Idempotent, runs inside the caller's BEGIN
+ * IMMEDIATE; bt_create_schema creates the same tables on a fresh file.
+ */
+function bt_migrate_v6_to_v7(PDO $pdo): void
+{
+    bt_create_device_tables($pdo);
+    error_log('[baby-tracker] schema v6 -> v7: device tables added');
+}
+
+/**
+ * Physical buttons (lib/devices.php): a device is its family and the
+ * sha256 of its token; a press is the sealed blob a device sent, waiting
+ * for a phone of the family to turn it into an entry (then deleted). Dates
+ * are 'YYYY-MM-DD'. No index on the presses: the caps keep the table small.
+ */
+function bt_create_device_tables(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS devices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  family_id INTEGER NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS device_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id INTEGER NOT NULL,
+  family_id INTEGER NOT NULL,
+  blob TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+SQL);
+}
+
+/**
  * The schema (CREATE IF NOT EXISTS — also fills in the index on a migrated
  * DB), the per-install settings rows (INSERT OR IGNORE) and the version
  * stamp. Runs inside the caller's transaction.
@@ -478,6 +524,7 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('feed_id', lower(hex(randomb
 SQL);
     bt_create_feedback_table($pdo);
     bt_create_spots_table($pdo);
+    bt_create_device_tables($pdo);
     $pdo->prepare(
         "INSERT INTO settings (key, value) VALUES ('schema_version', ?)
            ON CONFLICT(key) DO UPDATE SET value = excluded.value"

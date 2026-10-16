@@ -29,7 +29,13 @@ export const SETTINGS_TYPE = 'settings';
 // home screen expands them into today's to-dos (reminders.js) and a tick
 // becomes a `task` entry that references the reminder and its due instant.
 export const REMINDER_TYPE = 'reminder';
-export const TYPES = [...EVENT_TYPES, SETTINGS_TYPE, REMINDER_TYPE];
+// … and the family's physical buttons («Taster», src/devices.js): one entry
+// of type `device` per registered device — its server id, a name and the
+// two secrets the device holds (the token the server knows as a hash, the
+// key the device seals its presses with, which the server never sees).
+// Not an event: the presses become ordinary entries on the phone.
+export const DEVICE_TYPE = 'device';
+export const TYPES = [...EVENT_TYPES, SETTINGS_TYPE, REMINDER_TYPE, DEVICE_TYPE];
 export const TIMER_TYPES = ['breastfeed', 'sleep'];
 export const FEED_TYPES = ['breastfeed', 'bottle'];
 
@@ -45,7 +51,14 @@ export const TYPE_LABELS = {
   get task() { return t('common.type.task'); },
   get settings() { return t('common.type.settings'); },
   get reminder() { return t('common.type.reminder'); },
+  get device() { return t('common.type.device'); },
 };
+
+// A device's name («Taster Wickeltisch»): shown in the list and as the
+// logger of the entries its presses make.
+export const DEVICE_NAME_MAX = 40;
+const HEX32_RE = /^[0-9a-f]{32}$/;
+const HEX64_RE = /^[0-9a-f]{64}$/;
 
 // Whom a reminder (and the task ticking it off) is for: the baby by default —
 // medication for a parent is the other everyday case.
@@ -310,6 +323,25 @@ export function validDetails(type, details) {
         out.startDate = details.startDate;
       }
       return out;
+    }
+    case DEVICE_TYPE: {
+      // A registered device: the server's id, a name, the token (32 hex)
+      // and the key (64 hex) as src/devices.js lays them into the code.
+      const id = details.id ?? null;
+      if (!isInt(id) || id < 1) {
+        throw fail(t('errors.validate.deviceId'));
+      }
+      const name = details.name;
+      if (typeof name !== 'string' || phpTrim(name) === '' || [...phpTrim(name)].length > DEVICE_NAME_MAX) {
+        throw fail(t('errors.validate.deviceName', { max: DEVICE_NAME_MAX }));
+      }
+      if (typeof details.token !== 'string' || !HEX32_RE.test(details.token)) {
+        throw fail(t('errors.validate.deviceToken'));
+      }
+      if (typeof details.key !== 'string' || !HEX64_RE.test(details.key)) {
+        throw fail(t('errors.validate.deviceKey'));
+      }
+      return { id, name: phpTrim(name), token: details.token, key: details.key };
     }
     case SETTINGS_TYPE: {
       // The family settings document. Every field is optional (a save

@@ -421,6 +421,7 @@ test('boot without a stored key ends locked; unlockWith makes it ready and syncs
     'familySettings',
     'reminders',
     'todos',
+    'devices',
     'today',
     'recentMedicationNames',
   ]);
@@ -2342,4 +2343,169 @@ test('spots: a parent reports a place without a name on the wire; the operator c
   await parent.store.setIdentity({ ...parent.prefs.user, username: 'mama' });
   assert.equal(parentStorage.getItem('bt.spots'), null);
   assert.equal(parent.store.spots.version, 0);
+});
+
+// --- physical buttons (store.devices) --------------------------------------------
+
+/** The device routes of api/lib/devices.php over the entries fake: registration, presses, the sync page's list. */
+function devicesApi(server, dv) {
+  const press = (path) => {
+    const m = /^api\/devices\/events\/(\d+)$/.exec(path);
+    if (!m) return null;
+    const row = dv.events.find((e) => e.id === Number(m[1]));
+    if (!row) throw httpError(404, 'Tastendruck nicht gefunden', 'devices.eventNotFound');
+    return row;
+  };
+  return {
+    ...server.api,
+    async get(path, opts) {
+      const page = await server.api.get(path, opts);
+      return dv.events.length ? { ...page, deviceEvents: dv.events.map((e) => ({ ...e })) } : page;
+    },
+    async post(path, body) {
+      if (path === 'api/devices') {
+        dv.registered.push(JSON.stringify(body));
+        const id = dv.devices.length + 1;
+        const token = randomEid();
+        dv.devices.push({ id, token });
+        return { id, token, createdAt: TODAY };
+      }
+      if (path === 'api/devices/events') {
+        // The device's own request (no cookie): the token names the device.
+        const device = dv.devices.find((d) => d.token === body.token);
+        if (!device) throw httpError(404, 'Taster nicht gefunden', 'devices.notFound');
+        dv.events.push({ id: ++dv.lastId, device: device.id, blob: body.blob, createdAt: TODAY });
+        return { ok: true };
+      }
+      return server.api.post(path, body);
+    },
+    async del(path, body) {
+      const row = press(path);
+      if (row) {
+        dv.events = dv.events.filter((e) => e !== row);
+        return { ok: true };
+      }
+      const m = /^api\/devices\/(\d+)$/.exec(path);
+      if (m) {
+        const id = Number(m[1]);
+        if (!dv.devices.some((d) => d.id === id)) throw httpError(404, 'Taster nicht gefunden', 'devices.notFound');
+        dv.devices = dv.devices.filter((d) => d.id !== id);
+        dv.events = dv.events.filter((e) => e.device !== id);
+        return { ok: true };
+      }
+      return server.api.del(path, body);
+    },
+  };
+}
+
+test('devices: a member registers one (the key never leaves the phone), the device presses, the first phone to sync makes the entry once — both phones, no duplicate', async () => {
+  const server = fakeServer();
+  const dv = { devices: [], events: [], registered: [], lastId: 0 };
+  const mama = await online(phone(server, { api: devicesApi(server, dv) }), FDK_RAW);
+  const papa = await online(phone(server, { api: devicesApi(server, dv), username: 'papa', displayName: 'Papa' }), FDK_RAW);
+  assert.deepEqual(mama.store.devices.list, []);
+
+  const dev = await mama.store.devices.add('  Wickeltisch ');
+  assert.equal(dev.type, 'device');
+  assert.equal(dev.details.name, 'Wickeltisch');
+  assert.equal(dev.details.id, 1);
+  assert.equal(dev.details.token, dv.devices[0].token);
+  assert.match(dev.details.key, /^[0-9a-f]{64}$/);
+  assert.deepEqual(dv.registered, ['{}'], 'the registration carries nothing');
+  assert.equal(JSON.stringify([...server.calls]).includes(dev.details.key), false, 'the key is never on the wire');
+  assert.deepEqual(mama.store.devices.list, [{ eid: dev.eid, id: 1, name: 'Wickeltisch', createdAt: NOW }]);
+  assert.equal(mama.store.devices.code(dev.eid), dev.details.token + dev.details.key);
+  assert.equal(mama.store.exportPlain().some((e) => e.type === 'device'), false, 'the export leaves the secrets out');
+
+  // The device presses (sealed with the key, posted with the token) — twice.
+  const { sealPress } = await import('../crypto.js');
+  // (the store's own press() is the Testdruck; a real device posts like this:)
+  const press = async (plain) => {
+    const blob = await sealPress(dev.details.key, plain);
+    dv.events.push({ id: ++dv.lastId, device: 1, blob, createdAt: TODAY });
+  };
+  await press({ v: 3, at: minus(5), type: 'diaper', details: { kind: 'poop' } });
+  await press({ v: 3, at: minus(2), type: 'diaper', details: { kind: 'pee' } });
+
+  // Papa syncs first: he has the device entry from the sync, opens both presses, writes the entries as the device, clears the presses.
+  await papa.store.refresh();
+  assert.deepEqual(papa.store.devices.list.map((d) => d.name), ['Wickeltisch']);
+  const diapers = papa.store.entries.range(TODAY, TODAY).filter((e) => e.type === 'diaper');
+  assert.equal(diapers.length, 2);
+  assert.deepEqual(diapers.map((e) => e.details.kind), ['pee', 'poop'], 'newest first');
+  assert.deepEqual(diapers.map((e) => e.loggedBy), ['Wickeltisch', 'Wickeltisch'], 'the device signs its entries');
+  assert.deepEqual(diapers.map((e) => e.startedAt), [minus(2), minus(5)], 'the press time, not the sync time');
+  assert.deepEqual(dv.events, [], 'cleared on the server');
+  assert.deepEqual(papa.toasts, []);
+  await papa.store.outbox.idle();
+  assert.equal([...server.rows.values()].filter((r) => r.deletedAt == null).length, 3, 'two diapers + the device entry');
+
+  // Mama syncs later: the entries come as rows, nothing is made twice.
+  await mama.store.refresh();
+  const mamaDiapers = mama.store.entries.range(TODAY, TODAY).filter((e) => e.type === 'diaper');
+  assert.deepEqual(mamaDiapers.map((e) => e.eid).sort(), diapers.map((e) => e.eid).sort());
+  assert.equal(mama.store.snapshot.data.today.diapers, 2);
+
+  // The eid is the same on both phones: a press both phones see at once lands exactly once.
+  await press({ v: 3, at: minus(1), type: 'diaper', details: { kind: 'both' } });
+  await Promise.all([mama.store.refresh(), papa.store.refresh()]);
+  await Promise.all([mama.store.outbox.idle(), papa.store.outbox.idle()]);
+  await Promise.all([mama.store.refresh(), papa.store.refresh()]);
+  assert.equal([...server.rows.values()].filter((r) => r.deletedAt == null).length, 4, 'one row for the shared press');
+  assert.equal(mama.store.snapshot.data.today.diapers, 3);
+  assert.equal(papa.store.snapshot.data.today.diapers, 3);
+  assert.deepEqual(dv.events, []);
+
+  // The Testdruck: the phone presses exactly like the device; the next sync makes the entry.
+  await mama.store.devices.press(dev.eid);
+  assert.equal(dv.events.length, 1);
+  assert.equal(server.calls.some((c) => c[0] === 'POST' && c[1] === 'api/devices/events'), false, 'the press went to the device route of the fake, not the entries fake');
+  await mama.store.refresh();
+  assert.equal(mama.store.snapshot.data.today.diapers, 4);
+  assert.deepEqual(dv.events, []);
+});
+
+test('devices: a press nobody can read, one with a wrong clock, one of a removed device — dropped with a notice, never retried; removing kills the token', async () => {
+  const server = fakeServer();
+  const dv = { devices: [], events: [], registered: [], lastId: 0 };
+  const mama = await online(phone(server, { api: devicesApi(server, dv) }), FDK_RAW);
+  const dev = await mama.store.devices.add('Taster');
+  const { sealPress, randomDeviceKey } = await import('../crypto.js');
+
+  dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(randomDeviceKey(), { v: 3, at: minus(1), type: 'diaper', details: { kind: 'pee' } }), createdAt: TODAY });
+  dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(dev.details.key, { v: 3, at: '1970-01-01T00:00:10Z', type: 'diaper', details: { kind: 'pee' } }), createdAt: TODAY });
+  dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(dev.details.key, { v: 3, at: minus(1), type: 'diaper', details: { kind: 'nope' } }), createdAt: TODAY });
+  dv.events.push({ id: ++dv.lastId, device: 9, blob: await sealPress(dev.details.key, { v: 3, at: minus(1), type: 'diaper', details: { kind: 'pee' } }), createdAt: TODAY });
+  await mama.store.refresh();
+  assert.equal(mama.store.snapshot.data.today.diapers, 0);
+  assert.deepEqual(dv.events, [], 'every press cleared: none comes back');
+  assert.deepEqual(mama.toasts, [
+    'Tastendruck von «Taster» verworfen: Entschlüsselung fehlgeschlagen',
+    'Tastendruck von «Taster» verworfen: Die Uhr des Tasters stimmt nicht',
+    'Tastendruck von «Taster» verworfen: "details.kind" muss "pee", "poop" oder "both" sein',
+    'Tastendruck eines unbekannten Tasters verworfen',
+  ]);
+
+  // A good press after the bad ones still lands.
+  dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(dev.details.key, { v: 3, at: minus(1), type: 'diaper', details: { kind: 'pee' } }), createdAt: TODAY });
+  await mama.store.refresh();
+  assert.equal(mama.store.snapshot.data.today.diapers, 1);
+
+  // A sleep press opens the timer; a second one is refused by the one-timer rule and dropped.
+  dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(dev.details.key, { v: 3, at: minus(1), type: 'sleep', details: {} }), createdAt: TODAY });
+  dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(dev.details.key, { v: 3, at: minus(1), type: 'sleep', details: {} }), createdAt: TODAY });
+  await mama.store.refresh();
+  assert.equal(mama.store.snapshot.data.openTimers.length, 1);
+  assert.equal(mama.toasts.at(-1), 'Tastendruck von «Taster» verworfen: Es läuft bereits ein Schlaf-Timer');
+
+  // Remove: the server row goes first (the token dies), then the entry.
+  await mama.store.devices.remove(dev.eid);
+  assert.deepEqual(dv.devices, []);
+  assert.deepEqual(mama.store.devices.list, []);
+  await mama.store.outbox.idle();
+  assert.equal(server.rows.get(dev.eid).deletedAt, TODAY);
+  assert.throws(() => mama.store.devices.code(dev.eid), /Eintrag nicht gefunden/);
+  await rejects(mama.store.devices.press(dev.eid), 'Eintrag nicht gefunden', 404);
+  // Removing twice: the server's 404 is fine, the entry is already a tombstone.
+  await rejects(mama.store.devices.remove(dev.eid), 'Eintrag nicht gefunden', 404);
 });

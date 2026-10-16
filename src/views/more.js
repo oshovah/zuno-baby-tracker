@@ -38,6 +38,7 @@ import { t, tn, availableLocales, getLocale, setLocale, localeMeta } from '../i1
 import { openWhatsNewSheet } from '../whats-new-sheet.js';
 import { openFeedbackForm, openFeedbackInbox } from '../feedback-sheet.js';
 import { openSpotsSheet } from '../spots-sheet.js';
+import { openDeviceSheet } from '../device-sheet.js';
 import { WHATS_NEW } from '../whats-new.js';
 
 // Labels are read when shown (getters), never at module load: the language
@@ -129,6 +130,27 @@ function reminderListHtml() {
         <span class="e-text">
           <span class="e-summary">${escapeHtml(r.title)}${r.note ? ` · ${escapeHtml(r.note)}` : ''}</span>
           <span class="e-by">${escapeHtml(reminderScheduleLabel(r))}</span>
+        </span>
+        <span class="e-chevron" aria-hidden="true">›</span>
+      </button>`
+    )
+    .join('');
+}
+
+/** The family's physical buttons (src/devices.js): a row per device, a tap opens the sheet. */
+function deviceListHtml() {
+  const list = store.devices.list;
+  if (list.length === 0) {
+    return `<p class="hint">${t('devices.section.empty')}</p>`;
+  }
+  return list
+    .map(
+      (d) => `
+      <button type="button" class="entry-row reminder-row" data-device="${d.eid}">
+        ${icon('bolt', 'e-emoji')}
+        <span class="e-text">
+          <span class="e-summary">${escapeHtml(d.name)}</span>
+          <span class="e-by">${escapeHtml(t('devices.section.since', { day: fmtDayHeading(localDateOf(d.createdAt)) }))} · ${escapeHtml(t('devices.section.open'))}</span>
         </span>
         <span class="e-chevron" aria-hidden="true">›</span>
       </button>`
@@ -494,6 +516,11 @@ export function renderMore(el) {
       </label>
       <p class="hint">${t('more.interval.hint')}</p>
 
+      <h2 class="section-title">${t('devices.section.title')}</h2>
+      <p class="hint">${t('devices.section.hint')}</p>
+      <div class="reminder-list" data-device-list>${deviceListHtml()}</div>
+      <button type="button" class="btn wide" data-add-device>${t('devices.section.add')}</button>
+
       <p class="group-label">${t('more.settings.deviceGroup')}</p>
 
       <h2 class="section-title">${t('more.homeCard.title')}</h2>
@@ -756,6 +783,32 @@ export function renderMore(el) {
       setHomeCard('reminders');
     });
 
+    // --- physical buttons: the list follows the store (the partner may add
+    //     one); a row opens the sheet with the code, «Taster hinzufügen»
+    //     the form ---
+    const deviceList = el.querySelector('[data-device-list]');
+    function syncDevices() {
+      const html = deviceListHtml();
+      if (deviceList.innerHTML !== html) deviceList.innerHTML = html;
+    }
+    const afterDeviceWrite = () => store.refreshAfterWrite().catch(() => {});
+    deviceList.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-device]');
+      if (!row) return;
+      if (store.keyState !== 'ready') {
+        toast(t('more.error.locked'));
+        return;
+      }
+      openDeviceSheet({ eid: row.dataset.device, onChanged: afterDeviceWrite });
+    });
+    el.querySelector('[data-add-device]').addEventListener('click', () => {
+      if (store.keyState !== 'ready') {
+        toast(t('more.error.locked'));
+        return;
+      }
+      openDeviceSheet({ onChanged: afterDeviceWrite });
+    });
+
     // --- encryption status: follows the store (sync, writes) ---
     const cryptoNode = el.querySelector('[data-crypto]');
     if (unsubscribe) unsubscribe();
@@ -765,6 +818,7 @@ export function renderMore(el) {
       if (cryptoNode.innerHTML !== html) cryptoNode.innerHTML = html;
       syncFamilyInputs();
       syncReminders();
+      syncDevices();
       syncFeedback();
     });
 

@@ -33,6 +33,11 @@ export default {
   'validate.mealsPerDay': '"details.mealsPerDay" muss eine Anzahl Mahlzeiten sein (1–12) oder leer',
   'validate.breastfeeding': '"details.breastfeeding" muss true oder false sein',
   'validate.nursingMl': '"details.nursingMl" muss eine Menge in ml sein (1–1000) oder leer',
+  'validate.deviceId': '"details.id" muss die Nummer des Tasters sein',
+  'validate.deviceName': '"details.name" muss ein Name sein (max. {max} Zeichen)',
+  'validate.deviceToken': '"details.token" muss der Taster-Code sein (32 Hex-Zeichen)',
+  'validate.deviceKey': '"details.key" muss der Taster-Schlüssel sein (64 Hex-Zeichen)',
+  'validate.deviceCode': 'Der Taster-Code hat 96 Hex-Zeichen',
   'validate.unknownType': 'Unbekannter Typ',
   'validate.type': '"type" muss einer der bekannten Eintragstypen sein',
   'validate.noEnd': 'Dieser Eintragstyp hat kein Ende – nur Stillen und Schlaf',
@@ -90,4 +95,10 @@ export default {
   'store.outboxDropped': 'Nicht übernommen: {type} wurde auf dem anderen Handy inzwischen beendet oder geändert',
   'store.outboxGone': 'Nicht übernommen: {type} wurde auf dem anderen Handy inzwischen gelöscht',
   'store.outboxParked': 'Nicht gesendet: der Server hat {type} abgelehnt – siehe «Jetzt», nicht gesendete Einträge',
+  // Physical buttons (src/devices.js): why a press could not become an entry
+  'devices.pressVersion': 'Unbekanntes Format des Tastendrucks',
+  'devices.pressType': 'Der Taster meldet einen unbekannten Eintragstyp',
+  'devices.pressTime': 'Die Uhr des Tasters stimmt nicht',
+  'devices.pressUnknown': 'Tastendruck eines unbekannten Tasters verworfen',
+  'devices.pressDropped': 'Tastendruck von «{name}» verworfen: {reason}',
 };

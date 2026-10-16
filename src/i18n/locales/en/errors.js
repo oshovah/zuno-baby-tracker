@@ -33,6 +33,11 @@ export default {
   'validate.mealsPerDay': '"details.mealsPerDay" must be a number of meals (1–12) or empty',
   'validate.breastfeeding': '"details.breastfeeding" must be true or false',
   'validate.nursingMl': '"details.nursingMl" must be an amount in ml (1–1000) or empty',
+  'validate.deviceId': '"details.id" must be the device\'s number',
+  'validate.deviceName': '"details.name" must be a name (max. {max} characters)',
+  'validate.deviceToken': '"details.token" must be the device token (32 hex characters)',
+  'validate.deviceKey': '"details.key" must be the device key (64 hex characters)',
+  'validate.deviceCode': 'A device code has 96 hex characters',
   'validate.unknownType': 'Unknown type',
   'validate.type': '"type" must be one of the known entry types',
   'validate.noEnd': 'This entry type has no end – only Nursing and Sleep',
@@ -90,4 +95,10 @@ export default {
   'store.outboxDropped': 'Not applied: {type} was ended or changed on the other phone meanwhile',
   'store.outboxGone': 'Not applied: {type} was deleted on the other phone meanwhile',
   'store.outboxParked': 'Not sent: the server refused {type} – see "Now", entries not sent',
+  // Physical buttons (src/devices.js): why a press could not become an entry
+  'devices.pressVersion': 'Unknown format of the button press',
+  'devices.pressType': 'The device reports an unknown entry type',
+  'devices.pressTime': 'The device\'s clock is wrong',
+  'devices.pressUnknown': 'Press of an unknown device dropped',
+  'devices.pressDropped': 'Press from "{name}" dropped: {reason}',
 };

@@ -100,7 +100,7 @@ function fake_eid(): string
 function empty_db(): PDO
 {
     $pdo = bt_db(['db_path' => $GLOBALS['__bt_db_file']]);
-    foreach (['entries', 'auth_tokens', 'login_attempts', 'users', 'families', 'feedback', 'spots', 'sqlite_sequence'] as $table) {
+    foreach (['entries', 'auth_tokens', 'login_attempts', 'users', 'families', 'feedback', 'spots', 'devices', 'device_events', 'sqlite_sequence'] as $table) {
         $pdo->exec("DELETE FROM $table");
     }
     $pdo->exec("DELETE FROM settings WHERE key IN ('feedback_pub', 'feedback_priv', 'spots_version')");
