@@ -1,7 +1,7 @@
 // The map's area and its data sources — ONE place for the two build-time
 // scripts (scripts/map-data.mjs fetches the places, scripts/map-basemap.mjs
 // extracts the basemap): both must cover the same box, or the places would
-// sit on a blank background. README › «Karte» and «Hosting somewhere else?»:
+// sit on a blank background. README › «Map» and «Hosting somewhere else?»:
 // change the box here, then run both scripts again.
 
 /** Switzerland and Liechtenstein with a margin for the border towns parents

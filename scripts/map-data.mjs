@@ -23,7 +23,7 @@
  * added (an own point). The run prints the verdicts.
  *
  * The data is © OpenStreetMap contributors, ODbL — the map shows the
- * attribution; README › «Karte» has the licence note.
+ * attribution; README › «Map» has the licence note.
  */
 
 import fs from 'node:fs';

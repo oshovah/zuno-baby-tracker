@@ -1,5 +1,5 @@
 # Places for the «Karte» tab that OpenStreetMap does not know (yet), and what a
-# place OSM knows still lacks there (the table, a place to nurse) — README › Karte.
+# place OSM knows still lacks there (the table, a place to nurse) — README › Map.
 # One row per place. Every column except id/use/feature/lat/lon/source/checked/note is
 # an OSM tag (an empty cell = not set); `feature` says what the place is (amenity=toilets,
 # shop=department_store …) and is a tag too. `npm run map:data` lays each row with

@@ -279,7 +279,7 @@ log(`copied api/ -> deploy/api/ (${apiCount} files, excluded tests/ and dev conf
 {
   const poisFile = path.join(deployDir, 'map', 'pois.json');
   if (!fs.existsSync(poisFile)) {
-    fail('no public/map/pois.json — run "npm run map:data" first (the places of the «Karte» tab, README › Karte)');
+    fail('no public/map/pois.json — run "npm run map:data" first (the places of the «Karte» tab, README › Map)');
   }
   let fc = null;
   try {

@@ -11,12 +11,43 @@ map's — Leaflet, protomaps-leaflet and pmtiles, bundled from npm, nothing
 from a CDN), the server a tiny PHP 7.4+ API over SQLite that runs on cheap
 shared hosting. The «Karte» tab shows changing tables and nursing places
 from OpenStreetMap — and the places parents report in the app, checked by
-the operator — on a map this server hosts itself (see «Karte» below). The UI ships
-in German (Swiss flavour, the source language) and English.
+the operator — on a map this server hosts itself (see «Map» below). The UI
+ships in German (Swiss flavour, the source language) and English.
 
 This repository is public so that anyone can check the privacy claims the app
-makes. The operator documentation further down is in German; the product spec
-([SPEC.md](SPEC.md)) and all code and comments are in English.
+makes. The product decisions are in [SPEC.md](SPEC.md); code, comments and
+this documentation are in English, the UI labels quoted here are the German
+ones the app shows.
+
+## At a glance
+
+- **Frontend:** vanilla JS + Vite, mobile-first, installable as a home-screen
+  app (manifest + service worker; the shell opens at once even on a bad
+  connection).
+- **Backend:** PHP 7.4+ (`api/`), SQLite (WAL). Accounts live in families:
+  every person has their own login (username + password) and a display
+  name (Mama / Papa / …), every family a name and a family password that
+  serves only to join and expires with every join (a member sets a new one
+  to invite the next person). Entries belong to the family — one
+  installation can host several families that never see each other.
+  Sessions are database tokens in a six-month cookie.
+- **End-to-end encrypted:** every entry (kind, times, amounts, names) is
+  encrypted on the phone with a random family key. The server stores
+  usernames, family names, wrapped keys and the encrypted records — and can
+  read none of it. The one exception is the places parents report on the
+  map: public map data in the clear, with no link to an account (see «Map»).
+  Passwords never leave the phone (the server sees a derived value), so
+  there is no password reset by the operator — see «Keys and recovery».
+- **Sync:** the server is the source of truth for the encrypted records;
+  every phone keeps a decrypted copy in memory and computes the «Jetzt»
+  screen itself. The app syncs in the foreground (~60 s) and on focus;
+  running timers live in the records and can be stopped from the other
+  phone (a stale stop is refused).
+- **Without network:** logging still works — the entry is stored encrypted
+  on the phone («wartet auf Netz»), shown at once and sent as soon as Zuno
+  is open and the network is back. If the other phone ended, changed or
+  deleted the same entry meanwhile, that version wins and the phone says
+  so. Sending happens only while the app is open.
 
 ## Security model — what the server can and cannot see
 
@@ -96,17 +127,31 @@ Found a hole? See [SECURITY.md](SECURITY.md).
 
 ## Run it yourself
 
-Requirements: Node 20+ and PHP ≥ 7.4 with `pdo_sqlite` on the PATH.
+Requirements: Node 20+ **and PHP ≥ 7.4 with `pdo_sqlite` on the PATH** — the
+dev server and `npm test` call the `php` CLI. Without PHP, Vite still starts
+and every API request ends in «Keine Verbindung zum Server».
 
 ```bash
 npm install
 npm run dev     # PHP API on :8788 + Vite on :5173 (proxies /api)
-npm test        # PHP API tests + node tests of the crypto / model modules
+npm test        # PHP API tests (api/tests/*.test.php) + node tests (src/tests/)
 ```
 
-There is no default account: open the app and register. To deploy, copy
-`.env.example` to `.env`, fill in the `DEPLOY_*` values and run
-`npm run package` / `npm run deploy` — any host with PHP and Apache-style
+There is no dev password: on the first open choose «Neues Konto erstellen» —
+username, password (8 characters or more), display name, family and family
+password. An unknown family name creates the family (and shows the recovery
+code once); a known name needs the right family password, then the account
+joins — and that family password expires with the join (a member sets a new
+one under «Mehr › Konto» when someone else is to join). The database is
+created automatically at `data/baby.db`.
+
+On a phone in the LAN, `crypto.subtle` only works over HTTPS
+(`http://192.168…` is no secure context): to test on the device, give the
+dev server a certificate (for example `@vitejs/plugin-basic-ssl`) or let the
+phone reach `localhost` through USB port forwarding.
+
+To deploy, copy `.env.example` to `.env`, fill in the `DEPLOY_*` values and
+run `npm run package` / `npm run deploy` — any host with PHP and Apache-style
 `.htaccess` will do; the details are under «Deployment» below. Contributor
 guides: designs in [`src/themes/README.md`](src/themes/README.md), languages
 in [`src/i18n/locales/README.md`](src/i18n/locales/README.md).
@@ -126,13 +171,244 @@ people, the AGPL asks you to offer them *your* source — point it there.
 The map is yours as well: its places and tiles are cut from OpenStreetMap on
 your machine (`npm run map:data`, `npm run map:basemap`; the area is
 `BBOX` in [`scripts/lib/map-config.mjs`](scripts/lib/map-config.mjs)) and
-uploaded once with `npm run deploy:basemap` — see «Karte» in the German part.
+uploaded once with `npm run deploy:basemap` — see «Map».
 
 The pictures in the login page's slider are the real app with invented data,
 taken by `npm run screenshots` ([`scripts/make-screenshots.mjs`](scripts/make-screenshots.mjs):
 a scratch database, headless Chrome, a week of a newborn written through the
 app's own code — needs Chrome, PHP and Node 22+). Re-run it after a change
 to one of the screens it shows.
+
+## Keys and recovery
+
+Three things open a family's entries — the server has none of them:
+
+1. **Your own password.** At login it unwraps the family key for this
+   device — on a new phone too; a member never needs the family password
+   for that. Forgotten? Register with a **new username** and join again —
+   with the recovery code, or with a family password the other person sets
+   anew beforehand; every entry stays, the old account stays unused.
+2. **The family password.** Needed only to join, and a one-time key: with
+   the join, the joining phone replaces it with random values nobody knows
+   (`rotateFamily` in the registration), so a guessed or passed-on family
+   password opens nothing after the join. Someone else to join? Every
+   logged-in member sets a new one under «Mehr › Konto» (confirmed with
+   their own password) and passes it on; whoever is in stays logged in.
+3. **The recovery code.** The raw family key (43 characters), shown once
+   when the family is created and under «Mehr › Konto» after entering your
+   own password. With it you create a new account in the family without any
+   password («Mit Wiederherstellungscode» on the login screen). Write it
+   down.
+
+Lose all three with no device logged in, and the data is gone — the price
+of the encryption. The reserve: **«Daten exportieren»** under «Mehr › Konto»
+writes every entry decrypted into a JSON file; store one somewhere safe now
+and then.
+
+An offline export from a database file (a backup, say) works with the
+recovery code or a currently set family password (the old one expires with
+every join — set a new one under «Mehr › Konto» first), without a server
+(needs the `sqlite3` command line on the PATH; `--family <name>` when the
+file holds several families; deleted entries are left out):
+
+```bash
+node scripts/export-plain.mjs data/baby.db > export.json
+node scripts/export-plain.mjs data/baby.db --recovery-code > export.json
+```
+
+No admin panel, no e-mail: the operator can delete accounts in the database
+but set no password and read no entry (see «Managing accounts by hand»). In
+the app the operator's account only reviews what parents send it: feedback
+and reported places for the map.
+
+## Deployment
+
+Once: copy `.env.example` to `.env` and fill in the `DEPLOY_*` credentials.
+
+```bash
+npm run map:data  # fetch the map's places (Overpass) – before packaging, see «Map»
+npm run package   # build + assemble deploy/
+npm run preview   # test deploy/ locally: http://127.0.0.1:8081 (also under /baby/)
+npm run deploy    # upload deploy/ (rsync / sftp / ftp as set in .env)
+
+npm run map:basemap -- --build YYYYMMDD   # cut the basemap (once per build)
+npm run deploy:basemap                    # … and upload it (once; never with the app)
+npm run deploy:beta                       # the same to a second installation (.env.beta)
+```
+
+- **Map:** `npm run map:data` before packaging (without `public/map/pois.json`
+  the package step aborts); the basemap archive (`basemap/`, ~570 MB) goes up
+  separately once per build — `npm run deploy:basemap` uploads the archive
+  first, then `index.json`, then checks that the server serves byte ranges
+  (206). The first time: archive first, then the app.
+- **A second installation (a test server):** `.env.beta` next to `.env` with
+  its own `DEPLOY_PATH` and `DEPLOY_URL` (no `DEPLOY_DB_PATH` — the database
+  then lives in that docroot); `npm run deploy:beta` and
+  `npm run deploy:basemap:beta` use that file.
+- Re-deploys **never** touch the remote `data/` — the database on the server
+  stays.
+- Health check: after the upload `deploy.mjs` calls `<DEPLOY_URL>/api/me`.
+  That is the first request after the upload, and it runs any pending
+  database migration (200 = done, 500 = rolled back, the file untouched; the
+  reason is in the PHP error log). Before the v3 → v4 migration the API
+  writes one copy next to the database (`baby.db.v3.bak`) — delete it after
+  a few quiet days.
+- The packaged `.htaccess` sets a Content-Security-Policy (own scripts
+  only): with encryption in the browser, injected JavaScript is the last
+  remaining attack path. Plus `nosniff`, `Referrer-Policy: same-origin` and
+  HSTS.
+- **The database outside the docroot** (optional, recommended): by default it
+  lives at `<docroot>/data/baby.db`, protected by two `.htaccess` rules.
+  `DEPLOY_DB_PATH` in `.env` writes another location into the packaged
+  `api/config.php`, and nothing hangs on `.htaccess` any more: absolute, or
+  relative to the docroot with `../` (for example `../baby-data/baby.db` —
+  on shared hosting the absolute path is often unknown). Keep the order —
+  at a missing path the API creates an **empty** database (a new feed id,
+  no accounts: every phone would be logged out):
+  1. At a quiet moment (at night, no timer open) create a directory next to
+     the docroot in the hoster's file manager or over FTP (say `baby-data`,
+     writable for the web server) and **move** `baby.db`, `baby.db-wal` and
+     `baby.db-shm` there (move, not copy; all three).
+  2. Set `DEPLOY_DB_PATH=../baby-data/baby.db` in `.env`, `npm run package`,
+     `npm run deploy` — the health check `/api/me` must answer 200; then sync
+     once on a phone.
+  3. The empty `data/` in the docroot may stay (only the deny stub is in it).
+  Back: move the files back, clear the variable, deploy again.
+
+## Schema migrations
+
+The schema is versioned (`settings.schema_version`) and detected
+structurally; a migration runs inside the first request after a deploy, in
+one transaction, and an older release opens a newer file unchanged (it never
+reads the tables it does not know).
+
+**v3 → v4.** Schema v3 still had five `legacy_*` columns in `entries`: entries
+from before the encryption lay there in plaintext until a phone of the
+family had encrypted them. v4 drops those columns together with the code
+that read them — since then the API has no place that takes or returns an
+entry's content. Entries, accounts, sessions and the phones' sync cursors
+stay as they are. A v3 file that still holds a **live** plaintext entry (or
+one without a family) is **refused** and left untouched: the health check
+reports 500, the reason is in the error log. Then deploy the last v3
+release again, let a phone of the family finish encrypting, and deploy
+anew. To check beforehand on the server (`sqlite3 data/baby.db`) — the
+result must be 0:
+
+```sql
+SELECT COUNT(*) FROM entries WHERE deleted_at IS NULL AND (family_id IS NULL
+  OR legacy_type IS NOT NULL OR legacy_started_at IS NOT NULL OR legacy_ended_at IS NOT NULL
+  OR legacy_details IS NOT NULL OR legacy_logged_by IS NOT NULL);
+```
+
+**v4 → v5** only adds the table `feedback` (id, blob, created_at as a date,
+read_at) — no column for the sender, the account or the family.
+**v5 → v6** only adds the table `spots` (id, status, lat, lon, kinds, name,
+note, created_at and decided_at as dates) — the places parents report on
+the map, no column for who reported them; plus, at the first approval, the
+counter `settings.spots_version`. **v6 → v7** only adds the tables `devices`
+(id, family_id, token_hash, created_at as a date) and `device_events` (id,
+device_id, family_id, blob, created_at as a date) — the analog buttons and
+their sealed presses, no column for a name, a key or what was pressed. None
+of these three touches another table or needs a backup copy, and no phone
+re-syncs.
+
+## Managing accounts by hand
+
+Directly in the SQLite file (`sqlite3 data/baby.db`, on the server over
+SSH). Passwords and entries can **not** be read or set here — the hashes
+belong to derived values, the records are encrypted.
+
+```sql
+SELECT id, username, family_id, created_at FROM users;
+SELECT id, name, name_key, created_at FROM families;     -- name_key = the lowercased name
+SELECT family_id, COUNT(*) FROM entries GROUP BY family_id;
+```
+
+Remove an account (an old one forgotten after a recovery, say) or log it
+out everywhere:
+
+```sql
+DELETE FROM auth_tokens WHERE user_id = <id>;
+DELETE FROM users WHERE id = <id>;
+```
+
+Delete a whole family (irreversible):
+
+```sql
+DELETE FROM entries WHERE family_id = <id>;
+DELETE FROM auth_tokens WHERE user_id IN (SELECT id FROM users WHERE family_id = <id>);
+DELETE FROM users WHERE family_id = <id>;
+DELETE FROM families WHERE id = <id>;
+VACUUM;
+```
+
+Users can **not** be moved to another family (their wrapped key belongs to
+the old one) — register anew and join instead.
+
+## API (quick reference)
+
+Every endpoint lives under `/api`, JSON in and out, errors as
+`{"error": "…", "code": "…"}`. `POST`, `PATCH` and a `DELETE` with a body
+require `Content-Type: application/json` (415 otherwise); every response is
+`Cache-Control: no-store`. Login, registration and every password
+confirmation are throttled per IP (10 attempts / 15 min → 429) and
+additionally per target — username or family name — from any number of
+addresses (20 / hour). Entry writes are limited to 300 / 15 min per IP
+(429), and new entries stop at 50 000 rows per family or 400 000 in total
+(507; deleted entries count, they stay as tombstones) — registration is
+open, and without these limits a stranger's account could fill the disk.
+Feedback messages have a budget of their own (10 / hour per IP) and their
+own cap (2000), so have reported places (10 / hour per IP; 200 open, 5000
+rows) and the presses of analog buttons (60 / hour per IP; 200 unprocessed
+per family, 10 devices per family). «Operator» = the account named in
+`ADMIN_USERNAME`; everyone else gets the same 404 on those routes. The
+client never sends a password, only an `authKey` derived from it (PBKDF2 +
+HKDF); keys and records are base64url blobs.
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/me` | – | `{authenticated, user}` — `user` = `{username, familyId, familyName, profileBlob}` (also the health check) |
+| `GET /api/auth/params?username=` | – | `{kdf: {salt, iter}}` to derive the login value (a stable fake for unknown names) |
+| `GET /api/families/check?name=` | – | `{exists, name, kdf}` — does the family exist already? |
+| `POST /api/families/unlock` | – | `{familyName, familyAuthKey \| recoveryAuthKey}` → `{kdf, fdkWrapped}` (the family-wrapped key, only after verification) |
+| `POST /api/register` | – | `familyMode: create` (with all key material) or `join` (with `rotateFamily`: new family credentials that replace the family password in the same step) → 201 `{ok, user, familyCreated, familyClosed}` + cookie |
+| `POST /api/login` | – | `{username, authKey}` → `{ok, user, kdf, fdkWrappedUser}` + cookie |
+| `POST /api/logout` | – | revoke the token |
+| `POST /api/me/keys/unlock` | ✓ | `{authKey}` → `{kdf, fdkWrappedUser}` (a device without the key) |
+| `PATCH /api/me` | ✓ | `{profileBlob}` (the encrypted display name) |
+| `PATCH /api/me/password` | ✓ | `{currentAuthKey, authKey, kdf, fdkWrappedUser}` — logs the other devices out |
+| `PATCH /api/families/password` | ✓ | `{currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily}` |
+| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — pages from `seq`, tombstones included; `reset: true` when the cursor is ahead of the database; a changed `feed` (another database file) makes the client start over too. Plus `feedback: true` when a feedback inbox exists and, for the operator's account only, `feedbackUnread`; with an operator configured `spots` (the version of the approved places) and, operator only, `spotsPending`; `deviceEvents` while presses of the family's analog buttons wait for a phone |
+| `POST /api/entries` | ✓ | `{eid, blob}` → the row (507 at the family's or the database's row cap) |
+| `PATCH /api/entries/:eid` | ✓ | `{blob, ifSeq}` → the row (409 when another device got there first) |
+| `DELETE /api/entries/:eid` | ✓ | soft delete; an optional JSON body `{ifSeq}` makes it conditional (409 when another device got there first) |
+| `POST /api/entries/:eid/restore` | ✓ | undo a soft delete |
+| `GET /api/feedback/key` | ✓ | `{publicKey}` — the inbox's public key (404 while feedback is off or not set up) |
+| `POST /api/feedback` | ✓ | `{blob}` → 201 — a sealed message, stored without a sender (413 too long, 429 after 10 / hour per address, 507 at 2000 messages) |
+| `POST /api/feedback/key` | operator | `{publicKey, privateSealed}` — sets the inbox up once (409 afterwards) |
+| `GET /api/feedback?before=` | operator | `{publicKey, privateSealed, items, next, unread}` — newest first, 100 per page |
+| `PATCH /api/feedback/:id` · `DELETE /api/feedback/:id` | operator | `{read}` read / unread · delete for good |
+| `GET /api/stats` | operator | usage numbers: `{asOf, families, familiesActive7, familiesActive30, accounts, accountsNew30, entries, entriesNew7}` — counts only |
+| `POST /api/spots` | ✓ | `{lat, lon, kinds, name?, note?}` → 201 — a reported place, pending until reviewed; stored without a sender (400 invalid, 429 after 10 / hour per address, 507 at 200 open or 5000 rows; 404 while no operator is configured) |
+| `GET /api/spots` | ✓ | `{version, items}` — the approved places every phone lays over its map |
+| `GET /api/spots/pending` | operator | `{items}` — the open reports, oldest first |
+| `PATCH /api/spots/:id` · `DELETE /api/spots/:id` | operator | `{approve?, name?, note?, kinds?}` correct and/or approve · reject or withdraw (for good) |
+| `POST /api/devices` | ✓ | → 201 `{id, token, createdAt}` — a device (analog buttons) of the family; the token is shown once and stored only as a hash (507 from 10 per family) |
+| `DELETE /api/devices/:id` | ✓ | remove a device: the token stops working at once, waiting presses go with it |
+| `POST /api/devices/events` | – | `{token, blob}` → 201 — a sealed press of the device (no cookie; 404 for an unknown token, 429 after 60 / hour per address, 507 at 200 unprocessed presses of the family) |
+| `DELETE /api/devices/events/:id` | ✓ | a press the phone has turned into an entry |
+| `GET /api/art/k/<key>/<name>` | – | the same pictures and `manifest.webmanifest` through the installation's random key (only the members of that family get it, as `artKey` in the sync) — for what the browser fetches without a session: the install icon. Wrong key, unknown name, feature off: the same 404 |
+| `GET /api/art/<name>` | (✓) | private artwork (`image/png`) for the members of the family named in `PRIVATE_ART_FAMILY` — the same 404 for everyone else, logged in or not (see «Private artwork») |
+
+Foreign `eid`s → 404. The entry types in the blob's plaintext: `breastfeed
+{side, paused?}`, `bottle {amount_ml, colostrum_ml?}`, `diaper {kind}`,
+`sleep`, `weight {grams}`, `temperature {celsius}`, `medication {name}`,
+`task {title, who, reminderEid?, due?}` (a ticked-off item), and the
+non-events `settings` (the family's settings document), `reminder {title,
+who, note?, times}` (a daily schedule) and `device {id, name, token, key}`
+(an analog-buttons device with its secrets); times are UTC ISO; at most one
+open timer per type and family (a client rule — in a race the one saved
+first wins).
 
 ## Private artwork
 
@@ -243,6 +519,173 @@ no third party is involved on that side either. Removing a device in the
 app kills its token at once; its entries stay. Limits: 10 devices per
 family, 200 unread presses per family, 60 presses an hour per address.
 
+## Reminders
+
+Under «Mehr › Erinnerungen» the family sets up what is due daily at fixed
+times — «Vitamin D · 2 Tropfen · 08:00» for the baby, «Ibuprofen 600 · 08:00
+· 20:00» for Mama. A schedule is an encrypted entry like any other (type
+`reminder`), so both phones hold the same list. When a phone shows the
+reminders under «Mehr › Einstellungen › Startbildschirm» (instead of the
+sleep, or next to it with «Beides»), the «Jetzt» screen shows the next item
+beside the diaper card («Als Nächstes · Vitamin D · 08:00 · in 2 Std.»,
+«Überfällig» from an hour after; a tap on the card ticks it off) and, in
+place of «Schlaf starten», the button «Erinnerungen» («3 offen») that opens
+the day's checklist. A tick is an entry of type `task` («Erledigt · Vitamin
+D», in the Verlauf with time and name) that names the schedule and the
+instant it stands for — so both phones tick the same item. The times are
+Europe/Zurich wall-clock like the day windows; there are no push
+notifications.
+
+## The guide, languages, what's new, designs
+
+**The guide.** «Mehr» has four panes: Erinnerungen, Einstellungen, Konto
+(your own account and, below it, everything about the family: family
+password, recovery code, export, encryption status) and the **Anleitung** —
+how the app is used, from the five tabs through one-tap logging and meals
+to the keys (static copy in `src/views/howto.js`). Whoever registers on a
+phone sees a note at start, «Neu hier? … unter Mehr › Anleitung» with
+«Anzeigen» — at every start until the guide has been opened once; the pane
+carries a dot until then.
+
+**Languages.** The app comes in German (Swiss vocabulary, the source
+language) and English. Every phone chooses its language under «Mehr ›
+Einstellungen › Sprache» or on the login page (the switch under the title);
+without a choice the app follows the phone's language, else German. The
+choice stays on the device (`prefs.lang`), like the design. All copy lives
+in `src/i18n/locales/<language>/` — one file per area (`home.js`,
+`more.js`, `howto.js`, …), flat keys, German is the template. **A new
+language** is a copied `en/` folder plus an entry in
+`src/i18n/locales/index.js`; `npm test` checks that every language has
+every key (and none too many). The guide for translators, with the
+glossary: `src/i18n/locales/README.md`. Server errors come with a code
+(`{error, code, params}`) the client translates; the German text travels
+along as the fallback.
+
+**What's new.** After an update the app shows once, at the next open, what
+changed for the parents — a list in the bottom sheet, readable again under
+«Mehr › Anleitung › Was ist neu». The notes are in `src/whats-new.js`: one
+entry per deploy that changes something visible (`id` = the date, newest
+first, one line per note in every language). A deploy without an entry
+updates silently. So before a deploy: write the entry if the parents should
+notice something — not what happened in the code, but what is different on
+the phone and where to find it. `npm test` checks the order, the uniqueness
+and that every language has its lines.
+
+**Designs.** Under «Mehr › Einstellungen › Design» every phone picks its
+look — «Nachtkinderzimmer» (the default, dark-first), «Swiss» (white, black
+rules, magenta) or «Bauhaus» (red, yellow, blue on paper). A design is one
+CSS file of colour, shape and type tokens in `src/themes/`; a new one starts
+from `_template.css` plus an entry in `src/themes/index.js` — the guide and
+checklist are in `src/themes/README.md`.
+
+## Map
+
+The fifth tab shows changing tables and nursing places — everything
+OpenStreetMap knows in Switzerland and across the border
+(`changing_table=*`, `baby_feeding=*`) — on a map this server serves itself.
+The login page's promise («nothing outside the hosting») and the CSP hold
+here too: no tile server, no CDN, no Overpass query from the phone.
+
+- **Places:** `npm run map:data` asks Overpass (the main instance and its
+  two mirrors that hold the whole planet; a second round on an error) for
+  the box in `scripts/lib/map-config.mjs` and writes `public/map/pois.json`
+  (~160 KB, gitignored; it ships with every build, the map shows its date).
+  `scripts/map-data.mjs`; the normalisation and the wording are pure in
+  `src/mapdata.js` (node-tested).
+- **Additions:** `scripts/map/extra-places.csv` holds places OpenStreetMap
+  does not know (yet) and details for places where the changing table is
+  not mapped there yet — one row per place, the columns are OSM keys
+  (`changing_table`, `baby_feeding`, `level` …) plus `use` (yes/no), source,
+  check date and note. `npm run map:data` asks Overpass what already stands
+  at that spot (an object of the same kind, 30 m for a point, 60 m for an
+  area): if it carries the tag already, OSM stays the source («covered»);
+  if it lacks it, the OSM object gets the row's details («merged», the OSM
+  link stays); if nothing is there, a point of its own is added («added»,
+  without an OSM link). Rooms open only to the members of an institution do
+  not belong in it. The better place for every row is OpenStreetMap itself
+  — entered there, it becomes «covered» on the next run.
+- **Reported places:** with an operator configured (`ADMIN_USERNAME`) the
+  map shows «Ort hinzufügen»: move the map until the cross sits on the place
+  (from zoom 15), say what is there, a name and «Wo genau?», send. The
+  report goes to the server without a name (`api/lib/spots.php`, table
+  `spots`: position, kind, name, note in the clear — public map data, no
+  column for an account or a family, throttled per address only). The
+  operator's account reviews it under Mehr › Anleitung («Gemeldete Orte»:
+  approve, correct, reject, withdraw later — with the nearest known place
+  as a duplicate warning). Approved places come from `GET /api/spots`; every
+  phone lays them over the OSM file (`src/spots.js`, `store.spots`), fetches
+  the list only when its version on the sync page moved, and keeps it in
+  `localStorage` (`bt.spots`) for the first paint and offline. In the sheet
+  such a place reads «Von Eltern gemeldet, vom Betreiber geprüft», without
+  an OSM link.
+- **Basemap:** `npm run map:basemap -- --build YYYYMMDD` cuts, with the
+  `pmtiles` CLI (`brew install pmtiles`), an archive for the same box out of
+  the daily Protomaps planet build (zoom 0–14, ~570 MB; `--maxzoom 15`
+  doubles it) into `basemap/basemap-<build>.pmtiles`, plus `index.json`
+  (what the app loads) and `LICENSE.txt`. The folder is gitignored and not
+  part of `deploy/`: `npm run deploy:basemap` uploads it once per build to
+  `<DEPLOY_PATH>/basemap/` and checks that the server serves byte ranges
+  (206) — that is how the phone reads the tiles. Locally a Vite plugin
+  (`scripts/lib/map-assets-plugin.mjs`, also in the headless runs) and the
+  preview router serve it with ranges. A new build gets a new file name; an
+  archive is never overwritten in place.
+- **On the phone:** Leaflet and protomaps-leaflet draw the tiles on canvas
+  (`src/map-engine.js`, loaded when the tab is first opened; no worker, no
+  font files, no sprites); the pins are DOM elements in the design's
+  colours, from zoom 11. «Mein Standort» on tap only (geolocation; the
+  position never leaves the phone). Three buttons at the bottom:
+  «Info/Einstellung» (where the data comes from, its date, the attribution
+  — a small attribution link sits over the map's corner too — and the start
+  view), «Ort hinzufügen» and «Orte in der Nähe» (the ten nearest in the
+  sheet — works without the map, without network, without the archive on
+  the server). Where the map stands when it opens, every phone sets in that
+  sheet: «Aktuellen Kartenausschnitt übernehmen» takes the view behind the
+  sheet (`prefs.mapStart`). The service worker lets range requests and
+  `basemap/` bypass its cache; `map/pois.json` stays cached.
+- **What the server learns:** which byte ranges of the archive a phone
+  reads while the map is open (ordinary access-log material) — not the
+  position. Whoever reports a place sends its position, kind, name and note
+  (without an account; the throttle counts per address).
+- **Licence:** data © OpenStreetMap contributors, ODbL; the map shows the
+  attribution, `basemap/LICENSE.txt` travels with the archive. The
+  additions in `scripts/map/extra-places.csv` are public domain (CC0 1.0)
+  so that anyone may carry them into OpenStreetMap; a row that takes its
+  point or tags from an OSM object says so in its note — that part stays
+  ODbL. Nursing places are still thinly mapped in OpenStreetMap (October
+  2026: 15 in the box, next to 800 changing tables) — more come only through
+  entries there.
+- **Another area:** change the box in `scripts/lib/map-config.mjs` and run
+  both scripts again.
+
+## Structure
+
+```
+api/            PHP backend (index.php router + lib/ + tests/)
+src/            frontend: main.js shell, views/, store.js (local model +
+                sync), session.js (login / key flows), crypto.js,
+                model.js/validate.js/tz.js/meals.js/reminders.js/dose.js
+                (pure logic, node-tested), themes/ (one CSS per design +
+                registry; README there), i18n/ (languages: locales/<id>/,
+                README there), whats-new.js (the notes of the update sheet),
+                feedback.js + feedback-sheet.js (feedback to the operator),
+                mapdata.js (the map's places, pure) + map-engine.js (Leaflet,
+                lazy) + views/map.js (the «Karte» tab), spots.js +
+                spots-sheet.js (reported places: report, review) + pois.js
+                (the places file, loaded once), devices.js + device-sheet.js
+                (the analog buttons: code, test press, removal)
+arduino/        the sketch for the analog buttons (Arduino Nano ESP32) + build guide
+public/         manifest, service worker, icons; map/pois.json (generated, gitignored)
+basemap/        the map archive + index.json (generated, gitignored, uploaded on its own)
+scripts/        dev-router, preview-router, package.mjs, deploy.mjs,
+                export-plain.mjs (offline decryption), make-icons.mjs
+                (draws the icon set into public/img/), make-screenshots.mjs
+                (the login page's pictures), map-data.mjs + map-basemap.mjs
+                (the map: places and archive), map/extra-places.csv (the
+                additions), lib/map-config.mjs (the box),
+                lib/map-assets-plugin.mjs (ranges in the dev server), lib/csv.mjs
+data/           the local SQLite database (gitignored, never deployed)
+```
+
 ## Licence
 
 [GNU Affero General Public License v3.0](LICENSE). In short: use it, host it,
@@ -253,7 +696,7 @@ drawn by [`scripts/make-icons.mjs`](scripts/make-icons.mjs). The bundled fonts
 (Inter, Jost, Nunito) are under the SIL Open Font License, their licence texts
 sit next to them in [`src/themes/fonts/`](src/themes/fonts/). The map's
 places and tiles (`public/map/pois.json` and `basemap/`, both generated — see
-«Karte») are OpenStreetMap data under the
+«Map») are OpenStreetMap data under the
 [Open Database License](https://www.openstreetmap.org/copyright): the map
 shows the attribution, and `basemap/LICENSE.txt` travels with the archive.
 The places parents report in the app are the installation's own data, not
@@ -263,501 +706,3 @@ The hand-kept additions in
 to the public domain ([CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/))
 so that anyone may carry them into OpenStreetMap; a row that takes its point
 or tags from an OSM object says so in its note, and that part stays OSM's.
-
----
-
-# Dokumentation (Deutsch)
-
-Zuno ist ein einfacher, selbst gehosteter Baby-Tracker für zwei Eltern: Stillen,
-Schoppen, Windeln, Schlaf, Messwerte und tägliche Erinnerungen (Vitamin D
-fürs Baby, ein Medikament für Mama) — synchronisiert über ein PHP-API mit
-SQLite auf Shared Hosting (cyon). Produktentscheide stehen in
-[SPEC.md](SPEC.md).
-
-- **Frontend:** Vanilla JS + Vite, mobile-first, deutsche UI, installierbar
-  als Home-Screen-App (Manifest + Service Worker; die Shell öffnet auch bei
-  schlechtem Netz sofort).
-- **Backend:** PHP 7.4+ (`api/`), SQLite (WAL). Konten in Familien: Jede
-  Person hat ein eigenes Login (Benutzername + Passwort) und einen
-  Anzeigenamen (Mama/Papa/…), jede Familie einen Namen und ein
-  Familien-Passwort, das nur zum Beitreten dient und mit jedem Beitritt
-  verfällt (ein Mitglied setzt zum Einladen ein neues). Einträge gehören der
-  Familie — eine Installation kann mehrere Familien beherbergen, die einander
-  nie sehen. Sessions als DB-Tokens im 6-Monats-Cookie.
-- **Ende-zu-Ende verschlüsselt:** Jeder Eintrag (Art, Zeiten, Mengen, Namen)
-  wird auf dem Handy mit einem zufälligen Familienschlüssel verschlüsselt.
-  Der Server speichert nur Benutzernamen, Familiennamen, verpackte Schlüssel
-  und die verschlüsselten Datensätze — und kann nichts davon lesen. Einzig
-  die Orte, die Eltern auf der Karte melden, liegen im Klartext: öffentliche
-  Kartendaten ohne Bezug zu einem Konto (siehe «Karte»). Passwörter
-  verlassen das Handy nie (der Server sieht nur einen abgeleiteten Wert).
-  Deshalb gibt es kein «Passwort zurücksetzen» durch den Betreiber; siehe
-  «Schlüssel und Wiederherstellung».
-- **Sync:** Der Server ist die Wahrheit für die verschlüsselten Datensätze;
-  jedes Handy hält eine entschlüsselte Kopie im Speicher und berechnet die
-  «Jetzt»-Ansicht selbst. Die App synchronisiert im Vordergrund (~60 s) und
-  beim Fokuswechsel; laufende Timer liegen in den Datensätzen und lassen sich
-  vom anderen Handy stoppen (ein veralteter Stopp wird abgewiesen).
-- **Ohne Netz:** Erfassen geht trotzdem — der Eintrag wird verschlüsselt auf
-  dem Handy gespeichert («wartet auf Netz»), sofort angezeigt und gesendet,
-  sobald Zuno offen ist und wieder Netz hat. Hat das andere Handy denselben
-  Eintrag inzwischen beendet, geändert oder gelöscht, gilt dessen Stand, und
-  das Handy sagt es. Gesendet wird nur, solange die App offen ist.
-
-## Setup (lokal)
-
-Voraussetzungen: Node 20+ **und PHP ≥ 7.4 mit `pdo_sqlite` im PATH** — der
-Dev-Server und `npm test` rufen die `php`-CLI auf. Fehlt PHP, startet Vite
-trotzdem und jede API-Anfrage endet als «Keine Verbindung zum Server».
-
-```bash
-npm install
-npm run dev     # PHP-API auf :8788 + Vite auf :5173 (mit /api-Proxy)
-```
-
-Ein Dev-Passwort gibt es nicht: Beim ersten Öffnen «Neues Konto erstellen» —
-Benutzername, Passwort (min. 8 Zeichen), Anzeigename, Familie und
-Familien-Passwort. Ein unbekannter Familienname legt die Familie an (und zeigt
-einmalig den Wiederherstellungscode); bei einem bekannten Namen muss das
-Familien-Passwort stimmen, dann tritt das Konto bei — und das Familien-Passwort
-verfällt damit (unter «Mehr › Konto» setzt ein Mitglied ein neues, wenn noch
-jemand dazukommen soll). Die Datenbank entsteht automatisch unter
-`data/baby.db`.
-
-```bash
-npm test        # PHP-API-Tests (api/tests/*.test.php) + Node-Tests (src/tests/)
-```
-
-Auf einem Handy im LAN läuft `crypto.subtle` nur über HTTPS (`http://192.168…`
-ist kein «secure context»): Für den Test auf dem Gerät braucht der Dev-Server
-ein Zertifikat (z. B. `@vitejs/plugin-basic-ssl`), oder das Handy greift per
-USB-Port-Forwarding auf `localhost` zu.
-
-## Schlüssel und Wiederherstellung
-
-Drei Dinge öffnen die Einträge einer Familie — der Server hat keines davon:
-
-1. **Das eigene Passwort.** Entschlüsselt beim Anmelden den Familienschlüssel
-   für dieses Gerät — auch auf einem neuen Handy; das Familien-Passwort
-   braucht ein Mitglied dafür nie. Vergessen? Mit einem **neuen
-   Benutzernamen** registrieren und wieder beitreten — mit dem
-   Wiederherstellungscode oder mit einem Familien-Passwort, das die andere
-   Person vorher neu setzt; alle Einträge bleiben erhalten, das alte Konto
-   bleibt ungenutzt.
-2. **Das Familien-Passwort.** Nur zum Beitreten nötig, und ein
-   Einmal-Schlüssel: Mit dem Beitritt ersetzt das beitretende Handy es durch
-   Zufallswerte, die niemand kennt (`rotateFamily` in der Registrierung), so
-   dass ein erratenes oder weitererzähltes Familien-Passwort nach dem
-   Beitritt nichts mehr öffnet. Noch jemand? Jedes angemeldete Mitglied setzt
-   unter «Mehr › Konto» ein neues (das eigene Passwort bestätigt) und gibt es
-   weiter; wer schon dabei ist, bleibt angemeldet.
-3. **Der Wiederherstellungscode.** Der rohe Familienschlüssel (43 Zeichen),
-   einmalig beim Anlegen der Familie angezeigt und unter «Mehr › Konto» nach
-   Eingabe des eigenen Passworts. Mit ihm legt man ohne jedes Passwort ein neues
-   Konto in der Familie an («Mit Wiederherstellungscode» auf dem
-   Login-Bildschirm). Aufschreiben.
-
-Gehen alle drei verloren und ist kein Gerät mehr angemeldet, sind die Daten
-weg — das ist der Preis der Verschlüsselung. Reserve: **«Daten exportieren»**
-unter «Mehr › Konto» schreibt alle Einträge entschlüsselt als JSON-Datei; ab
-und zu sicher ablegen.
-
-Offline-Export aus einer Datenbankdatei (z. B. aus einem Backup) mit dem
-Wiederherstellungscode oder einem aktuell gesetzten Familien-Passwort (das
-alte verfällt mit jedem Beitritt — vorher unter «Mehr › Konto» ein neues
-setzen), ohne Server (braucht die
-`sqlite3`-Kommandozeile im PATH; bei mehreren Familien `--family <Name>`;
-gelöschte Einträge bleiben weg):
-
-```bash
-node scripts/export-plain.mjs data/baby.db > export.json
-node scripts/export-plain.mjs data/baby.db --recovery-code > export.json
-```
-
-Kein Admin-Panel, kein E-Mail: Der Betreiber kann in der Datenbank Konten
-löschen, aber keine Passwörter setzen und keine Einträge lesen (siehe
-«Konten von Hand verwalten»). In der App prüft das Betreiber-Konto nur, was
-Eltern ihm schicken: Feedback und gemeldete Orte für die Karte.
-
-## Deployment (cyon)
-
-Einmalig: `.env.example` nach `.env` kopieren und die `DEPLOY_*`-Zugänge
-ausfüllen.
-
-```bash
-npm run map:data  # die Orte der Karte holen (Overpass) – vor dem Packen, siehe «Karte»
-npm run package   # baut + stellt deploy/ zusammen
-npm run preview   # deploy/ lokal testen: http://127.0.0.1:8081 (auch /baby/)
-npm run deploy    # deploy/ hochladen (rsync/sftp/ftp gemäss .env)
-
-npm run map:basemap -- --build YYYYMMDD   # die Hintergrundkarte schneiden (einmal pro Build)
-npm run deploy:basemap                    # … und hochladen (einmal; nie mit der App)
-npm run deploy:beta                       # dasselbe auf eine zweite Installation (.env.beta)
-```
-
-- **Karte**: `npm run map:data` vor dem Packen (ohne `public/map/pois.json`
-  bricht `package` ab); das Kartenarchiv (`basemap/`, ~570 MB) geht einmal
-  pro Build separat hoch – `npm run deploy:basemap`, zuerst das Archiv, dann
-  `index.json`, danach die Probe, dass der Server Byte-Ranges liefert (206).
-  Reihenfolge beim ersten Mal: Archiv hochladen, dann die App.
-- **Zweite Installation (Testserver)**: `.env.beta` neben `.env` mit
-  eigenem `DEPLOY_PATH` und `DEPLOY_URL` (kein `DEPLOY_DB_PATH` – die
-  Datenbank liegt dann in deren Docroot); `npm run deploy:beta` und
-  `npm run deploy:basemap:beta` nehmen diese Datei.
-
-- Re-Deploys fassen das entfernte `data/` **nie** an — die Datenbank auf dem
-  Server bleibt bestehen.
-- Health-Check: `deploy.mjs` ruft nach dem Upload `<DEPLOY_URL>/api/me` auf.
-  Das ist die erste Anfrage nach dem Upload — sie führt eine allfällige
-  Datenbank-Migration aus (200 = durch, 500 = zurückgerollt, die Datei ist
-  unverändert; der Grund steht im PHP-Fehlerlog). Vor einer Migration
-  schreibt die API einmalig eine Kopie neben die Datenbank
-  (`baby.db.v3.bak`) — nach ein paar Tagen ohne Probleme löschen.
-- Die gepackte `.htaccess` setzt eine Content-Security-Policy (nur eigene
-  Skripte): Bei Verschlüsselung im Browser ist eingeschleustes JavaScript der
-  letzte verbleibende Angriffsweg. Dazu `nosniff`, `Referrer-Policy:
-  same-origin` und HSTS.
-- **Datenbank ausserhalb des Docroots** (optional, empfohlen): Standardmässig
-  liegt sie unter `<docroot>/data/baby.db`, geschützt durch zwei
-  `.htaccess`-Regeln. `DEPLOY_DB_PATH` in `.env` schreibt einen anderen Ort in
-  die gepackte `api/config.php`, dann hängt nichts mehr an `.htaccess`:
-  absolut, oder relativ zum Docroot mit `../` (z. B. `../baby-data/baby.db`
-  — auf Shared Hosting kennt man den absoluten Pfad oft nicht). Reihenfolge
-  einhalten — die API legt an einem fehlenden Pfad eine **leere** Datenbank
-  an (neue Feed-Kennung, keine Konten: alle Handys wären abgemeldet):
-  1. Zu einem ruhigen Zeitpunkt (nachts, kein Timer offen) im Dateimanager
-     von my.cyon oder per FTP neben dem Docroot ein Verzeichnis anlegen (z. B.
-     `baby-data`, für den Webserver beschreibbar) und `baby.db`, `baby.db-wal`
-     und `baby.db-shm` dorthin **verschieben** (nicht kopieren; alle drei).
-  2. `DEPLOY_DB_PATH=../baby-data/baby.db` in `.env` setzen, `npm run package`,
-     `npm run deploy` — der Health-Check `/api/me` muss 200 liefern, danach
-     auf einem Handy einmal synchronisieren.
-  3. Das leere `data/` im Docroot kann bleiben (nur der Deny-Stub liegt drin).
-  Zurück: Dateien zurückschieben, Variable leeren, erneut deployen.
-
-## Schema v3 → v4
-
-Schema v3 hatte in der Tabelle `entries` noch fünf `legacy_*`-Spalten: Dort
-lagen Einträge aus der Zeit vor der Verschlüsselung im Klartext, bis ein Handy
-der Familie sie verschlüsselt hatte. v4 entfernt diese Spalten samt dem Code,
-der sie las — die API hat seither keine Stelle mehr, die den Inhalt eines
-Eintrags annimmt oder ausgibt. Die Migration läuft bei der ersten Anfrage nach
-dem Deploy in einer Transaktion; Einträge, Konten, Sitzungen und die
-Sync-Stände der Handys bleiben, wie sie sind.
-
-Eine v3-Datei, in der noch ein **lebender** Eintrag im Klartext liegt (oder
-einer ohne Familie), wird **abgelehnt** und nicht angefasst: Der Health-Check
-meldet 500, der Grund steht im Fehlerlog. Dann den letzten v3-Stand nochmals
-deployen, ein Handy der Familie die Einträge fertig verschlüsseln lassen und
-erneut deployen. Vorab prüfen lässt es sich auf dem Server (`sqlite3
-data/baby.db`) — das Ergebnis muss 0 sein:
-
-```sql
-SELECT COUNT(*) FROM entries WHERE deleted_at IS NULL AND (family_id IS NULL
-  OR legacy_type IS NOT NULL OR legacy_started_at IS NOT NULL OR legacy_ended_at IS NOT NULL
-  OR legacy_details IS NOT NULL OR legacy_logged_by IS NOT NULL);
-```
-
-## Schema v4 → v5
-
-v5 fügt nur die Tabelle `feedback` hinzu (id, blob, created_at als Datum,
-read_at) — ohne Spalte für Absender, Konto oder Familie. Die Migration läuft
-bei der ersten Anfrage nach dem Deploy, fasst keine andere Tabelle an und
-braucht keine Sicherungskopie; kein Handy synchronisiert neu. Ein älterer
-Stand öffnet eine v5-Datei unverändert (er kennt die Tabelle nicht und liest
-sie nie).
-
-## Schema v5 → v6
-
-v6 fügt nur die Tabelle `spots` hinzu (id, status, lat, lon, kinds, name,
-note, created_at und decided_at als Datum) — die Orte, die Eltern auf der
-Karte melden, ohne Spalte für Absender, Konto oder Familie; dazu, erst beim
-ersten Freigeben, der Zähler `settings.spots_version`. Die Migration läuft
-bei der ersten Anfrage nach dem Deploy, fasst keine andere Tabelle an und
-braucht keine Sicherungskopie; kein Handy synchronisiert neu. Ein älterer
-Stand öffnet eine v6-Datei unverändert.
-
-## Konten von Hand verwalten
-
-Direkt in der SQLite-Datei (`sqlite3 data/baby.db`, auf dem Server per SSH).
-Passwörter und Einträge lassen sich hier **nicht** lesen oder setzen — die
-Hashes gehören zu abgeleiteten Werten, die Datensätze sind verschlüsselt.
-
-```sql
-SELECT id, username, family_id, created_at FROM users;
-SELECT id, name, name_key, created_at FROM families;     -- name_key = kleingeschriebener Name
-SELECT family_id, COUNT(*) FROM entries GROUP BY family_id;
-```
-
-Ein Konto entfernen (z. B. ein vergessenes altes nach einer
-Wiederherstellung) oder auf allen Geräten abmelden:
-
-```sql
-DELETE FROM auth_tokens WHERE user_id = <id>;
-DELETE FROM users WHERE id = <id>;
-```
-
-Eine ganze Familie löschen (unwiderruflich):
-
-```sql
-DELETE FROM entries WHERE family_id = <id>;
-DELETE FROM auth_tokens WHERE user_id IN (SELECT id FROM users WHERE family_id = <id>);
-DELETE FROM users WHERE family_id = <id>;
-DELETE FROM families WHERE id = <id>;
-VACUUM;
-```
-
-Benutzer lassen sich **nicht** in eine andere Familie verschieben (ihr
-verpackter Schlüssel gehört zur alten) — stattdessen neu registrieren und
-beitreten.
-
-## Schema v6 → v7
-
-v7 fügt nur die Tabellen `devices` (id, family_id, token_hash, created_at
-als Datum) und `device_events` (id, device_id, family_id, blob, created_at
-als Datum) hinzu — die Analog-Buttons und ihre versiegelten Knopfdrücke, ohne
-Spalte für den Namen, den Schlüssel oder den Inhalt eines Drucks. Die
-Migration läuft bei der ersten Anfrage nach dem Deploy, fasst keine andere
-Tabelle an und braucht keine Sicherungskopie; kein Handy synchronisiert
-neu. Ein älterer Stand öffnet eine v7-Datei unverändert.
-
-## API (Kurzreferenz)
-
-Alle Endpunkte unter `/api`, JSON, Fehler als `{"error": "…"}`. `POST`,
-`PATCH` und ein `DELETE` mit Body verlangen `Content-Type: application/json`
-(415 sonst); jede Antwort ist `Cache-Control: no-store`. Login, Registrierung und alle
-Passwort-Bestätigungen sind pro IP gedrosselt (10 Versuche / 15 min → 429) und
-zusätzlich pro Ziel — Benutzername bzw. Familienname — von beliebig vielen
-Adressen aus (20 / Stunde). Schreibzugriffe auf Einträge sind pro IP auf 300 /
-15 min begrenzt (429), und neue Einträge enden bei 50 000 Zeilen pro Familie
-bzw. 400 000 insgesamt (507; gelöschte Einträge zählen mit, sie bleiben als
-Tombstones) — die Registrierung ist offen, ohne diese Grenzen könnte ein
-Fremdkonto die Disk füllen. Feedback-Nachrichten haben ein eigenes Budget
-(10 / Stunde pro IP) und eine eigene Grenze (2000), gemeldete Orte ebenso
-(10 / Stunde pro IP; 200 offene, 5000 Zeilen), Knopfdrücke der Analog-Buttons
-(60 / Stunde pro IP; 200 unverarbeitete pro Familie, 10 Geräte pro
-Familie). «Betreiber» = das Konto aus
-`ADMIN_USERNAME`; alle anderen bekommen auf diesen Routen dasselbe 404.
-Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
-`authKey` (PBKDF2 + HKDF); Schlüssel und Datensätze sind base64url-Blobs.
-
-| Endpunkt | Auth | Zweck |
-|---|---|---|
-| `GET /api/me` | – | `{authenticated, user}` — `user` = `{username, familyId, familyName, profileBlob}` (auch Health-Check) |
-| `GET /api/auth/params?username=` | – | `{kdf: {salt, iter}}` zum Ableiten des Login-Werts (stabile Attrappe für unbekannte Namen) |
-| `GET /api/families/check?name=` | – | `{exists, name, kdf}` — gibt es die Familie schon? |
-| `POST /api/families/unlock` | – | `{familyName, familyAuthKey \| recoveryAuthKey}` → `{kdf, fdkWrapped}` (der familien-verpackte Schlüssel, nur nach Prüfung) |
-| `POST /api/register` | – | `familyMode: create` (mit allem Schlüsselmaterial) oder `join` (mit `rotateFamily`: neue Familien-Schlüssel, die im selben Schritt das Familien-Passwort ersetzen) → 201 `{ok, user, familyCreated, familyClosed}` + Cookie |
-| `POST /api/login` | – | `{username, authKey}` → `{ok, user, kdf, fdkWrappedUser}` + Cookie |
-| `POST /api/logout` | – | Token widerrufen |
-| `POST /api/me/keys/unlock` | ✓ | `{authKey}` → `{kdf, fdkWrappedUser}` (Gerät ohne Schlüssel) |
-| `PATCH /api/me` | ✓ | `{profileBlob}` (verschlüsselter Anzeigename) |
-| `PATCH /api/me/password` | ✓ | `{currentAuthKey, authKey, kdf, fdkWrappedUser}` — meldet andere Geräte ab |
-| `PATCH /api/families/password` | ✓ | `{currentAuthKey, familyAuthKey, familyKdf, fdkWrappedFamily}` |
-| `GET /api/sync?since=&limit=` | ✓ | `{serverNow, feed, rows, next}` — Seiten ab `seq`, inkl. Grabsteine; `reset: true`, wenn der Cursor der Datenbank voraus ist; ändert sich `feed` (eine andere Datenbankdatei), fängt der Client ebenfalls von vorn an. Dazu `feedback: true`, wenn es ein Feedback-Postfach gibt, und nur für das Betreiber-Konto `feedbackUnread`; mit eingerichtetem Betreiber `spots` (die Version der freigegebenen Orte) und nur für das Betreiber-Konto `spotsPending`; `deviceEvents`, solange Knopfdrücke der Familie auf ein Handy warten |
-| `POST /api/entries` | ✓ | `{eid, blob}` → Datensatz (507 an der Zeilengrenze der Familie bzw. der Datenbank) |
-| `PATCH /api/entries/:eid` | ✓ | `{blob, ifSeq}` → Datensatz (409, wenn ein anderes Gerät dazwischenkam) |
-| `DELETE /api/entries/:eid` | ✓ | Soft-Delete; optionaler JSON-Body `{ifSeq}` macht ihn bedingt (409, wenn ein anderes Gerät dazwischenkam) |
-| `POST /api/entries/:eid/restore` | ✓ | Soft-Delete rückgängig |
-| `GET /api/feedback/key` | ✓ | `{publicKey}` — der öffentliche Schlüssel des Postfachs (404, solange Feedback aus oder nicht eingerichtet ist) |
-| `POST /api/feedback` | ✓ | `{blob}` → 201 — eine versiegelte Nachricht; gespeichert ohne Absender (413 zu lang, 429 nach 10 / Stunde pro Adresse, 507 bei 2000 Nachrichten) |
-| `POST /api/feedback/key` | Betreiber | `{publicKey, privateSealed}` — richtet das Postfach einmalig ein (409 danach) |
-| `GET /api/feedback?before=` | Betreiber | `{publicKey, privateSealed, items, next, unread}` — neueste zuerst, 100 pro Seite |
-| `PATCH /api/feedback/:id` · `DELETE /api/feedback/:id` | Betreiber | `{read}` gelesen/ungelesen · endgültig löschen |
-| `GET /api/stats` | Betreiber | Nutzungszahlen: `{asOf, families, familiesActive7, familiesActive30, accounts, accountsNew30, entries, entriesNew7}` — nur Zahlen |
-| `POST /api/spots` | ✓ | `{lat, lon, kinds, name?, note?}` → 201 — ein gemeldeter Ort, offen bis zur Prüfung; gespeichert ohne Absender (400 ungültig, 429 nach 10 / Stunde pro Adresse, 507 bei 200 offenen oder 5000 Zeilen; 404, solange kein Betreiber eingerichtet ist) |
-| `GET /api/spots` | ✓ | `{version, items}` — die freigegebenen Orte, die jedes Handy über seine Karte legt |
-| `GET /api/spots/pending` | Betreiber | `{items}` — die offenen Meldungen, älteste zuerst |
-| `PATCH /api/spots/:id` · `DELETE /api/spots/:id` | Betreiber | `{approve?, name?, note?, kinds?}` korrigieren und/oder freigeben · ablehnen oder zurückziehen (endgültig) |
-| `POST /api/devices` | ✓ | → 201 `{id, token, createdAt}` — ein Gerät (Analog-Buttons) der Familie; der Token wird einmal gezeigt und nur als Hash gespeichert (507 ab 10 pro Familie) |
-| `DELETE /api/devices/:id` | ✓ | Gerät entfernen: der Token gilt sofort nicht mehr, wartende Drücke gehen mit |
-| `POST /api/devices/events` | – | `{token, blob}` → 201 — ein versiegelter Knopfdruck des Geräts (kein Cookie; 404 bei unbekanntem Token, 429 nach 60 / Stunde pro Adresse, 507 bei 200 unverarbeiteten der Familie) |
-| `DELETE /api/devices/events/:id` | ✓ | ein Knopfdruck, den das Handy zum Eintrag gemacht hat |
-| `GET /api/art/k/<key>/<name>` | – | Dieselben Bilder und `manifest.webmanifest` über den zufälligen Schlüssel der Installation (nur die Mitglieder jener Familie erhalten ihn, als `artKey` im Sync) — für das, was der Browser ohne Sitzung lädt: das Installations-Symbol. Falscher Schlüssel, unbekannter Name, Funktion aus: dasselbe 404 |
-| `GET /api/art/<name>` | (✓) | Privates Bildmaterial (`image/png`) für die Mitglieder der in `PRIVATE_ART_FAMILY` genannten Familie — für alle anderen, auch ohne Anmeldung, dasselbe 404 (siehe «Private artwork») |
-
-Fremde `eid`s → 404. Eintragstypen im Klartext des Blobs: `breastfeed {side,
-paused?}`, `bottle {amount_ml, colostrum_ml?}`, `diaper {kind}`, `sleep`, `weight {grams}`,
-`temperature {celsius}`, `medication {name}`, `task {title, who,
-reminderEid?, due?}` (ein abgehakter Punkt) sowie die Nicht-Ereignisse
-`settings` (das Einstellungsdokument der Familie), `reminder {title, who,
-note?, times}` (ein täglicher Zeitplan) und `device {id, name, token, key}`
-(ein Gerät mit seinen Geheimnissen); Zeiten UTC-ISO; höchstens ein
-offener Timer pro Typ und Familie (Regel im Client, bei einem Wettlauf gewinnt
-der zuerst gespeicherte).
-
-## Erinnerungen
-
-Unter «Mehr › Erinnerungen» legt die Familie an, was täglich zu festen
-Zeiten dran ist — «Vitamin D · 2 Tropfen · 08:00» fürs Baby, «Ibuprofen 600 ·
-08:00 · 20:00» für Mama. Ein Zeitplan ist ein verschlüsselter Eintrag wie
-jeder andere (Typ `reminder`), also auf beiden Handys gleich. Zeigt ein Handy
-unter «Mehr › Einstellungen › Startbildschirm» die Erinnerungen (statt des
-Schlafs oder mit «Beides» daneben), steht auf «Jetzt» neben der Windel-Karte das Nächste («Als Nächstes
-· Vitamin D · 08:00 · in 2 Std.», «Überfällig» ab einer Stunde danach; ein
-Tipp auf die Karte hakt es ab) und anstelle von «Schlaf starten» der Knopf
-«Erinnerungen» («3 offen»), der die Liste des Tages zum Abhaken öffnet. Ein Haken ist
-ein Eintrag vom Typ `task` («Erledigt · Vitamin D», im Verlauf mit Uhrzeit
-und Name), der den Zeitplan und den gemeinten Zeitpunkt nennt — so haken
-beide Handys denselben Punkt ab. Die Uhrzeiten gelten in Europe/Zurich wie
-die Tagesgrenzen; Push-Benachrichtigungen gibt es keine.
-
-## Anleitung
-
-«Mehr» hat vier Bereiche: Erinnerungen, Einstellungen, Konto (das eigene
-Konto und darunter alles zur Familie: Familien-Passwort,
-Wiederherstellungscode, Export, Verschlüsselungsstatus) und die
-**Anleitung** — wie die App benutzt wird, von den fünf Tabs über das
-Ein-Tipp-Erfassen und die Mahlzeiten bis zu den Schlüsseln (statischer Text
-in `src/views/howto.js`). Wer sich auf einem Handy neu registriert, sieht
-beim Start eine Meldung «Neu hier? … unter Mehr › Anleitung» mit
-«Anzeigen» — bei jedem Start, bis die Anleitung einmal geöffnet wurde;
-der Bereich trägt bis dahin einen Punkt.
-
-## Sprachen
-
-Die App gibt es auf Deutsch (Schweizer Wortschatz, die Ausgangssprache)
-und Englisch. Jedes Handy wählt seine Sprache unter «Mehr › Einstellungen ›
-Sprache» oder auf der Anmeldeseite (Umschalter unter dem Titel); ohne
-Wahl folgt die App der Sprache des Handys, sonst Deutsch. Die Wahl bleibt
-auf dem Gerät (`prefs.lang`), wie das Design.
-
-Alle Texte liegen in `src/i18n/locales/<sprache>/` — eine Datei pro
-Bereich (`home.js`, `more.js`, `howto.js`, …), flache Schlüssel, Deutsch
-ist die Vorlage. **Eine neue Sprache** ist ein kopierter `en/`-Ordner plus
-ein Eintrag in `src/i18n/locales/index.js`; `npm test` prüft, dass jede
-Sprache jeden Schlüssel hat (und keinen zu viel). Die Anleitung für
-Übersetzerinnen und Übersetzer samt Glossar: `src/i18n/locales/README.md`.
-Server-Fehler kommen mit einem Code (`{error, code, params}`), den der
-Client übersetzt; der deutsche Text bleibt als Rückfall dabei.
-
-## Was ist neu
-
-Nach einem Update zeigt die App beim nächsten Öffnen einmal, was sich für
-die Eltern geändert hat — als Liste im Bottom-Sheet, nachlesbar unter
-«Mehr › Anleitung › Was ist neu». Die Notizen stehen in
-`src/whats-new.js`: ein Eintrag pro Deploy, der etwas Sichtbares ändert
-(`id` = Datum, neueste zuerst, eine Zeile pro Punkt in jeder Sprache).
-Ein Deploy ohne Eintrag aktualisiert still. Vor dem Deploy also: Eintrag
-schreiben, wenn die Eltern etwas merken sollen — nicht was im Code
-passiert ist, sondern was auf dem Handy anders ist und wo es zu finden
-ist. `npm test` prüft Reihenfolge, Eindeutigkeit und dass jede Sprache
-ihre Zeilen hat.
-
-## Designs
-
-Unter «Mehr › Einstellungen › Design» wählt jedes Handy sein Aussehen —
-«Nachtkinderzimmer» (Standard, dunkel-first), «Swiss» (weiss, schwarze
-Linien, Magenta) oder «Bauhaus» (Rot, Gelb, Blau auf Papier). Ein Design ist eine CSS-Datei mit Farb-, Form- und
-Schrift-Tokens in `src/themes/`; ein neues entsteht aus `_template.css`
-plus einem Eintrag in `src/themes/index.js` — Anleitung und Checkliste in
-`src/themes/README.md`.
-
-## Karte
-
-Der fünfte Tab zeigt Wickeltische und Still-Orte – alles, was OpenStreetMap
-in der Schweiz und im Grenzgebiet kennt (`changing_table=*`,
-`baby_feeding=*`) – auf einer Karte, die dieser Server selbst ausliefert.
-Das Login-Versprechen («nichts ausserhalb des Hostings») und die CSP gelten
-auch hier: kein Kachel-Server, kein CDN, keine Overpass-Abfrage vom Handy.
-
-- **Orte**: `npm run map:data` fragt Overpass (die Hauptinstanz und ihre
-  zwei Spiegel, die den ganzen Planeten halten; bei einem Fehler eine zweite
-  Runde) nach der Box in `scripts/lib/map-config.mjs` und
-  schreibt `public/map/pois.json` (~160 KB, gitignored; fährt mit jedem Build
-  mit, die Karte zeigt das Datum). `scripts/map-data.mjs`; die Normalisierung
-  und die Wortwahl sind pur in `src/mapdata.js` (node-getestet).
-- **Ergänzungen**: `scripts/map/extra-places.csv` hält Orte, die
-  OpenStreetMap (noch) nicht kennt, und Angaben zu Orten, bei denen dort der
-  Wickeltisch noch nicht eingetragen ist – eine Zeile je Ort, die Spalten sind
-  OSM-Schlüssel (`changing_table`, `baby_feeding`, `level` …) plus `use`
-  (yes/no), Quelle, Prüfdatum und Notiz. `npm run map:data` fragt Overpass,
-  was an der Stelle schon steht (ein Objekt derselben Art, 30 m bei einem
-  Punkt, 60 m bei einer Fläche): trägt es den Tag schon, bleibt OSM die
-  Quelle («covered»); fehlt er, bekommt das OSM-Objekt die Angaben der Zeile
-  («merged», der OSM-Link bleibt); steht dort nichts, wird ein eigener Punkt
-  angelegt («added», ohne OSM-Link). Räume, die nur Angehörigen einer
-  Institution offenstehen, gehören nicht hinein. Der bessere Ort für jede
-  Zeile ist OpenStreetMap selbst – dort eingetragen, wird sie beim nächsten
-  Lauf «covered».
-- **Gemeldete Orte**: mit eingerichtetem Betreiber (`ADMIN_USERNAME`) zeigt
-  die Karte «Ort hinzufügen»: die Karte schieben, bis das Kreuz auf dem Ort
-  steht (ab Zoom 15), sagen, was es dort gibt, Name und «Wo genau?», melden.
-  Die Meldung geht ohne Namen an den Server (`api/lib/spots.php`, Tabelle
-  `spots`: Position, Art, Name, Notiz im Klartext – öffentliche Kartendaten,
-  keine Spalte für Konto oder Familie, Drossel nur pro Adresse). Das
-  Betreiber-Konto prüft sie unter Mehr › Anleitung («Gemeldete Orte»:
-  freigeben, korrigieren, ablehnen, später zurückziehen – mit dem nächsten
-  bekannten Ort als Warnung vor Doppelten). Freigegebene Orte liefert
-  `GET /api/spots`; jedes Handy legt sie über die OSM-Datei (`src/spots.js`,
-  `store.spots`), lädt die Liste nur, wenn ihre Version auf der Sync-Seite
-  gestiegen ist, und behält sie in `localStorage` (`bt.spots`) für den
-  ersten Aufbau und offline. Im Sheet steht ein solcher Ort als «Von Eltern
-  gemeldet, vom Betreiber geprüft», ohne OSM-Link.
-- **Hintergrundkarte**: `npm run map:basemap -- --build YYYYMMDD` schneidet mit
-  der `pmtiles`-CLI (`brew install pmtiles`) aus dem täglichen Protomaps-
-  Planet-Build ein Archiv für dieselbe Box (Zoom 0–14, ~570 MB; `--maxzoom 15`
-  verdoppelt) nach `basemap/basemap-<build>.pmtiles`, dazu `index.json` (was
-  die App lädt) und `LICENSE.txt`. Der Ordner ist gitignored und nicht Teil
-  von `deploy/`: `npm run deploy:basemap` lädt ihn einmal pro Build nach
-  `<DEPLOY_PATH>/basemap/` und prüft, dass der Server Byte-Ranges liefert
-  (206) – so liest das Handy die Kacheln. Lokal liefern ihn ein Vite-Plugin
-  (`scripts/lib/map-assets-plugin.mjs`, auch in den Headless-Läufen) und der
-  Preview-Router mit Ranges aus. Ein neuer Build bekommt einen neuen
-  Dateinamen; ein Archiv wird nie an Ort und Stelle überschrieben.
-- **Im Handy**: Leaflet und protomaps-leaflet zeichnen die Kacheln auf
-  Canvas (`src/map-engine.js`, erst beim Öffnen des Tabs geladen; kein
-  Worker, keine Schriftdateien, keine Sprites); die Pins sind DOM-Elemente in
-  den Farben des Designs, ab Zoom 11. «Mein Standort» nur auf Tipp
-  (Geolocation; die Position verlässt das Handy nicht). Unten drei Knöpfe:
-  «Info/Einstellung» (woher die Daten stammen, ihr Stand, die Attribution —
-  eine kleine Attribution steht zudem über der Kartenecke — und die
-  Startansicht), «Ort hinzufügen» und «Orte in der Nähe» (die zehn nächsten
-  im Sheet – geht auch ohne Karte, ohne Netz, ohne Archiv auf dem Server).
-  Wo die Karte beim Öffnen steht, legt jedes Handy in diesem Sheet fest:
-  «Aktuellen Kartenausschnitt übernehmen» nimmt den Ausschnitt hinter dem
-  Sheet (`prefs.mapStart`). Der Service Worker
-  lässt Range-Anfragen und `basemap/` am Cache vorbei, `map/pois.json` bleibt
-  gecacht.
-- **Was der Server erfährt**: welche Byte-Bereiche des Archivs ein Handy
-  liest, während die Karte offen ist (normales Access-Log) – nicht den
-  Standort. Wer einen Ort meldet, schickt dessen Position, Art, Name und
-  Notiz (ohne Konto; die Drossel zählt pro Adresse).
-- **Lizenz**: Daten © OpenStreetMap-Mitwirkende, ODbL; die Karte zeigt die
-  Attribution, `basemap/LICENSE.txt` liegt beim Archiv. Die Ergänzungen in
-  `scripts/map/extra-places.csv` sind gemeinfrei (CC0 1.0), damit sie jemand
-  nach OpenStreetMap übertragen kann; nimmt eine Zeile ihren Punkt oder ihre
-  Tags von einem OSM-Objekt, sagt es die Notiz – der Teil bleibt ODbL.
-  Still-Orte sind in OpenStreetMap noch dünn erfasst (Oktober 2026: 15 in der
-  Box, dazu 800 Wickeltische) – mehr gibt es nur über Einträge dort.
-- **Anderes Gebiet**: die Box in `scripts/lib/map-config.mjs` ändern und
-  beide Scripts erneut laufen lassen.
-
-## Struktur
-
-```
-api/            PHP-Backend (index.php Router + lib/ + tests/)
-src/            Frontend: main.js Shell, views/, store.js (lokales Modell +
-                Sync), session.js (Anmelde-/Schlüsselflüsse), crypto.js,
-                model.js/validate.js/tz.js/meals.js/reminders.js/dose.js
-                (reine Logik, node-getestet), themes/ (ein CSS pro Design +
-                Registry; README dort), i18n/ (Sprachen: locales/<id>/,
-                README dort), whats-new.js (die Notizen fürs Update-Sheet),
-                feedback.js + feedback-sheet.js (Feedback an den Betreiber),
-                mapdata.js (die Orte der Karte, pur) + map-engine.js (Leaflet,
-                lazy) + views/map.js (der Tab «Karte»), spots.js +
-                spots-sheet.js (gemeldete Orte: melden, prüfen) + pois.js
-                (die Ortsdatei, einmal geladen), devices.js + device-sheet.js
-                (die Analog-Buttons: Code, Testdruck, entfernen)
-arduino/        der Sketch für die Analog-Buttons (Arduino Nano ESP32) + Bauanleitung
-public/         Manifest, Service Worker, Icons; map/pois.json (generiert, gitignored)
-basemap/        das Kartenarchiv + index.json (generiert, gitignored, eigener Upload)
-scripts/        dev-router, preview-router, package.mjs, deploy.mjs,
-                export-plain.mjs (Offline-Entschlüsselung), make-icons.mjs
-                (zeichnet das Icon-Set nach public/img/), make-screenshots.mjs
-                (die Bildschirmfotos der Anmeldeseite), map-data.mjs +
-                map-basemap.mjs (die Karte: Orte und Archiv), map/extra-places.csv
-                (die Ergänzungen), lib/map-config.mjs (die Box),
-                lib/map-assets-plugin.mjs (Ranges im Dev-Server), lib/csv.mjs
-data/           lokale SQLite-DB (gitignored, nie deployt)
-```
