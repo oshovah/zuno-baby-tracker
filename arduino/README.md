@@ -43,37 +43,51 @@ Paar, egal wie der Knopf gedreht ist.
 
 ### 2. Der Nano auf dem Steckbrett
 
-Der Nano steckt über dem Mittelgraben des Steckbretts; der USB-C-Stecker
-ragt über den Rand hinaus. Die Pin-Reihe mit **D2, D3, D4 und GND** (die
-Reihe mit RST / RX0 / TX1 am Ende) kommt in die Reihe **e** – so bleiben
-vor jedem dieser Pins vier freie Löcher (a–d). Die andere Reihe (D13,
-3.3V, A0 … VIN) landet dann in Reihe **i**.
+Das Steckbrett liegt mit den Zahlen 1–30 von links nach rechts vor dir,
+Reihe a unten, Reihe j oben, der Mittelgraben zwischen e und f. Der Nano
+steckt über dem Graben, **der USB-C-Stecker ragt links über den Rand
+hinaus** (vor Spalte 1):
 
-Die Pins der oberen Reihe, von links (USB) nach rechts:
+- Die Pin-Reihe mit **D2, D3, D4, GND** (die mit RST / RX0 / TX1 am Ende)
+  kommt in Reihe **f** – die Reihe direkt über dem Graben. Darüber bleiben
+  vier freie Löcher (g–j) pro Pin: dort werden die Knöpfe angeschlossen.
+- Die andere Reihe (D13, 3V3, A0 … VIN, GND) landet damit von selbst in
+  Reihe **b**; darunter bleibt ein freies Loch (a) pro Pin.
+
+So sitzt D12 in Spalte 1 und die Zahlen laufen aufwärts:
 
 ```
- D12 D11 D10 D9 D8 D7 D6 D5 D4 D3 D2 GND RST RX0 TX1
-                            ─┘ ─┘ ─┘  └─ hier wird alles angeschlossen
+ Spalte:   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+ Reihe f: D12 D11 D10  D9  D8  D7  D6  D5  D4  D3  D2 GND RST RX0 TX1
+ Reihe b: D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 VIN GND
+                                           ─┘  ─┘  ─┘ └─ hier wird angeschlossen
 ```
 
-GND ist der Pin **direkt neben D2** (auf der Platine mit einem eckigen
-Lötauge). Ein zweites GND liegt am anderen Ende der unteren Reihe neben
-VIN – geht genauso.
+(Steckt die TX1-Reihe stattdessen in Reihe e, zeigt der USB-Stecker auf die
+30er-Seite und D12 liegt in Spalte 30 – geht auch, zählt nur verkehrt.)
+
+GND gibt es zweimal: in der oberen Reihe neben D2 (Spalte 12, eckiges
+Lötauge) und in der unteren Reihe neben VIN (Spalte 15). Die untere ist
+die bequemere für die Minus-Schiene, weil ihr freies Loch a15 direkt an
+der Schiene liegt.
 
 ### 3. Verkabelung
 
-Jeder Knopf sitzt wie der Nano über dem Mittelgraben: zwei Beine in Reihe
-e, zwei in Reihe f, zwei Spalten auseinander. Dann:
+Jeder Knopf sitzt wie der Nano über dem Mittelgraben: zwei Beine in
+Reihe e, zwei in Reihe f, zwei Spalten auseinander – Knopf 1 in den
+Spalten 20 und 22, Knopf 2 in 24 und 26, Knopf 3 in 28 und 30. Vom Bein in
+Reihe e geht es nach unten an die Minus-Schiene, vom **diagonalen** Bein
+in Reihe f nach oben zum Pin:
 
 | Kabel | von | nach | wofür |
 | --- | --- | --- | --- |
-| 1 | ein Loch vor **GND** (Spalte von GND, Reihe a–d) | blaue Minus-Schiene (–) des Steckbretts | gemeinsame Masse |
-| 2 | Knopf 1, Bein in Reihe e (Loch a derselben Spalte) | Minus-Schiene (–) | Knopf 1 an Masse |
-| 3 | Knopf 1, **diagonales** Bein in Reihe f (Loch j derselben Spalte) | ein Loch vor **D2** (Reihe a–d) | Knopf 1 = Pipi |
-| 4 | Knopf 2, Bein in Reihe e (Loch a) | Minus-Schiene (–) | Knopf 2 an Masse |
-| 5 | Knopf 2, diagonales Bein in Reihe f (Loch j) | ein Loch vor **D3** | Knopf 2 = Gaggi |
-| 6 | Knopf 3, Bein in Reihe e (Loch a) | Minus-Schiene (–) | später: Knopf 3 an Masse |
-| 7 | Knopf 3, diagonales Bein in Reihe f (Loch j) | ein Loch vor **D4** | später: Knopf 3 = Beides |
+| 1 | **a15** (unter dem GND der unteren Reihe) | untere Minus-Schiene (–) | gemeinsame Masse |
+| 2 | **a20** (Knopf 1, Bein in Reihe e, Spalte 20) | Minus-Schiene (–) | Knopf 1 an Masse |
+| 3 | **j22** (Knopf 1, diagonales Bein in Reihe f, Spalte 22) | **j11** (über D2) | Knopf 1 = Pipi |
+| 4 | **a24** (Knopf 2, Bein in Reihe e) | Minus-Schiene (–) | Knopf 2 an Masse |
+| 5 | **j26** (Knopf 2, diagonales Bein in Reihe f) | **j10** (über D3) | Knopf 2 = Gaggi |
+| 6 | **a28** (Knopf 3, Bein in Reihe e) | Minus-Schiene (–) | später: Knopf 3 an Masse |
+| 7 | **j30** (Knopf 3, diagonales Bein in Reihe f) | **j9** (über D4) | später: Knopf 3 = Beides |
 
 Mehr ist es nicht: kein Widerstand, keine Diode, kein Strom für die
 Knöpfe. Der Nano zieht die Pins intern hoch (Pull-up); ein gedrückter
@@ -81,29 +95,31 @@ Knopf zieht den Pin auf Masse, das ist das Signal. Ein Pin ohne Knopf
 bleibt oben und löst nie aus – darum dürfen die Zeilen für drei Knöpfe im
 Programm stehen, auch wenn erst zwei verkabelt sind.
 
-Als Bild (halbes Steckbrett, Spalten 1–30; der Nano links über dem
-Graben, die Knöpfe rechts; `●` = Bein, `═` = Kabel):
+Als Bild (Reihe j oben, a unten; `●` = Knopf-Bein, `[1]` … `[7]` = die
+Kabel der Tabelle, jeweils an beiden Enden):
 
 ```
-  Spalte:   …  9  10  11  12 … 20  22     24  26     28  30
-  Reihe a      ·   ·   ·   ·     ●═══╗      ●═══╗      ●═══╗     } Knopf-Bein → –
-  Reihe b      ·   ·   ·   ·     ·   ║      ·   ║      ·   ║
-  Reihe c      ·   ·   ·   ·     ·   ║      ·   ║      ·   ║
-  Reihe d      ·   ·  ═╗  ·      ·   ║      ·   ║      ·   ║
-  Reihe e     D4  D3  D2 GND     ●   ●      ●   ●      ●   ●     ← Nano-Pins / Knopf-Beine
-  ───────── Mittelgraben ─────────────────────────────────────────
-  Reihe f      ·   ·   ·   ·     ●   ●      ●   ●      ●   ●
-  Reihe g      ·   ·   ·   ·     ·   ·      ·   ·      ·   ·
-  Reihe h      ·   ·   ·   ·     ·   ·      ·   ·      ·   ·
-  Reihe i     A?  A?  A?  A?     ·   ·      ·   ·      ·   ·     ← Nano-Pins (untere Reihe)
-  Reihe j      ·   ·   ·   ·     ·   ●═══   ·   ●═══   ·   ●═══  } diagonales Bein → D2 / D3 / D4
-  Minus (–)  ═══════════════════╝════════════╝═══════════╝        ← alle Massen, dazu Kabel 1 von GND
+ Spalte:    1   2   3   4   5   6   7   8   9  10  11  12  13  14  15    20  22    24  26    28  30
+ Reihe j    ·   ·   ·   ·   ·   ·   ·   ·  [7] [5] [3]  ·   ·   ·   ·     ·  [3]    ·  [5]    ·  [7]
+ Reihe i    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ Reihe h    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ Reihe g    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ Reihe f   D12 D11 D10  D9  D8  D7  D6  D5  D4  D3  D2 GND RST RX0 TX1    ●   ●     ●   ●     ●   ●
+ ─────────────────────────────── Mittelgraben ──────────────────────────────────────────────────────
+ Reihe e    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ●   ●     ●   ●     ●   ●
+ Reihe d    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ Reihe c    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·     ·   ·     ·   ·     ·   ·
+ Reihe b   D13 3V3  B0  A0  A1  A2  A3  A4  A5  A6  A7 VBUS B1 VIN GND    ·   ·     ·   ·     ·   ·
+ Reihe a    ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  [1]   [2]  ·    [4]  ·    [6]  ·
+ Minus (–) ═[1]═══════════════════════════════════════════════════════[2]═══════[4]═══════[6]═══
+ ◄ USB-C ragt hier über den Rand hinaus
 ```
 
-(Die Kabel von Reihe j zu D2 / D3 / D4 laufen oben über den Nano hinweg –
-ein Stecker vor D2, einer vor D3, einer vor D4.) Die Spaltenzahlen sind
-Beispiele; wichtig ist nur: ein Knopf über dem Graben, ein Bein an Minus,
-das diagonale Bein an den Pin.
+Die Kabel 3, 5 und 7 laufen oben in Reihe j von den Knöpfen nach links zu
+D2, D3 und D4; die Kabel 1, 2, 4 und 6 unten zur Minus-Schiene. Nichts
+kreuzt den Nano. Die Spaltenzahlen der Knöpfe sind Vorschläge; wichtig
+ist nur: ein Knopf über dem Graben, ein Bein an Minus, das diagonale Bein
+an den Pin.
 
 **Ohne Steckbrett** geht es auch: an zwei diagonale Beine jedes Knopfs je
 ein Kabel löten; die Masse-Kabel aller Knöpfe zusammen auf eine Buchse
