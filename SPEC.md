@@ -349,12 +349,13 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
     canvas, loaded on the first visit; DOM pins in the design's hues from
     zoom 11; a filter (all · changing table · nursing); «Mein Standort» on
     tap only (the position never leaves the phone); a bar of three buttons
-    at the bottom — «Info» (where the data comes from, its date, the
-    attribution; a small attribution link sits over the map's corner too),
-    «Ort hinzufügen» and «Orte in der Nähe» (the ten nearest in the sheet,
-    works without the basemap) —; the map opens on the whole
-    box or on the per-device start view set under Mehr › Einstellungen ›
-    Karte (`prefs.mapStart`, taken from the last view `prefs.mapView`); a tap on a pin opens the place (where the table is, fee,
+    at the bottom — «Info/Einstellung» (where the data comes from, its date,
+    the attribution; a small attribution link sits over the map's corner
+    too; and the start view: «Aktuellen Kartenausschnitt übernehmen» takes
+    the view behind the sheet as `prefs.mapStart`, «Zurücksetzen» clears
+    it), «Ort hinzufügen» and «Orte in der Nähe» (the ten nearest in the
+    sheet, works without the basemap) —; the map opens on the whole box or
+    on that per-device start view; a tap on a pin opens the place (where the table is, fee,
     wheelchair, hours, address, the link to OpenStreetMap). No third-party
     request: the CSP stays as it is. Pure: `src/mapdata.js`.
     **Ort hinzufügen** (with an operator configured): a crosshair on the map

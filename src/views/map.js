@@ -6,8 +6,9 @@
 //
 // The screen is a full-bleed stage (style.css .map-stage) with the filter
 // floating at the top, «Mein Standort» at the side and a bar of three
-// buttons at the bottom: «Info» (where the data comes from, its date, the
-// attribution), «Ort hinzufügen» (below) and «Orte in der Nähe» (the ten
+// buttons at the bottom: «Info/Einstellung» (where the data comes from, its
+// date, the attribution — and the start view, see below), «Ort hinzufügen»
+// (below) and «Orte in der Nähe» (the ten
 // nearest in the bottom sheet, once the phone has a fix); a small attribution
 // link sits over the map's corner. A tap on a pin opens the place in the
 // sheet. The engine
@@ -20,10 +21,12 @@
 // Module state survives a re-mount (every tab switch and a language switch
 // re-render the view): the places and the basemap index are fetched once,
 // the viewport, the filter and the last fix carry over. One thing is per
-// device (prefs): where the map starts — the whole box, or the view set
-// under Mehr › Einstellungen › Karte, which then wins over the last view.
-// The last view is written to prefs on every move: the settings take it as
-// the start view.
+// device (prefs.mapStart): where the map starts — the whole box, or the
+// view taken over in the «Info/Einstellung» sheet («Aktuellen
+// Kartenausschnitt übernehmen»: the view behind the sheet, as it stands),
+// which then wins over the last view. The last view is written to
+// prefs.mapView on every move (a fallback for the sheet while the engine
+// is not up).
 //
 // Reported places (store.spots, src/spots.js): the approved list is laid
 // over the OSM file whenever the store says it moved (every sync notifies).
@@ -267,18 +270,54 @@ export function renderMap(el) {
     });
   }
 
-  /** «Info»: where the places and the map come from, their date, the attribution. */
+  /** «Startansicht: …» with the buttons to take the view behind the sheet
+   *  as the start view or to clear it — the one map setting of this phone. */
+  function startHtml() {
+    const start = prefs.mapStart;
+    const can = !!(engine || prefs.mapView);
+    const fmt = (n, digits) => n.toFixed(digits).replace('.', localeMeta().decimalSeparator);
+    const label = start
+      ? t('map.start.set', { zoom: fmt(start.zoom, start.zoom % 1 ? 1 : 0), lat: fmt(start.lat, 3), lon: fmt(start.lon, 3) })
+      : t('map.start.none');
+    return `<p class="setting-value">${escapeHtml(label)}</p>
+      <div class="btn-row">
+        <button type="button" class="btn small" data-map-start-capture ${can ? '' : 'disabled'}>${escapeHtml(t('map.start.capture'))}</button>
+        ${start ? `<button type="button" class="btn small" data-map-start-reset>${escapeHtml(t('map.start.reset'))}</button>` : ''}
+      </div>
+      ${can ? '' : `<p class="hint">${escapeHtml(t('map.start.captureHint'))}</p>`}`;
+  }
+
+  /** «Info/Einstellung»: the start view (per device, set from the view
+   *  behind the sheet) first — the thing one comes here to do —, then where
+   *  the places and the map come from, their date, the attribution. */
   function openInfo() {
     openSheet(t('map.info.title'), (body) => {
       const date = fc && fc.generated ? fmtDay(fc.generated) : null;
       body.innerHTML = `
+        <h2 class="section-title first">${escapeHtml(t('map.start.title'))}</h2>
+        <p class="hint">${escapeHtml(t('map.start.hint'))}</p>
+        <div data-map-start>${startHtml()}</div>
+        <h2 class="section-title">${escapeHtml(t('map.info.about'))}</h2>
         <p>${escapeHtml(t('map.info.places'))}${date ? ` ${escapeHtml(t('map.info.date', { date }))}` : ''}</p>
         <p>${escapeHtml(t('map.info.tiles'))}</p>
         ${store.spots.on ? `<p>${escapeHtml(t('map.info.spots'))}</p>` : ''}
         <p>${escapeHtml(t('map.info.location'))}</p>
-        <p>${escapeHtml(t('map.info.start'))}</p>
         <p>${escapeHtml(t('map.info.missing'))}</p>
         <p class="hint">${escapeHtml(t('map.info.license'))} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">openstreetmap.org/copyright</a></p>`;
+      const wrap = body.querySelector('[data-map-start]');
+      wrap.addEventListener('click', (e) => {
+        if (e.target.closest('[data-map-start-capture]')) {
+          const view = engine ? engine.getView() : prefs.mapView;
+          if (!view) return;
+          prefs.mapStart = view;
+          wrap.innerHTML = startHtml();
+          toast(t('map.start.saved'), 'success');
+        } else if (e.target.closest('[data-map-start-reset]')) {
+          prefs.mapStart = null;
+          wrap.innerHTML = startHtml();
+          toast(t('map.start.cleared'), 'success');
+        }
+      });
     });
   }
 
@@ -395,7 +434,7 @@ export function renderMap(el) {
           hintEl.hidden = pinsShown;
           if (engine) {
             lastView = engine.getView();
-            prefs.mapView = lastView; // the settings offer it as the start view
+            prefs.mapView = lastView; // the sheet's fallback for «übernehmen» while no engine is up
             if (picking) syncPick();
           }
         },

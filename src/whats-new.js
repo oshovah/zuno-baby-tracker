@@ -15,12 +15,21 @@
 
 export const WHATS_NEW = [
   {
-    id: '2026-10-16',
+    id: '2026-10-16-b',
     de: [
       'Neu unter Mehr › Einstellungen: «Analog-Buttons». Ein kleines Gerät mit bis zu drei echten Knöpfen neben dem Wickeltisch trägt mit einem Druck die Windel ein – Pipi, Gaggi oder Beides, ohne Handy. Die App erzeugt den Code für das Gerät; jeder Druck wird dort verschlüsselt, der Server sieht nur, dass gedrückt wurde. Die Bauanleitung liegt beim Quellcode.',
     ],
     en: [
       'New under More › Settings: "Analog buttons". A small device with up to three real buttons next to the changing table logs the diaper with one press – pee, poop or both, no phone needed. The app makes the code for the device; every press is encrypted there, the server only sees that a button was pressed. The build guide ships with the source code.',
+    ],
+  },
+  {
+    id: '2026-10-16',
+    de: [
+      'Karte: Der Knopf «Info» heisst jetzt «Info/Einstellung» und hat die Startansicht bei sich – zum Ort zoomen, «Aktuellen Kartenausschnitt übernehmen», und die Karte beginnt künftig dort. Der Abschnitt «Karte» unter Mehr › Einstellungen ist damit weg.',
+    ],
+    en: [
+      'Map: the "Info" button is now "Info/Settings" and holds the start view – zoom to the place, "Take the current map view", and the map opens there from now on. The "Map" section under More › Settings is gone with it.',
     ],
   },
   {

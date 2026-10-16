@@ -3401,6 +3401,11 @@ body.map-open {
   font-weight: 600;
 }
 
+/* A sheet that opens with a section title (the map's «Info/Einstellung»): no gap above the first one. */
+.sheet-body .section-title.first {
+  margin-top: 0;
+}
+
 /* --- motion ------------------------------------------------------------------ */
 
 @media (prefers-reduced-motion: reduce) {
