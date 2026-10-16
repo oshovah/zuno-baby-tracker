@@ -46,15 +46,19 @@ const char* ZUNO_CODE = "";
 // The buttons: a pin, and the entry a press makes. Wire each button between
 // the pin and GND (the internal pull-up does the rest). `details` is the
 // entry's details as Zuno stores them — for a diaper: {"kind":"pee"} (Pipi),
-// {"kind":"poop"} (Gaggi) or {"kind":"both"}. A third button is one more line.
+// {"kind":"poop"} (Gaggi) or {"kind":"both"} (Beides). Three are laid out;
+// a pin without a button reads as "not pressed" (the pull-up), so the lines
+// may stay while only two buttons are wired. Any other entry type works the
+// same way (README.md).
 struct Button {
   uint8_t pin;
   const char* type;
   const char* details;
 };
 Button BUTTONS[] = {
-  { D2, "diaper", "{\"kind\":\"pee\"}" },
-  { D3, "diaper", "{\"kind\":\"poop\"}" },
+  { D2, "diaper", "{\"kind\":\"pee\"}" },   // Pipi
+  { D3, "diaper", "{\"kind\":\"poop\"}" },  // Gaggi
+  { D4, "diaper", "{\"kind\":\"both\"}" },  // Beides
 };
 
 // Set to false to skip the certificate check (only while debugging a host

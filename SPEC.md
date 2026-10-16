@@ -175,7 +175,7 @@ instant), creates the entry under a deterministic eid (`pressEid`: both
 phones make the same one) and deletes the press. Mehr › Einstellungen ›
 Analog-Buttons: the list, «Analog-Buttons hinzufügen» (the name, then the 96-hex code =
 token ‖ key), «Testdruck senden» (the phone presses like the device),
-«Knopf entfernen» (kills the token).
+«Gerät entfernen» (kills the token).
 
 **Family settings** travel the same way: one entry of type `settings` per
 family — its `details` is the settings document (`feedFromStart`,

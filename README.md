@@ -535,7 +535,7 @@ Tombstones) — die Registrierung ist offen, ohne diese Grenzen könnte ein
 Fremdkonto die Disk füllen. Feedback-Nachrichten haben ein eigenes Budget
 (10 / Stunde pro IP) und eine eigene Grenze (2000), gemeldete Orte ebenso
 (10 / Stunde pro IP; 200 offene, 5000 Zeilen), Knopfdrücke der Analog-Buttons
-(60 / Stunde pro IP; 200 unverarbeitete pro Familie, 10 Knöpfe pro
+(60 / Stunde pro IP; 200 unverarbeitete pro Familie, 10 Geräte pro
 Familie). «Betreiber» = das Konto aus
 `ADMIN_USERNAME`; alle anderen bekommen auf diesen Routen dasselbe 404.
 Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
@@ -569,8 +569,8 @@ Der Client schickt nie ein Passwort, sondern einen daraus abgeleiteten
 | `GET /api/spots` | ✓ | `{version, items}` — die freigegebenen Orte, die jedes Handy über seine Karte legt |
 | `GET /api/spots/pending` | Betreiber | `{items}` — die offenen Meldungen, älteste zuerst |
 | `PATCH /api/spots/:id` · `DELETE /api/spots/:id` | Betreiber | `{approve?, name?, note?, kinds?}` korrigieren und/oder freigeben · ablehnen oder zurückziehen (endgültig) |
-| `POST /api/devices` | ✓ | → 201 `{id, token, createdAt}` — ein Knopf (Analog-Button) der Familie; der Token wird einmal gezeigt und nur als Hash gespeichert (507 ab 10 pro Familie) |
-| `DELETE /api/devices/:id` | ✓ | Knopf entfernen: der Token gilt sofort nicht mehr, wartende Drücke gehen mit |
+| `POST /api/devices` | ✓ | → 201 `{id, token, createdAt}` — ein Gerät (Analog-Buttons) der Familie; der Token wird einmal gezeigt und nur als Hash gespeichert (507 ab 10 pro Familie) |
+| `DELETE /api/devices/:id` | ✓ | Gerät entfernen: der Token gilt sofort nicht mehr, wartende Drücke gehen mit |
 | `POST /api/devices/events` | – | `{token, blob}` → 201 — ein versiegelter Knopfdruck des Geräts (kein Cookie; 404 bei unbekanntem Token, 429 nach 60 / Stunde pro Adresse, 507 bei 200 unverarbeiteten der Familie) |
 | `DELETE /api/devices/events/:id` | ✓ | ein Knopfdruck, den das Handy zum Eintrag gemacht hat |
 | `GET /api/art/k/<key>/<name>` | – | Dieselben Bilder und `manifest.webmanifest` über den zufälligen Schlüssel der Installation (nur die Mitglieder jener Familie erhalten ihn, als `artKey` im Sync) — für das, was der Browser ohne Sitzung lädt: das Installations-Symbol. Falscher Schlüssel, unbekannter Name, Funktion aus: dasselbe 404 |
@@ -582,7 +582,7 @@ paused?}`, `bottle {amount_ml, colostrum_ml?}`, `diaper {kind}`, `sleep`, `weigh
 reminderEid?, due?}` (ein abgehakter Punkt) sowie die Nicht-Ereignisse
 `settings` (das Einstellungsdokument der Familie), `reminder {title, who,
 note?, times}` (ein täglicher Zeitplan) und `device {id, name, token, key}`
-(ein Knopf mit seinen Geheimnissen); Zeiten UTC-ISO; höchstens ein
+(ein Gerät mit seinen Geheimnissen); Zeiten UTC-ISO; höchstens ein
 offener Timer pro Typ und Familie (Regel im Client, bei einem Wettlauf gewinnt
 der zuerst gespeicherte).
 

@@ -13,7 +13,7 @@ export default {
   'type.task': 'Erledigt',
   'type.reminder': 'Erinnerung',
   'type.settings': 'Einstellungen',
-  'type.device': 'Knopf',
+  'type.device': 'Analog-Buttons',
   'side.L': 'links',
   'side.R': 'rechts',
   'who.baby': 'Baby',

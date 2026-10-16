@@ -61,7 +61,7 @@ test('type tables match entries.php, plus the family settings document, tasks an
     task: 'Erledigt',
     settings: 'Einstellungen',
     reminder: 'Erinnerung',
-    device: 'Knopf',
+    device: 'Analog-Buttons',
   });
   assert.deepEqual(WHO_VALUES, ['baby', 'mama', 'papa']);
   assert.equal(isEventType('settings'), false);

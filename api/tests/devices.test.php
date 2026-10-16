@@ -56,7 +56,7 @@ bt_test('devices: a member registers one — the token is handed out once and st
     for ($i = 2; $i < BT_DEVICE_MAX_PER_FAMILY; $i++) {
         dv_register();
     }
-    assert_error(api_call('POST', '/devices', []), 507, 'Zu viele Knöpfe – bitte zuerst einen entfernen', 'the 11th', 'devices.tooMany', ['max' => 10]);
+    assert_error(api_call('POST', '/devices', []), 507, 'Zu viele Geräte – bitte zuerst eines entfernen', 'the 11th', 'devices.tooMany', ['max' => 10]);
     assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM devices'), BT_DEVICE_MAX_PER_FAMILY);
     $other = second_family($pdo);
     login_as($pdo, $other['user']);
@@ -118,10 +118,10 @@ bt_test('devices: validation of a press — the token shape, the blob (canonical
         assert_error(dv_press($token, $blob), $status, $message, $label, $code);
     };
     foreach ([strtoupper($dev['token']), substr($dev['token'], 1), $dev['token'] . 'a', '', null, 42, ['x']] as $token) {
-        $bad($token, dv_blob(), 400, 'Ungültiger Knopf-Code', 'token ' . bt_format($token), 'devices.badToken');
+        $bad($token, dv_blob(), 400, 'Ungültiger Geräte-Code', 'token ' . bt_format($token), 'devices.badToken');
     }
     $unknown = str_repeat('0', 32);
-    $bad($unknown, dv_blob(), 404, 'Knopf nicht gefunden', 'unknown token', 'devices.notFound');
+    $bad($unknown, dv_blob(), 404, 'Gerät nicht gefunden', 'unknown token', 'devices.notFound');
     $bad($dev['token'], fake_b64u("\x01" . random_bytes(156)), 400, 'Ungültiger Datensatz', 'an entry envelope', 'request.badBlob');
     $bad($dev['token'], fake_b64u("\x02" . random_bytes(156)), 400, 'Ungültiger Datensatz', 'a feedback envelope', 'request.badBlob');
     $bad($dev['token'], dv_blob(28), 400, 'Ungültiger Datensatz', 'too short', 'request.badBlob');
@@ -188,7 +188,7 @@ bt_test('devices: removing one kills its token at once and drops its waiting pre
 
     $other = second_family($pdo);
     login_as($pdo, $other['user']);
-    assert_error(api_call('DELETE', "/devices/$a[id]"), 404, 'Knopf nicht gefunden', 'another family', 'devices.notFound');
+    assert_error(api_call('DELETE', "/devices/$a[id]"), 404, 'Gerät nicht gefunden', 'another family', 'devices.notFound');
     assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM devices'), 2, 'nothing removed');
 
     login_as($pdo, me());
@@ -196,11 +196,11 @@ bt_test('devices: removing one kills its token at once and drops its waiting pre
     assert_eq(count_of($pdo, 'SELECT COUNT(*) FROM devices'), 1);
     assert_eq(count_of($pdo, "SELECT COUNT(*) FROM device_events WHERE device_id = $a[id]"), 0, 'its presses went with it');
     assert_eq(count_of($pdo, "SELECT COUNT(*) FROM device_events WHERE device_id = $b[id]"), 1, 'the other device keeps its press');
-    assert_error(dv_press($a['token']), 404, 'Knopf nicht gefunden', 'the removed device presses on', 'devices.notFound');
+    assert_error(dv_press($a['token']), 404, 'Gerät nicht gefunden', 'the removed device presses on', 'devices.notFound');
     assert_response(dv_press($b['token']), 201, null, 'the other device still works');
-    assert_error(api_call('DELETE', "/devices/$a[id]"), 404, 'Knopf nicht gefunden', 'twice', 'devices.notFound');
-    assert_error(api_call('DELETE', '/devices/999'), 404, 'Knopf nicht gefunden', 'unknown', 'devices.notFound');
-    assert_error(api_call('DELETE', '/devices/abc'), 404, 'Knopf nicht gefunden', 'not an id', 'devices.notFound');
+    assert_error(api_call('DELETE', "/devices/$a[id]"), 404, 'Gerät nicht gefunden', 'twice', 'devices.notFound');
+    assert_error(api_call('DELETE', '/devices/999'), 404, 'Gerät nicht gefunden', 'unknown', 'devices.notFound');
+    assert_error(api_call('DELETE', '/devices/abc'), 404, 'Gerät nicht gefunden', 'not an id', 'devices.notFound');
     assert_error(api_call('PATCH', "/devices/$b[id]", ['x' => 1]), 405, 'Methode nicht erlaubt', 'PATCH', 'request.methodNotAllowed');
     assert_eq(fails_of($pdo, 'write:' . T_IP), 8, 'registrations and removals draw on the write budget');
 });

@@ -13,8 +13,9 @@ the device's name.
 ## What you need
 
 - An Arduino Nano ESP32 (or another ESP32 with Wi-Fi) and a USB cable
-- One push button per entry (momentary, normally open), wired between a
-  pin and GND — the sketch uses the internal pull-ups, no resistors
+- Up to three push buttons (momentary, normally open), each wired between
+  a pin and GND — the sketch uses the internal pull-ups, no resistors. Two
+  are enough to start: a pin without a button simply never fires
 - The Arduino IDE 2.x with the board package **Arduino ESP32 Boards**
   (Boards Manager; the Espressif *esp32* package works too)
 - A device code from the app: Mehr › Einstellungen › Analog-Buttons ›
@@ -26,9 +27,10 @@ the device's name.
 | --- | --- | --- |
 | 1 | D2 ↔ GND | Windel · Pipi |
 | 2 | D3 ↔ GND | Windel · Gaggi |
+| 3 | D4 ↔ GND | Windel · Beides (optional — leave the pin open until you add the button) |
 
-A third button for «Beides» is one more line in `BUTTONS[]`
-(`{"kind":"both"}`). Any event type Zuno knows works the same way — the
+Pins and entries live in `BUTTONS[]` at the top of the sketch; swap a pin
+or a kind there. Any event type Zuno knows works the same way — the
 `details` are what the app stores for that type (see `src/validate.js`):
 a bottle `{"amount_ml":90}`, a medication `{"name":"Vitamin D"}`, a sleep
 timer `{}` (a second sleep press while one runs is refused by the phone).
@@ -43,8 +45,10 @@ timer `{}` (a second sleep press while one runs is refused by the phone).
 3. Upload. Open the serial monitor at 115200 baud to watch it connect,
    read the time and send.
 
-The device is now registered in the app; press a button and the entry
-appears on both phones with the next sync (within a minute while the app
+The device is now registered in the app (one device per board, however
+many buttons it has — the app names the device, the sketch says which
+button logs what); press a button and the entry appears on both phones
+with the next sync (within a minute while the app
 is open). «Testdruck senden» in the app sends one press without the
 hardware — the same bytes the sketch sends — to prove the path.
 

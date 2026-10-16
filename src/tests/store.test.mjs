@@ -2373,7 +2373,7 @@ function devicesApi(server, dv) {
       if (path === 'api/devices/events') {
         // The device's own request (no cookie): the token names the device.
         const device = dv.devices.find((d) => d.token === body.token);
-        if (!device) throw httpError(404, 'Knopf nicht gefunden', 'devices.notFound');
+        if (!device) throw httpError(404, 'Gerät nicht gefunden', 'devices.notFound');
         dv.events.push({ id: ++dv.lastId, device: device.id, blob: body.blob, createdAt: TODAY });
         return { ok: true };
       }
@@ -2388,7 +2388,7 @@ function devicesApi(server, dv) {
       const m = /^api\/devices\/(\d+)$/.exec(path);
       if (m) {
         const id = Number(m[1]);
-        if (!dv.devices.some((d) => d.id === id)) throw httpError(404, 'Knopf nicht gefunden', 'devices.notFound');
+        if (!dv.devices.some((d) => d.id === id)) throw httpError(404, 'Gerät nicht gefunden', 'devices.notFound');
         dv.devices = dv.devices.filter((d) => d.id !== id);
         dv.events = dv.events.filter((e) => e.device !== id);
         return { ok: true };
@@ -2481,9 +2481,9 @@ test('devices: a press nobody can read, one with a wrong clock, one of a removed
   assert.deepEqual(dv.events, [], 'every press cleared: none comes back');
   assert.deepEqual(mama.toasts, [
     'Knopfdruck von «Knopf» verworfen: Entschlüsselung fehlgeschlagen',
-    'Knopfdruck von «Knopf» verworfen: Die Uhr des Knopfs stimmt nicht',
+    'Knopfdruck von «Knopf» verworfen: Die Uhr des Geräts stimmt nicht',
     'Knopfdruck von «Knopf» verworfen: "details.kind" muss "pee", "poop" oder "both" sein',
-    'Knopfdruck eines unbekannten Knopfs verworfen',
+    'Knopfdruck eines unbekannten Geräts verworfen',
   ]);
 
   // A good press after the bad ones still lands.

@@ -69,9 +69,9 @@ export default {
   'spots.notFound': 'Ort nicht gefunden',
 
   // physical buttons (lib/devices.php, auth.php's dev:<ip> budget)
-  'devices.badToken': 'Ungültiger Knopf-Code',
-  'devices.notFound': 'Knopf nicht gefunden',
-  'devices.tooMany': 'Zu viele Knöpfe – bitte zuerst einen entfernen',
+  'devices.badToken': 'Ungültiger Geräte-Code',
+  'devices.notFound': 'Gerät nicht gefunden',
+  'devices.tooMany': 'Zu viele Geräte – bitte zuerst eines entfernen',
   'devices.full': 'Zu viele unverarbeitete Knopfdrücke – bitte die App öffnen',
   'devices.eventNotFound': 'Knopfdruck nicht gefunden',
   'devices.throttled': 'Zu viele Knopfdrücke in kurzer Zeit – bitte später nochmals versuchen',

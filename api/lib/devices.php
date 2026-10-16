@@ -65,7 +65,7 @@ function bt_device_token_hash(string $token): string
 function bt_valid_device_token($value): string
 {
     if (!is_string($value) || !preg_match('/^[0-9a-f]{32}$/D', $value)) {
-        throw new HttpError(400, 'Ungültiger Knopf-Code', 'devices.badToken');
+        throw new HttpError(400, 'Ungültiger Geräte-Code', 'devices.badToken');
     }
     return $value;
 }
@@ -94,7 +94,7 @@ function bt_valid_device_blob($value): string
 function bt_valid_device_id(string $value): int
 {
     if (!preg_match('/^[1-9]\d{0,14}$/D', $value)) {
-        throw new HttpError(404, 'Knopf nicht gefunden', 'devices.notFound');
+        throw new HttpError(404, 'Gerät nicht gefunden', 'devices.notFound');
     }
     return (int) $value;
 }
@@ -121,7 +121,7 @@ function bt_device_create(PDO $pdo, int $familyId, ?string $today = null): array
         $stmt = $pdo->prepare('SELECT COUNT(*) FROM devices WHERE family_id = ?');
         $stmt->execute([$familyId]);
         if ((int) $stmt->fetchColumn() >= BT_DEVICE_MAX_PER_FAMILY) {
-            throw new HttpError(507, 'Zu viele Knöpfe – bitte zuerst einen entfernen', 'devices.tooMany', ['max' => BT_DEVICE_MAX_PER_FAMILY]);
+            throw new HttpError(507, 'Zu viele Geräte – bitte zuerst eines entfernen', 'devices.tooMany', ['max' => BT_DEVICE_MAX_PER_FAMILY]);
         }
         $pdo->prepare('INSERT INTO devices (family_id, token_hash, created_at) VALUES (?, ?, ?)')
             ->execute([$familyId, bt_device_token_hash($token), $day]);
@@ -141,7 +141,7 @@ function bt_device_delete(PDO $pdo, int $familyId, int $id): array
         $stmt = $pdo->prepare('DELETE FROM devices WHERE id = ? AND family_id = ?');
         $stmt->execute([$id, $familyId]);
         if ($stmt->rowCount() === 0) {
-            throw new HttpError(404, 'Knopf nicht gefunden', 'devices.notFound');
+            throw new HttpError(404, 'Gerät nicht gefunden', 'devices.notFound');
         }
         $pdo->prepare('DELETE FROM device_events WHERE device_id = ? AND family_id = ?')->execute([$id, $familyId]);
     });
@@ -163,7 +163,7 @@ function bt_device_press(PDO $pdo, array $body, ?string $today = null): array
         $stmt->execute([bt_device_token_hash($token)]);
         $device = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($device === false) {
-            throw new HttpError(404, 'Knopf nicht gefunden', 'devices.notFound');
+            throw new HttpError(404, 'Gerät nicht gefunden', 'devices.notFound');
         }
         $familyId = (int) $device['family_id'];
         $stmt = $pdo->prepare('SELECT COUNT(*) FROM device_events WHERE family_id = ?');

@@ -34,14 +34,14 @@ test('deviceCode / parseDeviceCode: the token then the key, 96 hex; whitespace a
   assert.equal(groupedCode(code).split(' ').length, 12, 'twelve groups of eight');
   assert.throws(() => parseDeviceCode(code.slice(1)), /96 Hex-Zeichen/);
   assert.throws(() => parseDeviceCode(code + 'g'), /96 Hex-Zeichen/);
-  assert.throws(() => deviceCode({ token: 'x', key: KEY }), /Knopf-Code/);
-  assert.throws(() => deviceCode({ token: TOKEN, key: KEY.slice(1) }), /Knopf-Schlüssel/);
+  assert.throws(() => deviceCode({ token: 'x', key: KEY }), /Geräte-Code/);
+  assert.throws(() => deviceCode({ token: TOKEN, key: KEY.slice(1) }), /Geräte-Schlüssel/);
 });
 
 test('cleanDeviceName: trimmed, collapsed, capped; empty = the default', () => {
   assert.equal(cleanDeviceName('  Wickeltisch   oben '), 'Wickeltisch oben');
-  assert.equal(cleanDeviceName(''), 'Knopf');
-  assert.equal(cleanDeviceName(null), 'Knopf');
+  assert.equal(cleanDeviceName(''), 'Wickeltisch');
+  assert.equal(cleanDeviceName(null), 'Wickeltisch');
   assert.equal([...cleanDeviceName('x'.repeat(100))].length, DEVICE_NAME_MAX);
   assert.equal([...cleanDeviceName('🔘'.repeat(100))].length, DEVICE_NAME_MAX, 'code points, not UTF-16 units');
 });
@@ -67,9 +67,9 @@ test('pressToDraft: the envelope version, an event type, a recent instant; the d
   assert.throws(() => pressToDraft({ ...PRESS, v: 1 }, NOW), /Unbekanntes Format/);
   assert.throws(() => pressToDraft({ ...PRESS, type: 'settings' }, NOW), /unbekannten Eintragstyp/);
   assert.throws(() => pressToDraft({ ...PRESS, type: 'device' }, NOW), /unbekannten Eintragstyp/);
-  assert.throws(() => pressToDraft({ ...PRESS, at: '2026-10-16T12:20:00Z' }, NOW), /Uhr des Knopfs/, 'the future');
-  assert.throws(() => pressToDraft({ ...PRESS, at: '1970-01-01T00:00:10Z' }, NOW), /Uhr des Knopfs/, 'a clock never set');
-  assert.throws(() => pressToDraft({ ...PRESS, at: 'gestern' }, NOW), /Uhr des Knopfs/);
+  assert.throws(() => pressToDraft({ ...PRESS, at: '2026-10-16T12:20:00Z' }, NOW), /Uhr des Geräts/, 'the future');
+  assert.throws(() => pressToDraft({ ...PRESS, at: '1970-01-01T00:00:10Z' }, NOW), /Uhr des Geräts/, 'a clock never set');
+  assert.throws(() => pressToDraft({ ...PRESS, at: 'gestern' }, NOW), /Uhr des Geräts/);
   const edge = new Date(Date.parse(NOW) - PRESS_MAX_AGE_DAYS * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   assert.equal(pressToDraft({ ...PRESS, at: edge }, NOW).startedAt, edge, 'exactly the horizon still counts');
   assert.throws(() => pressToDraft(null, NOW), /Unbekanntes Format/);
