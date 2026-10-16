@@ -15,6 +15,15 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-10-16',
+    de: [
+      'Karte: Der Knopf «Info» heisst jetzt «Info/Einstellung» und hat die Startansicht bei sich – zum Ort zoomen, «Aktuellen Kartenausschnitt übernehmen», und die Karte beginnt künftig dort. Der Abschnitt «Karte» unter Mehr › Einstellungen ist damit weg.',
+    ],
+    en: [
+      'Map: the "Info" button is now "Info/Settings" and holds the start view – zoom to the place, "Take the current map view", and the map opens there from now on. The "Map" section under More › Settings is gone with it.',
+    ],
+  },
+  {
     id: '2026-10-14-c',
     de: [
       'Neu auf der Karte: «Ort hinzufügen». Fehlt ein Wickeltisch oder ein Platz zum Stillen, schieb die Karte, bis das Kreuz auf dem Ort steht, und sag, was es dort gibt – ohne deinen Namen. Die Person, die Zuno betreibt, prüft die Meldung; danach sehen den Ort alle.',

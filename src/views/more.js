@@ -34,7 +34,7 @@ import {
 } from '../dose.js';
 import { zurichDateOf } from '../tz.js';
 import { THEMES, DEFAULT_THEME, SCHEMES, applyTheme, applyScheme } from '../themes/index.js';
-import { t, tn, availableLocales, getLocale, setLocale, localeMeta } from '../i18n/index.js';
+import { t, tn, availableLocales, getLocale, setLocale } from '../i18n/index.js';
 import { openWhatsNewSheet } from '../whats-new-sheet.js';
 import { openFeedbackForm, openFeedbackInbox } from '../feedback-sheet.js';
 import { openSpotsSheet } from '../spots-sheet.js';
@@ -137,23 +137,6 @@ function reminderListHtml() {
 }
 
 /** The note under the reminders while this phone does not show them on «Jetzt». */
-/** «Startansicht: …» with the buttons to take the map's last view or to
- *  clear it — the «Karte» section of the device settings. */
-function mapStartHtml() {
-  const start = prefs.mapStart;
-  const last = prefs.mapView;
-  const fmt = (n, digits) => n.toFixed(digits).replace('.', localeMeta().decimalSeparator);
-  const label = start
-    ? t('more.map.start.set', { zoom: fmt(start.zoom, start.zoom % 1 ? 1 : 0), lat: fmt(start.lat, 3), lon: fmt(start.lon, 3) })
-    : t('more.map.start.none');
-  return `<p class="setting-value">${escapeHtml(label)}</p>
-    <div class="btn-row">
-      <button type="button" class="btn small" data-map-start-capture ${last ? '' : 'disabled'}>${t('more.map.start.capture')}</button>
-      ${start ? `<button type="button" class="btn small" data-map-start-reset>${t('more.map.start.reset')}</button>` : ''}
-    </div>
-    ${last ? '' : `<p class="hint">${t('more.map.start.captureHint')}</p>`}`;
-}
-
 function homeCardNoteHtml() {
   if (prefs.homeCard === 'reminders' || prefs.homeCard === 'both') {
     return '';
@@ -541,10 +524,6 @@ export function renderMore(el) {
             aria-checked="${on}" data-scheme="${s.id || ''}">${s.label}</button>`;
         }).join('')}
       </div>
-
-      <h2 class="section-title">${t('more.map.title')}</h2>
-      <p class="hint">${t('more.map.hint')}</p>
-      <div data-map-start>${mapStartHtml()}</div>
 
       <h2 class="section-title">${t('common.language')}</h2>
       <div class="segmented" role="radiogroup" aria-label="${attr('common.language')}" data-langs>
@@ -1061,23 +1040,6 @@ export function renderMore(el) {
         });
       })
     );
-
-    // --- the map's start view (per device): taken from where the map was
-    //     last, cleared back to the whole box ---
-    const mapStartWrap = el.querySelector('[data-map-start]');
-    mapStartWrap.addEventListener('click', (e) => {
-      if (e.target.closest('[data-map-start-capture]')) {
-        const view = prefs.mapView;
-        if (!view) return;
-        prefs.mapStart = view;
-        mapStartWrap.innerHTML = mapStartHtml();
-        toast(t('more.map.start.saved'), 'success');
-      } else if (e.target.closest('[data-map-start-reset]')) {
-        prefs.mapStart = null;
-        mapStartWrap.innerHTML = mapStartHtml();
-        toast(t('more.map.start.cleared'), 'success');
-      }
-    });
 
     // --- language (per device): the shell relabels the tab bar and re-routes
     //     on `bt-lang` (main.js), which rebuilds this view on the same pane —
