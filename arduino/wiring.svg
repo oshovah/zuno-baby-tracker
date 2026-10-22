@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 560" width="920" height="560" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Zuno – Analog-Buttons: the cable build</title>
+  <desc>An Arduino Nano ESP32 from above with the USB-C connector on the right. Four female jumper ends sit on GND, D2, D3 and D4 of the pin row that ends in TX1. Each of the three 12 × 12 mm buttons hangs on two wires: the wire from its pin on one leg, the shared ground on the diagonally opposite leg. The ground runs from GND to button 1, on to button 2 and on to button 3. Button 1 is Pipi on D2, button 2 Gaggi on D3, button 3 Beides on D4.</desc>
+  <rect width="920" height="560" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#1b1b1b">Zuno – Analog-Buttons · the cable build</text>
+  <text x="24" y="56" font-size="12" fill="#555">Arduino Nano ESP32 from above, USB-C on the right · three 12 × 12 mm buttons on wires · no resistor, no diode, no extra power</text>
+
+  <!-- the board -->
+  <rect x="120" y="110" width="330" height="130" rx="8" fill="#0e5a68" stroke="#073642" stroke-width="2"/>
+  <rect x="441" y="157" width="36" height="36" rx="5" fill="#b5b5b5" stroke="#6b6b6b"/>
+  <text x="459" y="208" text-anchor="middle" font-size="9" fill="#555">USB-C</text>
+  <text x="285" y="183" text-anchor="middle" font-size="12" fill="#d7ecef">Arduino Nano ESP32 · from above</text>
+  <g>
+    <circle cx="140" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(143.5 152) rotate(-90)" font-size="9" fill="#fff">VIN</text>
+    <rect x="155.5" y="105.5" width="9" height="9" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(163.5 152) rotate(-90)" font-size="9" fill="#fff">GND</text>
+    <circle cx="180" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(183.5 152) rotate(-90)" font-size="9" fill="#fff">B1</text>
+    <circle cx="200" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(203.5 152) rotate(-90)" font-size="9" fill="#fff">VBUS</text>
+    <circle cx="220" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(223.5 152) rotate(-90)" font-size="9" fill="#fff">A7</text>
+    <circle cx="240" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(243.5 152) rotate(-90)" font-size="9" fill="#fff">A6</text>
+    <circle cx="260" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(263.5 152) rotate(-90)" font-size="9" fill="#fff">A5</text>
+    <circle cx="280" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(283.5 152) rotate(-90)" font-size="9" fill="#fff">A4</text>
+    <circle cx="300" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(303.5 152) rotate(-90)" font-size="9" fill="#fff">A3</text>
+    <circle cx="320" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(323.5 152) rotate(-90)" font-size="9" fill="#fff">A2</text>
+    <circle cx="340" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(343.5 152) rotate(-90)" font-size="9" fill="#fff">A1</text>
+    <circle cx="360" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(363.5 152) rotate(-90)" font-size="9" fill="#fff">A0</text>
+    <circle cx="380" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(383.5 152) rotate(-90)" font-size="9" fill="#fff">B0</text>
+    <circle cx="400" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(403.5 152) rotate(-90)" font-size="9" fill="#fff">3V3</text>
+    <circle cx="420" cy="110" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(423.5 152) rotate(-90)" font-size="9" fill="#fff">D13</text>
+    <circle cx="140" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(143.5 230) rotate(-90)" font-size="9" fill="#fff">TX1</text>
+    <circle cx="160" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(163.5 230) rotate(-90)" font-size="9" fill="#fff">RX0</text>
+    <circle cx="180" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(183.5 230) rotate(-90)" font-size="9" fill="#fff">RST</text>
+    <rect x="195.5" y="235.5" width="9" height="9" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(203.5 230) rotate(-90)" font-size="9" fill="#fff" font-weight="700">GND</text>
+    <circle cx="220" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(223.5 230) rotate(-90)" font-size="9" fill="#fff" font-weight="700">D2</text>
+    <circle cx="240" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(243.5 230) rotate(-90)" font-size="9" fill="#fff" font-weight="700">D3</text>
+    <circle cx="260" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(263.5 230) rotate(-90)" font-size="9" fill="#fff" font-weight="700">D4</text>
+    <circle cx="280" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(283.5 230) rotate(-90)" font-size="9" fill="#fff">D5</text>
+    <circle cx="300" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(303.5 230) rotate(-90)" font-size="9" fill="#fff">D6</text>
+    <circle cx="320" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(323.5 230) rotate(-90)" font-size="9" fill="#fff">D7</text>
+    <circle cx="340" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(343.5 230) rotate(-90)" font-size="9" fill="#fff">D8</text>
+    <circle cx="360" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(363.5 230) rotate(-90)" font-size="9" fill="#fff">D9</text>
+    <circle cx="380" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(383.5 230) rotate(-90)" font-size="9" fill="#fff">D10</text>
+    <circle cx="400" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(403.5 230) rotate(-90)" font-size="9" fill="#fff">D11</text>
+    <circle cx="420" cy="240" r="4.5" fill="#e6c75c" stroke="#7a5c12"/><text transform="translate(423.5 230) rotate(-90)" font-size="9" fill="#fff">D12</text>
+  </g>
+
+  <!-- four female jumper ends on GND, D2, D3, D4 -->
+  <g>
+    <rect x="194" y="244" width="12" height="18" rx="2" fill="#2b2b2b"/>
+    <rect x="214" y="244" width="12" height="18" rx="2" fill="#2b2b2b"/>
+    <rect x="234" y="244" width="12" height="18" rx="2" fill="#2b2b2b"/>
+    <rect x="254" y="244" width="12" height="18" rx="2" fill="#2b2b2b"/>
+  </g>
+  <text x="188" y="257" text-anchor="end" font-size="10" fill="#555">4 female jumper ends</text>
+
+  <!-- the wires -->
+  <g>
+    <path d="M220 262 V372 H568 V388" fill="none" stroke="#e9b912" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M240 262 V357 H688 V388" fill="none" stroke="#46a24e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M260 262 V342 H808 V388" fill="none" stroke="#3b82d6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M200 262 V495 H832" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M592 472 V495" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M712 472 V495" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M832 472 V495" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="592" cy="495" r="4" fill="#222"/>
+    <circle cx="712" cy="495" r="4" fill="#222"/>
+  </g>
+
+  <!-- the buttons -->
+  <g>
+    <rect x="566" y="388" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="590" y="388" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="566" y="460" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="590" y="460" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="550" y="400" width="60" height="60" rx="5" fill="#2a2a2a" stroke="#111"/>
+    <circle cx="580" cy="430" r="21" fill="#e9b912" stroke="#7a5f00" stroke-width="1.5"/>
+    <circle cx="573" cy="423" r="6" fill="#fff" fill-opacity="0.35"/>
+    <text x="580" y="435" text-anchor="middle" font-size="15" font-weight="700" fill="#7a5f00">1</text>
+    <text x="580" y="524" text-anchor="middle" font-size="13" font-weight="700" fill="#1b1b1b">1 · Pipi</text>
+    <text x="580" y="541" text-anchor="middle" font-size="11" fill="#555">D2 · {"kind":"pee"}</text>
+    <rect x="686" y="388" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="710" y="388" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="686" y="460" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="710" y="460" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="670" y="400" width="60" height="60" rx="5" fill="#2a2a2a" stroke="#111"/>
+    <circle cx="700" cy="430" r="21" fill="#46a24e" stroke="#1f5a26" stroke-width="1.5"/>
+    <circle cx="693" cy="423" r="6" fill="#fff" fill-opacity="0.35"/>
+    <text x="700" y="435" text-anchor="middle" font-size="15" font-weight="700" fill="#1f5a26">2</text>
+    <text x="700" y="524" text-anchor="middle" font-size="13" font-weight="700" fill="#1b1b1b">2 · Gaggi</text>
+    <text x="700" y="541" text-anchor="middle" font-size="11" fill="#555">D3 · {"kind":"poop"}</text>
+    <rect x="806" y="388" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="830" y="388" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="806" y="460" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="830" y="460" width="4" height="12" fill="#c4c4c4" stroke="#6e6e6e" stroke-width="0.8"/>
+    <rect x="790" y="400" width="60" height="60" rx="5" fill="#2a2a2a" stroke="#111"/>
+    <circle cx="820" cy="430" r="21" fill="#3b82d6" stroke="#173f73" stroke-width="1.5"/>
+    <circle cx="813" cy="423" r="6" fill="#fff" fill-opacity="0.35"/>
+    <text x="820" y="435" text-anchor="middle" font-size="15" font-weight="700" fill="#173f73">3</text>
+    <text x="820" y="524" text-anchor="middle" font-size="13" font-weight="700" fill="#1b1b1b">3 · Beides</text>
+    <text x="820" y="541" text-anchor="middle" font-size="11" fill="#555">D4 · {"kind":"both"}</text>
+  </g>
+
+  <text font-size="11.5" fill="#333" y="96">
+      <tspan x="500" dy="0">GND · D2 · D3 · D4 sit side by side on the row that ends in TX1</tspan>
+      <tspan x="500" dy="15">(GND is the square pad): four female jumper ends in a row.</tspan>
+      <tspan x="500" dy="24">Each button: the wire from its pin on one leg, the ground on the</tspan>
+      <tspan x="500" dy="15">diagonally opposite leg — two legs of a pair are joined inside the</tspan>
+      <tspan x="500" dy="15">button, diagonal legs never are.</tspan>
+      <tspan x="500" dy="24">The ground is one wire from button to button: the incoming and the</tspan>
+      <tspan x="500" dy="15">outgoing wire share a leg (twisted together, soldered on at once).</tspan>
+      <tspan x="500" dy="24">No resistor, no diode, no power wire: the Nano pulls the pins up</tspan>
+      <tspan x="500" dy="15">itself. The wire colours only tell the three apart.</tspan>
+  </text>
+</svg>

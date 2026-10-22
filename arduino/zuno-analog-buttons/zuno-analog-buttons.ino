@@ -17,12 +17,16 @@
 //   - The network work (Wi-Fi, the clock, the sending) runs in a task of
 //     its own, so the buttons are read all the time — a second press while
 //     the first one is still on its way is not lost.
+//   - With OTA_PASSWORD set, a new version can be uploaded over Wi-Fi from
+//     the Arduino IDE (a network port named OTA_NAME); USB is then needed
+//     only for the very first upload.
 //
-// Configure the five values below, flash, press.
+// Configure the values below, flash, press.
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <ArduinoOTA.h>
 #include <mbedtls/gcm.h>
 #include <sys/time.h>
 #include <time.h>
@@ -69,6 +73,15 @@ Button BUTTONS[] = {
   { D3, "diaper", "{\"kind\":\"poop\"}" },  // Gaggi
   { D4, "diaper", "{\"kind\":\"both\"}" },  // Beides
 };
+
+// Updates over Wi-Fi: with a password here, the board shows up in the
+// Arduino IDE as a network port named OTA_NAME (Tools › Port), and the IDE
+// asks for this password on upload. Empty = off: only USB can flash it.
+// Anyone on your Wi-Fi who has the password can replace the program, so pick
+// a long one. Upload from your home network only: the program travels
+// unencrypted, and it contains your Wi-Fi password and the device code.
+const char* OTA_PASSWORD = "";
+const char* OTA_NAME = "zuno-wickeltisch";  // letters, digits and dashes; one name per board
 
 // Set to false to skip the certificate check (only while debugging a host
 // whose root is not in root_ca.h: the token could then be read on the way).
@@ -117,6 +130,8 @@ uint8_t key[32];     // the other 64, as bytes
 bool codeOk = false;
 
 volatile bool clockSynced = false;  // set by the sender task, read by loop()
+volatile bool otaBusy = false;      // an upload over Wi-Fi is running: the sender task holds still
+bool otaStarted = false;
 unsigned long clockSyncedAt = 0;
 unsigned long nextClockTry = 0;
 unsigned long lastWifiTry = 0;
@@ -327,7 +342,7 @@ int sendPress(const Press& p) {
 void senderTask(void*) {
   unsigned long backoff = 0;
   for (;;) {
-    if (!codeOk) {
+    if (!codeOk || otaBusy) {
       vTaskDelay(pdMS_TO_TICKS(500));
       continue;
     }
@@ -406,6 +421,44 @@ void ensureWifi() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
+// --- updates over Wi-Fi ---------------------------------------------------------------
+
+/**
+ * Starts listening for uploads once the Wi-Fi is up (the network port needs
+ * an address). The upload itself runs inside ArduinoOTA.handle() in loop():
+ * the buttons are not read for those few seconds, the sender task waits, and
+ * the board restarts into the new program at the end. Presses still waiting
+ * (red LED on) live in memory only and are lost with that restart.
+ */
+void startOta() {
+  if (otaStarted || OTA_PASSWORD[0] == 0 || WiFi.status() != WL_CONNECTED) return;
+  otaStarted = true;
+  ArduinoOTA.setHostname(OTA_NAME);
+  ArduinoOTA.setPassword(OTA_PASSWORD);
+  ArduinoOTA.onStart([]() {
+    otaBusy = true;
+    Serial.printf("[ota] update starts%s\n", waiting() > 0 ? " — presses still waiting are lost with the restart" : "");
+    led(PIN_LED_R, false);
+    led(PIN_LED_G, false);
+  });
+  ArduinoOTA.onProgress([](unsigned int done, unsigned int total) {
+    led(PIN_LED_B, total > 0 && (done * 20 / total) % 2 == 0);  // the blue LED flickers while the program arrives
+  });
+  ArduinoOTA.onEnd([]() {
+    led(PIN_LED_B, false);
+    Serial.println("[ota] done, restarting");
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    otaBusy = false;
+    led(PIN_LED_B, false);
+    blink(PIN_LED_R, 3);
+    led(PIN_LED_R, waiting() > 0);
+    Serial.printf("[ota] failed (%u)%s\n", (unsigned)error, error == OTA_AUTH_ERROR ? ": wrong password" : "");
+  });
+  ArduinoOTA.begin();
+  Serial.printf("[ota] ready: %s (%s)\n", OTA_NAME, WiFi.localIP().toString().c_str());
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -453,6 +506,9 @@ void greet() {
   Serial.printf("[boot] Zuno Analog-Buttons · %d Knöpfe · Code %s · WLAN %s · Uhr %s · %d wartend\n",
                 BUTTON_COUNT, codeOk ? "ok" : "FEHLT/ungültig", WiFi.status() == WL_CONNECTED ? "verbunden" : "nicht verbunden",
                 clockSynced ? "gestellt" : "nicht gestellt", waiting());
+  if (OTA_PASSWORD[0] == 0) Serial.println("[boot] Update über WLAN: aus (OTA_PASSWORD leer)");
+  else if (otaStarted) Serial.printf("[boot] Update über WLAN: bereit als %s (%s)\n", OTA_NAME, WiFi.localIP().toString().c_str());
+  else Serial.println("[boot] Update über WLAN: wartet aufs WLAN");
   Serial.printf("[boot] läuft seit %lu s · letzter Start: %s · %lu Drücke seit dem Start\n",
                 millis() / 1000UL, resetReasonText(), pressesSinceBoot);
   for (int i = 0; i < BUTTON_COUNT; i++) {
@@ -469,6 +525,8 @@ void loop() {
   } else if (!Serial) {
     greeted = false;  // the monitor was closed: greet again when it comes back
   }
+  startOta();
+  ArduinoOTA.handle();
   readButtons();
   // Nothing can be sent without a code: say so with the red LED and keep
   // reading the buttons (the presses wait). Everything else — Wi-Fi, the
