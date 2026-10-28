@@ -235,7 +235,7 @@ export function groupMeals(entries, nowIso) {
  * and `todos` ({today, tomorrow}: those schedules expanded into the day's
  * to-dos with their ticks, reminders.occurrencesFor — the home card and
  * checklist), and `devices` (the family's physical buttons: {eid, id,
- * name, createdAt} by id — the secrets stay in the entry, the cached
+ * name, createdAt, combos} by id — the secrets stay in the entry, the cached
  * snapshot never carries them).
  *
  * `entries` is the map or any array of entries (filtered + sorted here);
@@ -281,7 +281,7 @@ export function deriveState(entries, nowIso) {
   // The family's physical buttons (src/devices.js), by their server id.
   const devices = live
     .filter((e) => e.type === DEVICE_TYPE)
-    .map((e) => ({ eid: e.eid, id: e.details.id, name: e.details.name, createdAt: e.startedAt }))
+    .map((e) => ({ eid: e.eid, id: e.details.id, name: e.details.name, createdAt: e.startedAt, combos: { ...(e.details.combos || {}) } }))
     .sort((a, b) => a.id - b.id);
 
   // Today (Europe/Zurich calendar day of now).

@@ -16,15 +16,85 @@
 //
 // A press (the device's plaintext, inside the sealed blob):
 //   {v: 3, at: '2026-10-16T12:34:56Z', type: 'diaper', details: {kind: 'pee'}}
+// Two or more buttons pressed together are a COMBINATION (the sketch waits
+// CHORD_MS after the first push for the others):
+//   {v: 3, at: '2026-10-16T12:34:56Z', combo: 5}
+// `combo` is a bit mask (bit 0 = the sketch's first button). It carries no
+// meaning of its own: the device entry's `combos` map says what it ticks
+// off — a reminder, or the first open to-do — and the phone that converts
+// the press picks the slot (reminders.comboTodo).
 // `at` is the device's own clock (synced from the app host's Date header,
 // never a third party); a press older than PRESS_MAX_AGE_DAYS or in the
 // future is refused — a device with a broken clock must not write 1970.
 
 import { t } from './i18n/index.js';
-import { EVENT_TYPES, canonDatetime, assertNotFuture, isoFromMs, DEVICE_NAME_MAX } from './validate.js';
+import { EVENT_TYPES, canonDatetime, assertNotFuture, isoFromMs, DEVICE_NAME_MAX, COMBO_NEXT, isComboMask } from './validate.js';
 import { DEVICE_V } from './crypto.js';
 
-export { DEVICE_NAME_MAX };
+export { DEVICE_NAME_MAX, COMBO_NEXT, isComboMask };
+
+/**
+ * The combinations the settings offer, for the sketch's three buttons:
+ * 1+2, 1+3, 2+3, all three. The sketch sends any mask of up to eight
+ * buttons; the app lets a family assign these.
+ */
+export const COMBO_MASKS = [3, 5, 6, 7];
+
+/** What the sketch's buttons log as it ships (BUTTONS[] in the .ino): 1 Pipi, 2 Gaggi, 3 Beides. */
+const SKETCH_BUTTON_KEYS = ['common.diaper.wet', 'common.diaper.soiled', 'common.diaper.both'];
+
+/** The button numbers of a mask, 1-based: 5 → [1, 3]. */
+export function comboButtons(mask) {
+  const out = [];
+  for (let i = 0; i < 8; i++) if (mask & (1 << i)) out.push(i + 1);
+  return out;
+}
+
+/**
+ * A combination in words: {names: 'Pipi + Beides', buttons: 'Knopf 1 + 3'}.
+ * The names are the sketch's default layout — a reprogrammed button keeps
+ * its number, so both are shown.
+ */
+export function comboLabel(mask) {
+  const nums = comboButtons(mask);
+  const names = nums.map((n) => (SKETCH_BUTTON_KEYS[n - 1] ? t(SKETCH_BUTTON_KEYS[n - 1]) : t('devices.combo.buttonN', { n }))).join(' + ');
+  return { names, buttons: t('devices.combo.buttons', { list: nums.join(' + ') }) };
+}
+
+/** The press's instant, checked like every press's: canonical, not in the future, not older than PRESS_MAX_AGE_DAYS. */
+function pressInstant(plain, now) {
+  let at;
+  try {
+    at = canonDatetime(plain.at, 'at');
+    assertNotFuture(at, now);
+  } catch {
+    throw new Error(t('errors.devices.pressTime'));
+  }
+  if (Date.parse(now) - Date.parse(at) > PRESS_MAX_AGE_DAYS * 86400000) throw new Error(t('errors.devices.pressTime'));
+  return at;
+}
+
+/**
+ * A combination press → {combo, at}; null for a press of one button (that
+ * one is pressToDraft's). Throws on the envelope version, a mask that is
+ * not a combination, the instant.
+ */
+export function pressCombo(plain, nowIso) {
+  const now = nowIso ?? isoFromMs(Date.now());
+  if (!plain || typeof plain !== 'object' || plain.v !== DEVICE_V) throw new Error(t('errors.devices.pressVersion'));
+  if (plain.combo === undefined) return null;
+  if (!isComboMask(plain.combo)) throw new Error(t('errors.devices.pressCombo'));
+  return { combo: plain.combo, at: pressInstant(plain, now) };
+}
+
+/**
+ * The draft of the tick a combination makes for to-do slot `slot`
+ * (reminders.occurrencesFor): the same `task` the home card writes, at the
+ * press's instant.
+ */
+export function comboTickDraft(slot, at) {
+  return { type: 'task', startedAt: at, details: { title: slot.title, who: slot.who, reminderEid: slot.reminderEid, due: slot.due } };
+}
 
 /** The build guide and the sketch in the public source (GitHub renders arduino/README.md there). */
 export const SKETCH_URL = 'https://github.com/oshovah/zuno-baby-tracker/tree/main/arduino';
@@ -71,14 +141,7 @@ export function pressToDraft(plain, nowIso) {
   const now = nowIso ?? isoFromMs(Date.now());
   if (!plain || typeof plain !== 'object' || plain.v !== DEVICE_V) throw new Error(t('errors.devices.pressVersion'));
   if (typeof plain.type !== 'string' || !EVENT_TYPES.includes(plain.type)) throw new Error(t('errors.devices.pressType'));
-  let at;
-  try {
-    at = canonDatetime(plain.at, 'at');
-    assertNotFuture(at, now);
-  } catch {
-    throw new Error(t('errors.devices.pressTime'));
-  }
-  if (Date.parse(now) - Date.parse(at) > PRESS_MAX_AGE_DAYS * 86400000) throw new Error(t('errors.devices.pressTime'));
+  const at = pressInstant(plain, now);
   const details = plain.details && typeof plain.details === 'object' && !Array.isArray(plain.details) ? plain.details : {};
   return { type: plain.type, startedAt: at, details };
 }

@@ -100,7 +100,8 @@ import {
   randomDeviceKey,
 } from './crypto.js';
 import { readMessage } from './feedback.js';
-import { deviceCode, pressToDraft, testPress, cleanDeviceName } from './devices.js';
+import { deviceCode, pressToDraft, pressCombo, comboTickDraft, comboLabel, testPress, cleanDeviceName, isComboMask, COMBO_NEXT } from './devices.js';
+import { reminderOf, comboTodo } from './reminders.js';
 import { t } from './i18n/index.js';
 import {
   PENDING_SEQ_BASE,
@@ -124,6 +125,7 @@ import {
   isoFromMs,
   TYPE_LABELS,
   DEVICE_TYPE,
+  REMINDER_TYPE,
 } from './validate.js';
 import {
   deriveState,
@@ -136,6 +138,7 @@ import {
   effectiveFamilySettings,
   DEFAULT_FAMILY_SETTINGS,
   FAMILY_SETTING_KEYS,
+  liveEntries,
 } from './model.js';
 import { cleanSpot, spotDraftError, buildSpot, SPOT_NAME_MAX, SPOT_NOTE_MAX } from './spots.js';
 
@@ -2076,10 +2079,16 @@ export function createStore(deps) {
       if (device) {
         try {
           const plain = await openPress(device.details.key, ev.blob);
-          const draft = pressToDraft(plain, isoFromMs(nowMs()));
+          const now = isoFromMs(nowMs());
+          const combo = pressCombo(plain, now);
           const eid = await pressEid(ev.device, ev.id);
           if (gen !== generation) throw fail(t('errors.store.aborted'));
-          if (!effective().has(eid)) await entries.create(draft, { eid, loggedBy: device.details.name });
+          if (combo) {
+            notice = await convertCombo(device, combo, eid);
+          } else {
+            const draft = pressToDraft(plain, now);
+            if (!effective().has(eid)) await entries.create(draft, { eid, loggedBy: device.details.name });
+          }
         } catch (err) {
           if (gen !== generation) throw err;
           notice = t('errors.devices.pressDropped', { name: device.details.name, reason: (err && err.message) || '' });
@@ -2093,8 +2102,34 @@ export function createStore(deps) {
         // press for the next sync — the eid makes a second pass harmless.
         if (!err || err.status !== 404) continue;
       }
-      if (notice) toast(notice);
+      if (notice) toast(...(Array.isArray(notice) ? notice : [notice]));
     }
+  }
+
+  /**
+   * A combination press: tick off what the device's `combos` map assigns
+   * to it — the first open slot of that reminder (or of any, for «next») on
+   * the press's day — as the same `task` the home card writes, under the
+   * press's eid. Resolves with the toast for the parents ([text, kind]):
+   * there is no screen on the device, so this is the only word they get.
+   * A combination without an assignment or with nothing open throws
+   * (the press is dropped with a notice).
+   */
+  async function convertCombo(device, { combo, at }, eid) {
+    const name = device.details.name;
+    if (effective().has(eid)) return null; // the other phone (or a former pass) made it
+    const target = (device.details.combos || {})[String(combo)];
+    if (!target) throw new Error(t('errors.devices.comboUnassigned', { combo: comboLabel(combo).names }));
+    const live = liveEntries(effective());
+    const reminders = live.filter((e) => e.type === REMINDER_TYPE).map(reminderOf);
+    const tasks = live.filter((e) => e.type === 'task');
+    const res = comboTodo(reminders, tasks, at, target === COMBO_NEXT ? null : target);
+    if (res.reason === 'allDone') {
+      return [res.title ? t('devices.combo.alreadyDone', { name, title: res.title }) : t('devices.combo.nothingOpen', { name }), 'info'];
+    }
+    if (res.reason) throw new Error(t(`errors.devices.combo_${res.reason}`, { title: res.title || '' }));
+    await entries.create(comboTickDraft(res.slot, at), { eid, loggedBy: name });
+    return [t('devices.combo.ticked', { name, title: res.slot.title }), 'success'];
   }
 
   const devices = {
@@ -2139,6 +2174,22 @@ export function createStore(deps) {
         if (!err || err.status !== 404) throw err;
       }
       return entries.remove(eid);
+    },
+
+    /**
+     * Assign what button combination `mask` ticks off on device `eid`: a
+     * reminder's eid, COMBO_NEXT (the first open to-do), or null (nothing).
+     * An ordinary update of the device entry: both phones convert presses
+     * with the map they have. Resolves with the entry.
+     */
+    async setCombo(eid, mask, target) {
+      requireKey();
+      const e = liveLocal(eid);
+      if (e.type !== DEVICE_TYPE || !isComboMask(mask)) throw fail(t('errors.store.notFound'), 404);
+      const combos = { ...(e.details.combos || {}) };
+      if (target) combos[String(mask)] = target;
+      else delete combos[String(mask)];
+      return entries.update(eid, { details: { ...e.details, combos } });
     },
 
     /**

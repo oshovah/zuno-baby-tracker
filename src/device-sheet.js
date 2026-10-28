@@ -3,9 +3,10 @@
 //                                       sketch wants — the same sheet swaps
 //                                       its body to the detail view
 //   openDeviceSheet({eid, onChanged})   an existing one: the code again (to
-//                                       copy), a «Testdruck» that sends one
-//                                       press exactly as the device would,
-//                                       removal with two taps
+//                                       copy), what each button combination
+//                                       ticks off, a «Testdruck» that sends
+//                                       one press exactly as the device
+//                                       would, removal with two taps
 // ONE sheet whose body swaps between the form and the detail (a second
 // openSheet right after close() would race the history pop). The pure
 // shapes are src/devices.js; the store does the talking (store.devices).
@@ -14,7 +15,7 @@ import { store } from './store.js';
 import { t } from './i18n/index.js';
 import { openSheet } from './sheet.js';
 import { escapeHtml, toast, fmtDayHeading, localDateOf } from './ui.js';
-import { DEVICE_NAME_MAX, groupedCode, SKETCH_URL } from './devices.js';
+import { DEVICE_NAME_MAX, groupedCode, SKETCH_URL, COMBO_MASKS, COMBO_NEXT, comboLabel } from './devices.js';
 
 const ARM_MS = 3000;
 
@@ -33,6 +34,39 @@ function formHtml() {
     </form>`;
 }
 
+/** The family's reminders as the snapshot lists them (reminders.reminderOf, by first time). */
+function familyReminders() {
+  const data = store.snapshot && store.snapshot.data;
+  return (data && Array.isArray(data.reminders) && data.reminders) || [];
+}
+
+/** One combination's chips: Nichts · Nächste offene · each reminder; the assigned one active. */
+function comboChipsHtml(mask, target, reminders) {
+  const chip = (value, label) =>
+    `<button type="button" class="chip${value === (target || '') ? ' active' : ''}" data-target="${escapeHtml(value)}">${escapeHtml(label)}</button>`;
+  return [chip('', t('devices.combo.none')), chip(COMBO_NEXT, t('devices.combo.next')), ...reminders.map((r) => chip(r.eid, r.title))].join('');
+}
+
+/** «Kombinationen»: per combination of the sketch's buttons, what it ticks off. */
+function combosHtml(combos, reminders) {
+  const rows = COMBO_MASKS.map((mask) => {
+    const target = combos[String(mask)] || '';
+    const gone = target && target !== COMBO_NEXT && !reminders.some((r) => r.eid === target);
+    const label = comboLabel(mask);
+    return `
+      <div class="field combo-field">
+        <span class="combo-head">${escapeHtml(label.names)} <span class="combo-buttons">${escapeHtml(label.buttons)}</span></span>
+        <div class="chip-row" data-combo="${mask}">${comboChipsHtml(mask, target, reminders)}</div>
+        ${gone ? `<p class="hint">${escapeHtml(t('devices.combo.gone'))}</p>` : ''}
+      </div>`;
+  }).join('');
+  return `
+      <p class="field-label">${escapeHtml(t('devices.combo.title'))}</p>
+      <p class="hint">${escapeHtml(t('devices.combo.hint'))}</p>
+      ${reminders.length === 0 ? `<p class="hint">${escapeHtml(t('devices.combo.noReminders'))}</p>` : ''}
+      ${rows}`;
+}
+
 function detailHtml(entry, code, armed) {
   const d = entry.details;
   return `
@@ -43,6 +77,7 @@ function detailHtml(entry, code, armed) {
       <button type="button" class="btn wide" data-copy>${escapeHtml(t('devices.detail.copy'))}</button>
       <p class="hint">${escapeHtml(t('devices.detail.codeHint'))}
         <a href="${SKETCH_URL}" target="_blank" rel="noopener">${escapeHtml(t('devices.detail.sketch'))}</a></p>
+      <div data-combos>${combosHtml(d.combos || {}, familyReminders())}</div>
       <button type="button" class="btn wide" data-test>${escapeHtml(t('devices.detail.test'))}</button>
       <p class="hint">${escapeHtml(t('devices.detail.testHint'))}</p>
       <button type="button" class="btn wide danger" data-remove>${escapeHtml(t(armed ? 'devices.detail.removeConfirm' : 'devices.detail.remove'))}</button>
@@ -89,6 +124,26 @@ export function openDeviceSheet({ eid = null, onChanged } = {}) {
             /* ignore */
           }
           toast(t('devices.detail.copyFailed'), 'info');
+        }
+      });
+      // A tap assigns at once (an update of the device entry); the chip
+      // lights before the write lands, a refusal puts the row back.
+      body.querySelector('[data-combos]').addEventListener('click', async (ev) => {
+        const chip = ev.target.closest('[data-target]');
+        const row = chip && chip.closest('[data-combo]');
+        if (!row || chip.classList.contains('active')) return;
+        const mask = Number(row.dataset.combo);
+        const target = chip.dataset.target || null;
+        const before = row.innerHTML;
+        row.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === chip));
+        try {
+          await store.devices.setCombo(entry.eid, mask, target);
+          const gone = row.parentElement.querySelector('p.hint');
+          if (gone) gone.remove();
+          toast(t('devices.combo.saved', { combo: comboLabel(mask).names, target: chip.textContent }), 'success');
+        } catch (err) {
+          row.innerHTML = before;
+          toast((err && err.message) || t('errors.store.badPage'));
         }
       });
       const testBtn = body.querySelector('[data-test]');

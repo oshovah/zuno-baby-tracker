@@ -16,6 +16,13 @@ import {
   cleanDeviceName,
   pressToDraft,
   testPress,
+  pressCombo,
+  comboLabel,
+  comboButtons,
+  comboTickDraft,
+  isComboMask,
+  COMBO_MASKS,
+  COMBO_NEXT,
 } from '../devices.js';
 import { DEVICE_V, DEVICE_BUCKETS, sealPress, openPress, pressEid, randomDeviceKey, unb64u } from '../crypto.js';
 import { validDetails, validateCreate, DEVICE_TYPE } from '../validate.js';
@@ -138,4 +145,54 @@ test('pressEid: deterministic per (device, press), 32 hex, the first half of SHA
   assert.notEqual(eid, await pressEid(8, 42));
   await assert.rejects(pressEid(0, 1));
   await assert.rejects(pressEid(1, '1'));
+});
+
+test('button combinations: the masks, their words, the press that carries one and the tick it becomes', () => {
+  assert.deepEqual(COMBO_MASKS, [3, 5, 6, 7], '1+2, 1+3, 2+3, all three');
+  assert.deepEqual(COMBO_MASKS.map(isComboMask), [true, true, true, true]);
+  assert.deepEqual([0, 1, 2, 4, 128, 256, 3.5, '3'].map(isComboMask), Array(8).fill(false), 'one button is no combination');
+  assert.equal(isComboMask(255), true);
+  assert.deepEqual(comboButtons(5), [1, 3]);
+  assert.deepEqual(comboLabel(5), { names: 'Pipi + Beides', buttons: 'Knopf 1 + 3' });
+  assert.deepEqual(comboLabel(7), { names: 'Pipi + Gaggi + Beides', buttons: 'Knopf 1 + 2 + 3' });
+  assert.deepEqual(comboLabel(9), { names: 'Pipi + Knopf 4', buttons: 'Knopf 1 + 4' });
+
+  const combo = { v: DEVICE_V, at: '2026-10-16T11:58:30Z', combo: 5 };
+  assert.deepEqual(pressCombo(combo, NOW), { combo: 5, at: '2026-10-16T11:58:30Z' });
+  assert.equal(pressCombo(PRESS, NOW), null, 'a press of one button is not a combination');
+  assert.throws(() => pressCombo({ ...combo, combo: 4 }, NOW), /Knopf-Kombination/);
+  assert.throws(() => pressCombo({ ...combo, combo: 'x' }, NOW), /Knopf-Kombination/);
+  assert.throws(() => pressCombo({ ...combo, at: '1970-01-01T00:00:10Z' }, NOW), /Uhr des Geräts/);
+  assert.throws(() => pressCombo({ ...combo, v: 2 }, NOW), /Unbekanntes Format/);
+  assert.throws(() => pressToDraft(combo, NOW), /unbekannten Eintragstyp/, 'an older phone drops it with a notice');
+
+  const slot = { reminderEid: 'b'.repeat(32), title: 'Vitamin D', who: 'baby', due: '2026-10-16T06:00:00Z' };
+  const draft = comboTickDraft(slot, '2026-10-16T11:58:30Z');
+  assert.deepEqual(draft, { type: 'task', startedAt: '2026-10-16T11:58:30Z', details: { title: 'Vitamin D', who: 'baby', reminderEid: 'b'.repeat(32), due: '2026-10-16T06:00:00Z' } });
+  assert.deepEqual(validateCreate(draft, NOW).details, draft.details, 'the same task the home card writes');
+});
+
+test('validDetails(device): the combos map — combination → a reminder or «next»; empty is not stored', () => {
+  const base = { id: 3, name: 'x', token: TOKEN, key: KEY };
+  const R = 'c'.repeat(32);
+  assert.deepEqual(validDetails(DEVICE_TYPE, { ...base, combos: { 5: R, 7: COMBO_NEXT } }).combos, { 5: R, 7: 'next' });
+  assert.equal('combos' in validDetails(DEVICE_TYPE, { ...base, combos: {} }), false);
+  assert.equal('combos' in validDetails(DEVICE_TYPE, { ...base, combos: null }), false);
+  for (const bad of [[R], { 4: R }, { 1: R }, { '05': R }, { 256: R }, { 5: 'later' }, { 5: R.toUpperCase() }, { 5: null }]) {
+    assert.throws(() => validDetails(DEVICE_TYPE, { ...base, combos: bad }), /details\.combos/, JSON.stringify(bad));
+  }
+});
+
+test('a combination press sealed the way the sketch does it opens on the phone and has the length of any press', async () => {
+  const keyHex = randomDeviceKey();
+  const json = JSON.stringify({ v: 3, at: '2026-10-16T11:59:00Z', combo: 5 });
+  const padded = Buffer.alloc(128, 0x20);
+  padded.write(json, 'utf8');
+  const iv = nodeRandom(12);
+  const c = createCipheriv('aes-256-gcm', Buffer.from(keyHex, 'hex'), iv);
+  c.setAAD(Buffer.from('bt1|device'));
+  const ct = Buffer.concat([c.update(padded), c.final()]);
+  const blob = Buffer.concat([Buffer.from([3]), iv, ct, c.getAuthTag()]).toString('base64url');
+  assert.equal(unb64u(blob).length, unb64u(await sealPress(keyHex, PRESS)).length, 'a combination looks like a Pipi on the wire');
+  assert.deepEqual(pressCombo(await openPress(keyHex, blob), NOW), { combo: 5, at: '2026-10-16T11:59:00Z' });
 });

@@ -37,6 +37,7 @@ export default {
   'validate.deviceName': '"details.name" muss ein Name sein (max. {max} Zeichen)',
   'validate.deviceToken': '"details.token" muss der Geräte-Code sein (32 Hex-Zeichen)',
   'validate.deviceKey': '"details.key" muss der Geräte-Schlüssel sein (64 Hex-Zeichen)',
+  'validate.deviceCombos': '"details.combos" muss Knopf-Kombinationen einer Erinnerung oder «next» zuordnen',
   'validate.deviceCode': 'Der Geräte-Code hat 96 Hex-Zeichen',
   'validate.unknownType': 'Unbekannter Typ',
   'validate.type': '"type" muss einer der bekannten Eintragstypen sein',
@@ -101,4 +102,10 @@ export default {
   'devices.pressTime': 'Die Uhr des Geräts stimmt nicht',
   'devices.pressUnknown': 'Knopfdruck eines unbekannten Geräts verworfen',
   'devices.pressDropped': 'Knopfdruck von «{name}» verworfen: {reason}',
+  // A combination of buttons (devices.pressCombo, store.convertCombo)
+  'devices.pressCombo': 'Unbekannte Knopf-Kombination',
+  'devices.comboUnassigned': '{combo} ist nichts zugeordnet (Mehr › Einstellungen › Analog-Buttons)',
+  'devices.combo_gone': 'Die zugeordnete Erinnerung gibt es nicht mehr',
+  'devices.combo_notToday': '«{title}» ist an diesem Tag nicht fällig',
+  'devices.combo_none': 'An diesem Tag ist keine Erinnerung fällig',
 };

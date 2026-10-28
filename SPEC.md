@@ -176,6 +176,14 @@ phones make the same one) and deletes the press. Mehr › Einstellungen ›
 Analog-Buttons: the list, «Analog-Buttons hinzufügen» (the name, then the 96-hex code =
 token ‖ key), «Testdruck senden» (the phone presses like the device),
 «Gerät entfernen» (kills the token).
+Buttons pressed together are a **combination** (`{v: 3, at, combo}`, a bit
+mask; the sketch groups pushes within 250 ms): the device entry's `combos`
+map (`{"5": <reminder eid> | "next"}`, set per device under «Kombinationen»)
+says which reminder it ticks off; the converting phone writes the same
+`task` the home card does for the first open slot of that reminder (or of
+any, for `next`) on the press's Zurich day (`src/reminders.js comboTodo`)
+and toasts the result; nothing assigned or nothing open drops the press
+with a notice.
 
 **Family settings** travel the same way: one entry of type `settings` per
 family — its `details` is the settings document (`feedFromStart`,
@@ -385,7 +393,7 @@ previews today's numbers; «Empfohlene Menge» sits right below it. When the bot
     paused?}`, `{amount_ml, colostrum_ml?}`, `{kind}`, `{grams}`, `{celsius}`, `{name}`,
     `{title, who, reminderEid?, due?}`, the family settings document, the
     reminder schedule `{title, who, note?, times, everyDays?, startDate?}` and
-    the button device `{id, name, token, key}` (see *What gets tracked*);
+    the button device `{id, name, token, key, combos?}` (see *What gets tracked*);
     canonical UTC ISO times; point-in-time types use `startedAt` only.
   - One open timer per type is a client rule (lower `seq` wins a race).
 - `auth_tokens` (hashed session tokens, bound to a user_id)

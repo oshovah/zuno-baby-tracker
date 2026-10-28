@@ -47,4 +47,19 @@ export default {
   'detail.removing': 'Wird entfernt …',
   'detail.removed': 'Gerät «{name}» entfernt',
   'detail.gone': 'Gerät nicht gefunden',
+
+  // Button combinations: two or three buttons pressed together tick off a
+  // to-do (the detail view's section; the toasts when a phone converts one)
+  'combo.title': 'Kombinationen',
+  'combo.hint': 'Zwei oder drei Knöpfe gleichzeitig drücken hakt eine Erinnerung ab – die erste offene des Tages, wie auf «Jetzt». Die Namen gelten für die Knöpfe, wie das Programm sie mitbringt.',
+  'combo.buttons': 'Knopf {list}',
+  'combo.buttonN': 'Knopf {n}',
+  'combo.none': 'Nichts',
+  'combo.next': 'Nächste offene',
+  'combo.gone': 'Die zugeordnete Erinnerung gibt es nicht mehr – bitte neu wählen.',
+  'combo.noReminders': 'Noch keine Erinnerungen – unter Mehr › Erinnerungen anlegen, dann hier zuordnen.',
+  'combo.saved': '{combo}: {target}',
+  'combo.ticked': '«{name}»: {title} abgehakt',
+  'combo.alreadyDone': '«{name}»: {title} war heute schon abgehakt',
+  'combo.nothingOpen': '«{name}»: heute ist nichts mehr offen',
 };

@@ -60,6 +60,16 @@ export const DEVICE_NAME_MAX = 40;
 const HEX32_RE = /^[0-9a-f]{32}$/;
 const HEX64_RE = /^[0-9a-f]{64}$/;
 
+// A combination of a device's buttons pressed together (src/devices.js): a
+// bit mask, bit 0 = the sketch's first button, at least two bits, at most
+// the eight buttons the sketch reads. What it ticks off is stored on the
+// device entry: a reminder's eid, or COMBO_NEXT = the first open to-do.
+export const COMBO_NEXT = 'next';
+export function isComboMask(n) {
+  if (!Number.isInteger(n) || n < 3 || n > 255) return false;
+  return (n & (n - 1)) !== 0; // more than one bit
+}
+
 // Whom a reminder (and the task ticking it off) is for: the baby by default —
 // medication for a parent is the other everyday case.
 export const WHO_VALUES = ['baby', 'mama', 'papa'];
@@ -341,7 +351,21 @@ export function validDetails(type, details) {
       if (typeof details.key !== 'string' || !HEX64_RE.test(details.key)) {
         throw fail(t('errors.validate.deviceKey'));
       }
-      return { id, name: phpTrim(name), token: details.token, key: details.key };
+      const out = { id, name: phpTrim(name), token: details.token, key: details.key };
+      // What each button combination ticks off ({"5": <reminder eid> | "next"});
+      // an empty map is not stored.
+      if (details.combos !== undefined && details.combos !== null) {
+        const combos = details.combos;
+        if (typeof combos !== 'object' || Array.isArray(combos)) throw fail(t('errors.validate.deviceCombos'));
+        const kept = {};
+        for (const [k, v] of Object.entries(combos)) {
+          if (!/^[1-9]\d{0,2}$/.test(k) || !isComboMask(Number(k))) throw fail(t('errors.validate.deviceCombos'));
+          if (v !== COMBO_NEXT && !(typeof v === 'string' && EID_RE.test(v))) throw fail(t('errors.validate.deviceCombos'));
+          kept[k] = v;
+        }
+        if (Object.keys(kept).length > 0) out.combos = kept;
+      }
+      return out;
     }
     case SETTINGS_TYPE: {
       // The family settings document. Every field is optional (a save

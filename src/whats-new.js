@@ -15,6 +15,15 @@
 
 export const WHATS_NEW = [
   {
+    id: '2026-10-28',
+    de: [
+      'Analog-Buttons: Zwei oder drei Knöpfe gleichzeitig gedrückt haken eine Erinnerung ab – zum Beispiel Pipi + Beides für Vitamin D. Welche Kombination was abhakt, wählt ihr unter Mehr › Einstellungen › Analog-Buttons beim Gerät, unter «Kombinationen». Das Gerät braucht dafür das neue Programm aus der Bauanleitung.',
+    ],
+    en: [
+      'Analog buttons: two or three buttons pressed together tick off a reminder – say pee + both for vitamin D. Which combination ticks off what is chosen under More › Settings › Analog buttons with the device, under "Combinations". The device needs the new program from the build guide for it.',
+    ],
+  },
+  {
     id: '2026-10-16-b',
     de: [
       'Neu unter Mehr › Einstellungen: «Analog-Buttons». Ein kleines Gerät mit bis zu drei echten Knöpfen neben dem Wickeltisch trägt mit einem Druck die Windel ein – Pipi, Gaggi oder Beides, ohne Handy. Die App erzeugt den Code für das Gerät; jeder Druck wird dort verschlüsselt, der Server sieht nur, dass gedrückt wurde. Die Bauanleitung liegt beim Quellcode.',

@@ -37,6 +37,7 @@ export default {
   'validate.deviceName': '"details.name" must be a name (max. {max} characters)',
   'validate.deviceToken': '"details.token" must be the device token (32 hex characters)',
   'validate.deviceKey': '"details.key" must be the device key (64 hex characters)',
+  'validate.deviceCombos': '"details.combos" must map button combinations to a reminder or "next"',
   'validate.deviceCode': 'A device code has 96 hex characters',
   'validate.unknownType': 'Unknown type',
   'validate.type': '"type" must be one of the known entry types',
@@ -101,4 +102,10 @@ export default {
   'devices.pressTime': 'The device\'s clock is wrong',
   'devices.pressUnknown': 'Press of an unknown device dropped',
   'devices.pressDropped': 'Press from "{name}" dropped: {reason}',
+  // A combination of buttons (devices.pressCombo, store.convertCombo)
+  'devices.pressCombo': 'Unknown button combination',
+  'devices.comboUnassigned': 'Nothing is assigned to {combo} (More › Settings › Analog buttons)',
+  'devices.combo_gone': 'The assigned reminder no longer exists',
+  'devices.combo_notToday': '"{title}" is not due that day',
+  'devices.combo_none': 'No reminder is due that day',
 };

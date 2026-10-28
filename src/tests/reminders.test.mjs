@@ -18,6 +18,7 @@ import {
   overdueCount,
   reminderDueOn,
   intervalLabel,
+  comboTodo,
 } from '../reminders.js';
 
 const NOW = '2026-09-01T10:00:00Z';
@@ -203,4 +204,31 @@ test('reminderDueOn / occurrencesFor: an every-N-days reminder falls on its firs
   assert.deepEqual(occurrencesFor([bath, daily], [], '2026-09-03').map((o) => o.title), ['Vitamin D', 'Baden']);
   const done = tick(bath, '2026-09-03T16:00:00Z', '2026-09-03T16:10:00Z');
   assert.equal(occurrencesFor([bath], [done], '2026-09-03')[0].done.eid, done.eid);
+});
+
+test('comboTodo: a button combination ticks the first open slot of its reminder on the press day — or of any reminder; else a reason', () => {
+  const vit = reminder(1, { title: 'Vitamin D', who: 'baby', times: ['08:00', '20:00'] });
+  const iron = reminder(2, { title: 'Eisen', who: 'mama', times: ['09:00'] });
+  const odd = reminder(3, { title: 'Bad', who: 'baby', times: ['18:00'], everyDays: 2, startDate: '2026-08-31' });
+  const all = [vit, iron, odd];
+  const at = '2026-09-01T17:30:00Z'; // 19:30 Zurich
+
+  // The forgotten morning dose comes first, as on the home card.
+  assert.equal(comboTodo(all, [], at, vit.eid).slot.due, '2026-09-01T06:00:00Z');
+  const morning = tick(vit, '2026-09-01T06:00:00Z', '2026-09-01T06:05:00Z');
+  assert.equal(comboTodo(all, [morning], at, vit.eid).slot.due, '2026-09-01T18:00:00Z', 'then the evening one');
+  const evening = tick(vit, '2026-09-01T18:00:00Z', '2026-09-01T17:31:00Z');
+  assert.deepEqual(comboTodo(all, [morning, evening], at, vit.eid), { reason: 'allDone', title: 'Vitamin D' });
+  // The press's own day counts, not today: a press from yesterday ticks yesterday's slot.
+  assert.equal(comboTodo(all, [morning, evening], '2026-08-31T19:00:00Z', vit.eid).slot.due, '2026-08-31T06:00:00Z');
+
+  // «next»: the first open slot of any reminder that day.
+  const s = comboTodo(all, [morning], at, null).slot;
+  assert.deepEqual([s.title, s.due], ['Eisen', '2026-09-01T07:00:00Z']);
+  assert.deepEqual(comboTodo([vit], [morning, evening], at, null), { reason: 'allDone', title: null });
+  assert.deepEqual(comboTodo([odd], [], at, null), { reason: 'none' }, 'every 2 days from 31 Aug: not on 1 Sep');
+  assert.deepEqual(comboTodo([], [], at, null), { reason: 'none' });
+
+  assert.deepEqual(comboTodo(all, [], at, odd.eid), { reason: 'notToday', title: 'Bad' });
+  assert.deepEqual(comboTodo(all, [], at, eidOf(99)), { reason: 'gone' });
 });

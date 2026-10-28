@@ -209,3 +209,29 @@ export function todoProgress(list) {
   const all = list || [];
   return { done: all.filter((o) => !!o.done).length, total: all.length };
 }
+
+/**
+ * Which to-do a device's button combination ticks off when pressed at `at`
+ * (canonical UTC): on the Zurich day of `at`, the FIRST open slot — of the
+ * reminder `reminderEid`, or of any reminder when it is null — the one the
+ * home card shows (a forgotten morning dose before the evening one).
+ * `reminders` are reminderOf() objects, `tasks` the live task entries.
+ * Returns {slot} or {reason}: 'gone' (no such reminder any more), 'notToday'
+ * (not due that day), 'allDone' (every slot ticked; `title` says which),
+ * 'none' (no reminder due that day at all).
+ */
+export function comboTodo(reminders, tasks, at, reminderEid) {
+  const day = zurichDateOf(at);
+  let list = reminders;
+  if (reminderEid) {
+    const r = reminders.find((x) => x.eid === reminderEid);
+    if (!r) return { reason: 'gone' };
+    if (!reminderDueOn(r, day) || r.times.length === 0) return { reason: 'notToday', title: r.title };
+    list = [r];
+  }
+  const slots = occurrencesFor(list, tasks, day);
+  if (slots.length === 0) return { reason: 'none' };
+  const open = slots.find((s) => !s.done);
+  if (!open) return { reason: 'allDone', title: reminderEid ? slots[0].title : null };
+  return { slot: open };
+}

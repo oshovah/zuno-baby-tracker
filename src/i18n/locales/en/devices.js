@@ -43,4 +43,19 @@ export default {
   'detail.removing': 'Removing …',
   'detail.removed': 'Device "{name}" removed',
   'detail.gone': 'Device not found',
+
+  // Button combinations: two or three buttons pressed together tick off a
+  // to-do (the detail view's section; the toasts when a phone converts one)
+  'combo.title': 'Combinations',
+  'combo.hint': 'Pressing two or three buttons together ticks off a reminder – the first open one of the day, as on "Now". The names are those of the buttons as the program ships them.',
+  'combo.buttons': 'Button {list}',
+  'combo.buttonN': 'Button {n}',
+  'combo.none': 'Nothing',
+  'combo.next': 'Next open',
+  'combo.gone': 'The assigned reminder no longer exists – please choose again.',
+  'combo.noReminders': 'No reminders yet – add them under More › Reminders, then assign them here.',
+  'combo.saved': '{combo}: {target}',
+  'combo.ticked': '"{name}": {title} ticked off',
+  'combo.alreadyDone': '"{name}": {title} was already ticked off today',
+  'combo.nothingOpen': '"{name}": nothing left open today',
 };

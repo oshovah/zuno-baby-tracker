@@ -25,13 +25,23 @@ This folder has three parts:
   name signs every entry the device makes); which physical button logs what
   is set in the sketch. A board may carry up to three buttons — one entry
   each — and a pin without a button simply never fires.
+- **Combinations:** two or three buttons pressed together (within 250 ms of
+  the first, `CHORD_MS`) are one press of their own: it carries only
+  *which* buttons, never a meaning. What it does is set in the app (Mehr ›
+  Einstellungen › Analog-Buttons › the device › «Kombinationen»): tick off
+  a reminder, or the next open one. The phone that turns the press into an
+  entry ticks the first open slot of that reminder on the day of the press,
+  as the home screen would. Once a press is sent, nothing new starts until
+  every button is up again — holding one button and pressing another later
+  does nothing.
 - **The device code** from the app (96 hex characters) is the token (32
   hex) followed by the key (64 hex). The server knows the token only as a
   hash and checks it on every press; the key never leaves the device and
   the family's phones.
-- **A press** is `{"v":3,"at":"<UTC>","type":"diaper","details":{…}}`,
-  padded with spaces to 128 bytes (so a «Pipi» and a «Gaggi» have the same
-  length on the wire), encrypted with AES-256-GCM (hardware-accelerated on
+- **A press** is `{"v":3,"at":"<UTC>","type":"diaper","details":{…}}` —
+  a combination `{"v":3,"at":"<UTC>","combo":5}`, a bit mask (bit 0 =
+  button 1, so 5 = buttons 1 + 3) —, padded with spaces to 128 bytes (so a
+  «Pipi», a «Gaggi» and a combination have the same length on the wire), encrypted with AES-256-GCM (hardware-accelerated on
   the ESP32; AAD `bt1|device`, a random 12-byte IV) and posted as
   base64url(`0x03` ‖ iv ‖ ciphertext ‖ tag) to `POST /api/devices/events`
   together with the token — no cookie, no account.
@@ -138,6 +148,7 @@ password`) and the old program keeps running; so does a broken transfer.
 | --- | --- |
 | green, steady | the board's power LED — always on, not the sketch's |
 | green blink | a press was taken, or a press was sent |
+| green blink ×2 (short) | a combination was taken |
 | blue | sending |
 | blue flickering | an update is arriving over Wi-Fi |
 | red on | presses are waiting (no Wi-Fi, no clock yet) |
@@ -388,6 +399,14 @@ it fetches the presses when it syncs. Red on means presses are waiting
 (no Wi-Fi or no clock yet); red ×3 means the server refused, and the serial
 monitor says why.
 
+For a combination, first create a reminder in the app (Mehr ›
+Erinnerungen) and assign it under the device's «Kombinationen». Then press
+buttons 1 and 3 together: two short green blinks (combination taken), then
+blue and green as above. With the next sync the reminder is ticked off,
+signed by the device, and the phone that did it says so in a message. A
+combination with nothing assigned, or with nothing open that day, is
+dropped with a message on the phone.
+
 ## Troubleshooting
 
 - **"Bad CPU type in executable" … `esptool` … "exit status 126"** (Mac
@@ -428,6 +447,9 @@ monitor says why.
   the minus rail). If `[press]` appears now, the fault is the button or
   its legs; if not, the wire to D2 or the ground (on the breadboard: is
   the Nano really seated with D2 in column 11?).
+- **A combination arrives as a single button:** the second button went down
+  more than 250 ms after the first. Press both at once; the serial monitor
+  shows `[press] Kombination Knopf 1+3` when it was taken as one.
 - **A button fires by itself, or when its wire is touched:** a bare solder
   joint touching the neighbouring leg, 5 mm away (heat-shrink every
   joint), or a long run picking up noise — keep the ground wire together

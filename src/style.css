@@ -2562,6 +2562,22 @@ input[type='datetime-local'] {
   margin-top: 8px;
 }
 
+/* A button combination: its names, then the button numbers, quieter. */
+.device-detail .combo-field {
+  margin-top: 10px;
+}
+
+.device-detail .combo-buttons {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.device-detail .combo-field .chip-row {
+  margin: 4px 0 0;
+}
+
 .confirm-row {
   display: flex;
   align-items: center;

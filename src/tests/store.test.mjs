@@ -2413,7 +2413,7 @@ test('devices: a member registers one (the key never leaves the phone), the devi
   assert.match(dev.details.key, /^[0-9a-f]{64}$/);
   assert.deepEqual(dv.registered, ['{}'], 'the registration carries nothing');
   assert.equal(JSON.stringify([...server.calls]).includes(dev.details.key), false, 'the key is never on the wire');
-  assert.deepEqual(mama.store.devices.list, [{ eid: dev.eid, id: 1, name: 'Wickeltisch', createdAt: NOW }]);
+  assert.deepEqual(mama.store.devices.list, [{ eid: dev.eid, id: 1, name: 'Wickeltisch', createdAt: NOW, combos: {} }]);
   assert.equal(mama.store.devices.code(dev.eid), dev.details.token + dev.details.key);
   assert.equal(mama.store.exportPlain().some((e) => e.type === 'device'), false, 'the export leaves the secrets out');
 
@@ -2463,6 +2463,73 @@ test('devices: a member registers one (the key never leaves the phone), the devi
   await mama.store.refresh();
   assert.equal(mama.store.snapshot.data.today.diapers, 4);
   assert.deepEqual(dv.events, []);
+});
+
+test('devices: a button combination ticks off the reminder assigned to it — the first open slot, once on both phones; unassigned or nothing open = a notice', async () => {
+  const server = fakeServer();
+  const dv = { devices: [], events: [], registered: [], lastId: 0 };
+  const mama = await online(phone(server, { api: devicesApi(server, dv) }), FDK_RAW);
+  const papa = await online(phone(server, { api: devicesApi(server, dv), username: 'papa', displayName: 'Papa' }), FDK_RAW);
+  const dev = await mama.store.devices.add('Wickeltisch');
+  const vit = await mama.store.entries.create({ type: 'reminder', details: { title: 'Vitamin D', who: 'baby', times: ['08:00', '20:00'] } });
+  const { sealPress } = await import('../crypto.js');
+  const combo = async (mask, at = minus(1)) => {
+    dv.events.push({ id: ++dv.lastId, device: 1, blob: await sealPress(dev.details.key, { v: 3, at, combo: mask }), createdAt: TODAY });
+  };
+  const tasks = (p) => p.store.entries.range(TODAY, TODAY).filter((e) => e.type === 'task');
+
+  // Nothing assigned yet: dropped with a notice that says where to assign it.
+  await combo(5);
+  await mama.store.refresh();
+  assert.deepEqual(tasks(mama), []);
+  assert.deepEqual(dv.events, []);
+  assert.equal(mama.toasts.at(-1), 'Knopfdruck von «Wickeltisch» verworfen: Pipi + Beides ist nichts zugeordnet (Mehr › Einstellungen › Analog-Buttons)');
+
+  // Pipi + Beides → Vitamin D, all three → the next open to-do. The map lives on the device entry (no secret in the snapshot).
+  await mama.store.devices.setCombo(dev.eid, 5, vit.eid);
+  await mama.store.devices.setCombo(dev.eid, 7, 'next');
+  await mama.store.outbox.idle();
+  assert.deepEqual(mama.store.devices.list[0].combos, { 5: vit.eid, 7: 'next' });
+  assert.equal(mama.store.entries.get(dev.eid).details.token, dev.details.token, 'the secrets stay');
+  await assert.rejects(mama.store.devices.setCombo(dev.eid, 4, vit.eid), /Eintrag nicht gefunden/);
+
+  // Papa's phone converts the press: the 08:00 slot (12:00 now — the morning dose is open), signed by the device.
+  await combo(5);
+  await papa.store.refresh();
+  let ticks = tasks(papa);
+  assert.equal(ticks.length, 1);
+  assert.deepEqual(ticks[0].details, { title: 'Vitamin D', who: 'baby', reminderEid: vit.eid, due: '2026-09-01T06:00:00Z' });
+  assert.equal(ticks[0].loggedBy, 'Wickeltisch');
+  assert.equal(ticks[0].startedAt, minus(1), 'the press time');
+  assert.deepEqual(papa.store.snapshot.data.todos.today.map((o) => o.done && o.done.by), ['Wickeltisch', null]);
+  assert.equal(papa.toasts.at(-1), '«Wickeltisch»: Vitamin D abgehakt');
+  await papa.store.outbox.idle();
+
+  // Both phones see the next press at once: one tick (the press's eid), the 20:00 slot.
+  await combo(5);
+  await Promise.all([mama.store.refresh(), papa.store.refresh()]);
+  await Promise.all([mama.store.outbox.idle(), papa.store.outbox.idle()]);
+  await Promise.all([mama.store.refresh(), papa.store.refresh()]);
+  assert.equal(tasks(mama).length, 2);
+  assert.equal(tasks(papa).length, 2);
+  assert.equal([...server.rows.values()].filter((r) => r.deletedAt == null && tasks(mama).some((x) => x.eid === r.eid)).length, 2);
+  assert.deepEqual(mama.store.snapshot.data.todos.today.map((o) => o.done && o.done.by), ['Wickeltisch', 'Wickeltisch']);
+
+  // Everything ticked: a third press and «next» only say so.
+  await combo(5);
+  await combo(7);
+  await mama.store.refresh();
+  assert.equal(tasks(mama).length, 2);
+  assert.deepEqual(dv.events, []);
+  assert.deepEqual(mama.toasts.slice(-2), ['«Wickeltisch»: Vitamin D war heute schon abgehakt', '«Wickeltisch»: heute ist nichts mehr offen']);
+
+  // The reminder deleted: the combination says so; un-assigning drops the key.
+  await mama.store.entries.remove(vit.eid);
+  await combo(5);
+  await mama.store.refresh();
+  assert.equal(mama.toasts.at(-1), 'Knopfdruck von «Wickeltisch» verworfen: Die zugeordnete Erinnerung gibt es nicht mehr');
+  await mama.store.devices.setCombo(dev.eid, 5, null);
+  assert.deepEqual(mama.store.devices.list[0].combos, { 7: 'next' });
 });
 
 test('devices: a press nobody can read, one with a wrong clock, one of a removed device — dropped with a notice, never retried; removing kills the token', async () => {

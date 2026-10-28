@@ -13,6 +13,9 @@
 //   - The device learns the time from Zuno's own server (the Date header of
 //     a HEAD request) — no time server, no third party anywhere. A press
 //     made before the clock is known waits and keeps its true time.
+//   - Two or three buttons pressed together are a COMBINATION: it carries
+//     only which buttons, and the app decides what it does (Mehr ›
+//     Einstellungen › Analog-Buttons: tick off a reminder).
 //   - Presses queue while the Wi-Fi is down and go out once it is back.
 //   - The network work (Wi-Fi, the clock, the sending) runs in a task of
 //     its own, so the buttons are read all the time — a second press while
@@ -62,7 +65,8 @@ const char* ZUNO_CODE = "";
 // {"kind":"poop"} (Gaggi) or {"kind":"both"} (Beides). Three are laid out;
 // a pin without a button reads as "not pressed" (the pull-up), so the lines
 // may stay while only two buttons are wired. Any other entry type works the
-// same way (README.md).
+// same way (README.md). Buttons pressed together send a combination
+// instead; what it does is set in the app, not here.
 struct Button {
   uint8_t pin;
   const char* type;
@@ -93,6 +97,7 @@ const bool VERIFY_TLS = true;
 
 const int BUTTON_COUNT = sizeof(BUTTONS) / sizeof(BUTTONS[0]);
 const unsigned long DEBOUNCE_MS = 40;
+const unsigned long CHORD_MS = 250;  // buttons pushed within this time of the first one count as one combination
 const unsigned long CLOCK_RESYNC_MS = 6UL * 3600UL * 1000UL;  // the crystal drifts seconds a day; six hours is plenty
 const unsigned long WIFI_RETRY_MS = 15000;
 const int QUEUE_SIZE = 16;
@@ -115,7 +120,7 @@ const bool LED_ACTIVE_LOW = false;
 #endif
 
 struct Press {
-  uint8_t button;
+  uint8_t buttons;          // bit i = BUTTONS[i]; one bit = a button, more = a combination
   unsigned long pressedMs;  // millis() at the press: the instant is derived from the clock at send time
 };
 QueueHandle_t presses = nullptr;  // the presses waiting to be sent, oldest first (FreeRTOS: safe between the two tasks)
@@ -136,8 +141,17 @@ unsigned long clockSyncedAt = 0;
 unsigned long nextClockTry = 0;
 unsigned long lastWifiTry = 0;
 
-bool lastLevel[8];
+bool lastLevel[8];          // the raw level, bounces included
 unsigned long levelSince[8];
+bool down[8];               // the debounced level
+
+// The push being read: the buttons that went down within CHORD_MS of the
+// first one. It is sent once (when the time is up or every button is
+// released) and closed when every button is up again.
+bool pushOpen = false;
+bool pushSent = false;
+uint8_t pushButtons = 0;
+unsigned long pushStart = 0;
 unsigned long pressesSinceBoot = 0;
 
 // --- small helpers -----------------------------------------------------------
@@ -266,8 +280,17 @@ void pressTimeIso(unsigned long pressedMs, char* out, size_t outLen) {
   strftime(out, outLen, "%Y-%m-%dT%H:%M:%SZ", &tm);
 }
 
+/** The index of a press's only button, or -1 for a combination. */
+int singleButton(uint8_t buttons) {
+  if (buttons == 0 || (buttons & (buttons - 1)) != 0) return -1;
+  int i = 0;
+  while (!(buttons & (1 << i))) i++;
+  return i;
+}
+
 /**
- * Seal one press: the JSON {v:3, at, type, details}, padded with spaces to
+ * Seal one press: the JSON {v:3, at, type, details} — for a combination
+ * {v:3, at, combo: <bit mask>} —, padded with spaces to
  * 128 (or 256) bytes, AES-256-GCM under the key with AAD "bt1|device" and a
  * random 12-byte IV → base64url(0x03 ‖ iv ‖ ciphertext ‖ tag).
  */
@@ -275,7 +298,9 @@ bool sealPress(const Press& p, String& blobOut) {
   char at[24];
   pressTimeIso(p.pressedMs, at, sizeof(at));
   char json[200];
-  int n = snprintf(json, sizeof(json), "{\"v\":3,\"at\":\"%s\",\"type\":\"%s\",\"details\":%s}", at, BUTTONS[p.button].type, BUTTONS[p.button].details);
+  int b = singleButton(p.buttons);
+  int n = b >= 0 ? snprintf(json, sizeof(json), "{\"v\":3,\"at\":\"%s\",\"type\":\"%s\",\"details\":%s}", at, BUTTONS[b].type, BUTTONS[b].details)
+                 : snprintf(json, sizeof(json), "{\"v\":3,\"at\":\"%s\",\"combo\":%u}", at, (unsigned)p.buttons);
   if (n <= 0 || n >= (int)sizeof(json)) return false;
   size_t bucket = n <= (int)BUCKET_SMALL ? BUCKET_SMALL : BUCKET_LARGE;
   if (n > (int)bucket) return false;
@@ -380,36 +405,70 @@ void senderTask(void*) {
   }
 }
 
-void enqueue(uint8_t button) {
-  Press p = { button, millis() };
+/** "1+3" — the buttons of a press, 1-based, for the serial monitor. */
+String buttonList(uint8_t buttons) {
+  String out;
+  for (int i = 0; i < 8; i++) {
+    if (!(buttons & (1 << i))) continue;
+    if (out.length()) out += "+";
+    out += String(i + 1);
+  }
+  return out;
+}
+
+void enqueue(uint8_t buttons, unsigned long pressedMs) {
+  Press p = { buttons, pressedMs };
+  int b = singleButton(buttons);
   if (xQueueSend(presses, &p, 0) != pdTRUE) {
     // Sixteen presses waiting means no network for a long time; the newest
     // is dropped (the queue order must not change under the sender).
-    Serial.printf("[press] button %d ignored: %d presses waiting already\n", button + 1, QUEUE_SIZE);
+    Serial.printf("[press] Knopf %s ignored: %d presses waiting already\n", buttonList(buttons).c_str(), QUEUE_SIZE);
     blink(PIN_LED_R, 2);
     return;
   }
   pressesSinceBoot++;
-  Serial.printf("[press] button %d (%s %s), %d waiting\n", button + 1, BUTTONS[button].type, BUTTONS[button].details, waiting());
-  blink(PIN_LED_G, 1, 60);
+  if (b >= 0) Serial.printf("[press] Knopf %d (%s %s), %d waiting\n", b + 1, BUTTONS[b].type, BUTTONS[b].details, waiting());
+  else Serial.printf("[press] Kombination Knopf %s (combo %u), %d waiting\n", buttonList(buttons).c_str(), (unsigned)buttons, waiting());
+  blink(PIN_LED_G, b >= 0 ? 1 : 2, 60);  // two short flashes: a combination was recognised
   if (!clockSynced || WiFi.status() != WL_CONNECTED) led(PIN_LED_R, true);  // "not sent yet" until the queue drains
 }
 
 // --- buttons and Wi-Fi ---------------------------------------------------------------
 
+/**
+ * Debounce every button, then group the pushes: the first button down opens
+ * a push, every button that goes down within CHORD_MS joins it. The push is
+ * sent once — when CHORD_MS is up or every button is released before that
+ * (a quick tap) — as one button or as a combination. Until every button is
+ * up again, nothing new starts: holding one and pressing another later
+ * sends nothing more.
+ */
 void readButtons() {
   unsigned long now = millis();
+  uint8_t held = 0;
   for (int i = 0; i < BUTTON_COUNT && i < 8; i++) {
     bool pressed = digitalRead(BUTTONS[i].pin) == LOW;
     if (pressed != lastLevel[i]) {
       lastLevel[i] = pressed;
       levelSince[i] = now;
       Serial.printf("[btn] Knopf %d %s\n", i + 1, pressed ? "gedrückt" : "losgelassen");  // every edge, bounces included
-    } else if (pressed && levelSince[i] != 0 && now - levelSince[i] >= DEBOUNCE_MS) {
-      levelSince[i] = 0;  // one press per push: counted once it has held for the debounce time
-      enqueue(i);
+    } else if (pressed != down[i] && now - levelSince[i] >= DEBOUNCE_MS) {
+      down[i] = pressed;  // the level held for the debounce time
+      if (pressed && !pushOpen) {
+        pushOpen = true;
+        pushSent = false;
+        pushButtons = 0;
+        pushStart = now;
+      }
+      if (pressed && !pushSent) pushButtons |= (uint8_t)(1 << i);
     }
+    if (down[i]) held |= (uint8_t)(1 << i);
   }
+  if (pushOpen && !pushSent && (held == 0 || now - pushStart >= CHORD_MS)) {
+    pushSent = true;
+    enqueue(pushButtons, pushStart);
+  }
+  if (pushOpen && pushSent && held == 0) pushOpen = false;
 }
 
 void ensureWifi() {
@@ -472,6 +531,7 @@ void setup() {
     pinMode(BUTTONS[i].pin, INPUT_PULLUP);
     lastLevel[i] = false;
     levelSince[i] = 0;
+    down[i] = false;
   }
   codeOk = parseCode(ZUNO_CODE);
   if (!codeOk) {
@@ -511,6 +571,7 @@ void greet() {
   else Serial.println("[boot] Update über WLAN: wartet aufs WLAN");
   Serial.printf("[boot] läuft seit %lu s · letzter Start: %s · %lu Drücke seit dem Start\n",
                 millis() / 1000UL, resetReasonText(), pressesSinceBoot);
+  Serial.printf("[boot] Kombinationen: Knöpfe innert %lu ms zusammen gedrückt; was sie tun, steht in der App\n", CHORD_MS);
   for (int i = 0; i < BUTTON_COUNT; i++) {
     Serial.printf("[boot] Knopf %d: Pin %d, %s %s, liest gerade %s\n", i + 1, BUTTONS[i].pin, BUTTONS[i].type, BUTTONS[i].details,
                   digitalRead(BUTTONS[i].pin) == LOW ? "GEDRÜCKT" : "offen");
